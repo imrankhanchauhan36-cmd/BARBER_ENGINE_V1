@@ -3,7 +3,6 @@ import cors from "cors";
 import mongoose from "mongoose";
 
 // Routes
-import fieldRoutes from "./routes/field/index.js";
 import adminRoutes from "./routes/admin/index.js";
 
 const app = express();
@@ -21,7 +20,6 @@ mongoose
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
 /* ===================== ROUTES ===================== */
-app.use("/api/field", fieldRoutes);
 app.use("/api/admin", adminRoutes);
 
 /* ===================== HEALTH CHECK ===================== */
