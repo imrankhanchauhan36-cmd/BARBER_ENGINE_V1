@@ -1,0 +1,81 @@
+[
+  {
+    "districtName": "Gautam Buddha Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Noida",
+        "isDistrictHQ": false,
+        "isServiceable": true,
+        "aliases": ["Noida UP"],
+        "geo": { "type": "Point", "coordinates": [77.3910, 28.5355] }
+      },
+      {
+        "name": "Greater Noida",
+        "isDistrictHQ": false,
+        "isServiceable": true,
+        "aliases": ["Noida Extension"],
+        "geo": { "type": "Point", "coordinates": [77.5030, 28.4744] }
+      },
+      {
+        "name": "Dadri",
+        "isDistrictHQ": true,
+        "isServiceable": false,
+        "aliases": [],
+        "geo": { "type": "Point", "coordinates": [77.5536, 28.5462] }
+      }
+    ]
+  },
+  {
+    "districtName": "Lucknow",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Lucknow",
+        "isDistrictHQ": true,
+        "isServiceable": true,
+        "aliases": ["LKO"],
+        "geo": { "type": "Point", "coordinates": [80.9462, 26.8467] }
+      }
+    ]
+  },
+  {
+    "districtName": "Kanpur Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kanpur",
+        "isDistrictHQ": true,
+        "isServiceable": true,
+        "aliases": ["Kanpur City"],
+        "geo": { "type": "Point", "coordinates": [80.3319, 26.4499] }
+      }
+    ]
+  },
+  {
+    "districtName": "Varanasi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Varanasi",
+        "isDistrictHQ": true,
+        "isServiceable": true,
+        "aliases": ["Banaras", "Kashi"],
+        "geo": { "type": "Point", "coordinates": [82.9739, 25.3176] }
+      }
+    ]
+  },
+  {
+    "districtName": "Agra",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Agra",
+        "isDistrictHQ": true,
+        "isServiceable": true,
+        "aliases": [],
+        "geo": { "type": "Point", "coordinates": [78.0081, 27.1767] }
+      }
+    ]
+  }
+]

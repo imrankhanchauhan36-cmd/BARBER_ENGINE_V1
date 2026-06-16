@@ -1,0 +1,9350 @@
+[
+  {
+    "districtName": "Ahmednagar",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Ahmednagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Akola",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Akola",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Amravati",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Amravati",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Aurangabad",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Aurangabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Beed",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Beed",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhandara",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Bhandara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Buldhana",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Buldhana",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chandrapur",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Chandrapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhule",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Dhule",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gadchiroli",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Gadchiroli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gondia",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Gondia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hingoli",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Hingoli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalgaon",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Jalgaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalna",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Jalna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kolhapur",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Kolhapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Latur",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Latur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mumbai City",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Mumbai City",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mumbai Suburban",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Mumbai Suburban",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nagpur",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Nagpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nanded",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Nanded",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nandurbar",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Nandurbar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nashik",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Nashik",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Osmanabad",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Osmanabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Palghar",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Palghar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Parbhani",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Parbhani",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pune",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Pune",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raigad",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Raigad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ratnagiri",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Ratnagiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sangli",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Sangli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Satara",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Satara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sindhudurg",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Sindhudurg",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Solapur",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Solapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thane",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Thane",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Wardha",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Wardha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Washim",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Washim",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Yavatmal",
+    "stateCode": "MH",
+    "cities": [
+      {
+        "name": "Yavatmal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Agra",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Agra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Aligarh",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Aligarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ambedkar Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Ambedkar Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Amethi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Amethi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Amroha",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Amroha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Auraiya",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Auraiya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ayodhya",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Ayodhya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Azamgarh",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Azamgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Baghpat",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Baghpat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bahraich",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Bahraich",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ballia",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Ballia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balrampur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Balrampur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Banda",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Banda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Barabanki",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Barabanki",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bareilly",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Bareilly",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Basti",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Basti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhadohi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Bhadohi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bijnor",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Bijnor",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Budaun",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Budaun",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bulandshahr",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Bulandshahr",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chandauli",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Chandauli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chitrakoot",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Chitrakoot",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Deoria",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Deoria",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Etah",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Etah",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Etawah",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Etawah",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Farrukhabad",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Farrukhabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Fatehpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Fatehpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Firozabad",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Firozabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gautam Buddha Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Gautam Buddha Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ghaziabad",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Ghaziabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ghazipur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Ghazipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gonda",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Gonda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gorakhpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Gorakhpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hamirpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Hamirpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hapur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Hapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hardoi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Hardoi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hathras",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Hathras",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalaun",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Jalaun",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jaunpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Jaunpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhansi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Jhansi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kannauj",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kannauj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kanpur Dehat",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kanpur Dehat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kanpur Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kanpur Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kasganj",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kasganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kaushambi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kaushambi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kheri",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kheri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kushinagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Kushinagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lalitpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Lalitpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lucknow",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Lucknow",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Maharajganj",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Maharajganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahoba",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Mahoba",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mainpuri",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Mainpuri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mathura",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Mathura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mau",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Mau",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Meerut",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Meerut",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mirzapur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Mirzapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Moradabad",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Moradabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Muzaffarnagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Muzaffarnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pilibhit",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Pilibhit",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pratapgarh",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Pratapgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Prayagraj",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Prayagraj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raebareli",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Raebareli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rampur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Rampur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Saharanpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Saharanpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sambhal",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Sambhal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sant Kabir Nagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Sant Kabir Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shahjahanpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Shahjahanpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shamli",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Shamli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shravasti",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Shravasti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Siddharthnagar",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Siddharthnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sitapur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Sitapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sonbhadra",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Sonbhadra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sultanpur",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Sultanpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Unnao",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Unnao",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Varanasi",
+    "stateCode": "UP",
+    "cities": [
+      {
+        "name": "Varanasi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ajmer",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Ajmer",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Alwar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Alwar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anupgarh",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Anupgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balotra",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Balotra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Banswara",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Banswara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Baran",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Baran",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Barmer",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Barmer",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Beawar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Beawar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bharatpur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Bharatpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhilwara",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Bhilwara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bikaner",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Bikaner",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bundi",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Bundi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chittorgarh",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Chittorgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Churu",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Churu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dausa",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Dausa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Deeg",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Deeg",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dholpur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Dholpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Didwana-Kuchaman",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Didwana-Kuchaman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dungarpur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Dungarpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gangapur City",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Gangapur City",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ganganagar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Ganganagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hanumangarh",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Hanumangarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jaipur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jaipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jaipur Rural",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jaipur Rural",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jaisalmer",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jaisalmer",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalore",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jalore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhalawar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jhalawar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhunjhunu",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jhunjhunu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jodhpur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jodhpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jodhpur Rural",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Jodhpur Rural",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karauli",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Karauli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kekri",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Kekri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khairthal-Tijara",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Khairthal-Tijara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kota",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Kota",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kotputli-Behror",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Kotputli-Behror",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nagaur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Nagaur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Neem Ka Thana",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Neem Ka Thana",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pali",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Pali",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Phalodi",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Phalodi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pratapgarh",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Pratapgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajsamand",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Rajsamand",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Salumbar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Salumbar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sanchore",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Sanchore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sawai Madhopur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Sawai Madhopur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shahpura",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Shahpura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sikar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Sikar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sirohi",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Sirohi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sri Ganganagar",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Sri Ganganagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tonk",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Tonk",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Udaipur",
+    "stateCode": "RJ",
+    "cities": [
+      {
+        "name": "Udaipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bagalkot",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Bagalkot",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ballari",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Ballari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Belagavi",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Belagavi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bengaluru Rural",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Bengaluru Rural",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bengaluru Urban",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Bengaluru Urban",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bidar",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Bidar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chamarajanagar",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Chamarajanagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chikkaballapur",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Chikkaballapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chikkamagaluru",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Chikkamagaluru",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chitradurga",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Chitradurga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dakshina Kannada",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Dakshina Kannada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Davanagere",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Davanagere",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dharwad",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Dharwad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gadag",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Gadag",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hassan",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Hassan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Haveri",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Haveri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kalaburagi",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Kalaburagi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kodagu",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Kodagu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kolar",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Kolar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Koppal",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Koppal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mandya",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Mandya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mysuru",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Mysuru",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raichur",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Raichur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ramanagara",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Ramanagara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shivamogga",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Shivamogga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tumakuru",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Tumakuru",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Udupi",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Udupi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Uttara Kannada",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Uttara Kannada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vijayapura",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Vijayapura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vijayanagara",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Vijayanagara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Yadgir",
+    "stateCode": "KA",
+    "cities": [
+      {
+        "name": "Yadgir",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ahmedabad",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Ahmedabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Amreli",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Amreli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anand",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Anand",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Aravalli",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Aravalli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Banaskantha",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Banaskantha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bharuch",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Bharuch",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhavnagar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Bhavnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Botad",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Botad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chhota Udaipur",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Chhota Udaipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dahod",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Dahod",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dang",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Dang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Devbhoomi Dwarka",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Devbhoomi Dwarka",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gandhinagar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Gandhinagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gir Somnath",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Gir Somnath",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jamnagar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Jamnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Junagadh",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Junagadh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kheda",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Kheda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kutch",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Kutch",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahisagar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Mahisagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mehsana",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Mehsana",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Morbi",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Morbi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Narmada",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Narmada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Navsari",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Navsari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Panchmahal",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Panchmahal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Patan",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Patan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Porbandar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Porbandar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajkot",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Rajkot",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sabarkantha",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Sabarkantha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Surat",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Surat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Surendranagar",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Surendranagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tapi",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Tapi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vadodara",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Vadodara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Valsad",
+    "stateCode": "GJ",
+    "cities": [
+      {
+        "name": "Valsad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Araria",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Araria",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Arwal",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Arwal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Aurangabad",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Aurangabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Banka",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Banka",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Begusarai",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Begusarai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhagalpur",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Bhagalpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhojpur",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Bhojpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Buxar",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Buxar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Darbhanga",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Darbhanga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Champaran",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "East Champaran",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gaya",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Gaya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gopalganj",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Gopalganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jamui",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Jamui",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jehanabad",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Jehanabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kaimur",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Kaimur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Katihar",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Katihar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khagaria",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Khagaria",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kishanganj",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Kishanganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lakhisarai",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Lakhisarai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Madhepura",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Madhepura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Madhubani",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Madhubani",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Munger",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Munger",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Muzaffarpur",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Muzaffarpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nalanda",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Nalanda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nawada",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Nawada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Patna",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Patna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Purnia",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Purnia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rohtas",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Rohtas",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Saharsa",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Saharsa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Samastipur",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Samastipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Saran",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Saran",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sheikhpura",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Sheikhpura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sheohar",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Sheohar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sitamarhi",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Sitamarhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Siwan",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Siwan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Supaul",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Supaul",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vaishali",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "Vaishali",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Champaran",
+    "stateCode": "BR",
+    "cities": [
+      {
+        "name": "West Champaran",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Agar Malwa",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Agar Malwa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Alirajpur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Alirajpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anuppur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Anuppur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ashoknagar",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Ashoknagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balaghat",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Balaghat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Barwani",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Barwani",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Betul",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Betul",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhind",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Bhind",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhopal",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Bhopal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Burhanpur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Burhanpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chhatarpur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Chhatarpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chhindwara",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Chhindwara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Damoh",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Damoh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Datia",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Datia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dewas",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Dewas",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhar",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Dhar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dindori",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Dindori",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Guna",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Guna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gwalior",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Gwalior",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Harda",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Harda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Indore",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Indore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jabalpur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Jabalpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhabua",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Jhabua",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Katni",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Katni",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khandwa",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Khandwa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khargone",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Khargone",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Maihar",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Maihar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mandla",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Mandla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mandsaur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Mandsaur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Morena",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Morena",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Narmadapuram",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Narmadapuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Narsinghpur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Narsinghpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Neemuch",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Neemuch",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Niwari",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Niwari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Panna",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Panna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pandhurna",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Pandhurna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raisen",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Raisen",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajgarh",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Rajgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ratlam",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Ratlam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rewa",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Rewa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sagar",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Sagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Satna",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Satna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sehore",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Sehore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Seoni",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Seoni",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shahdol",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Shahdol",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shajapur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Shajapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sheopur",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Sheopur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shivpuri",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Shivpuri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sidhi",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Sidhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Singrauli",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Singrauli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tikamgarh",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Tikamgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ujjain",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Ujjain",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Umaria",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Umaria",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vidisha",
+    "stateCode": "MP",
+    "cities": [
+      {
+        "name": "Vidisha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ariyalur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Ariyalur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chengalpattu",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Chengalpattu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chennai",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Chennai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Coimbatore",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Coimbatore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Cuddalore",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Cuddalore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dharmapuri",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Dharmapuri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dindigul",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Dindigul",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Erode",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Erode",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kallakurichi",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Kallakurichi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kanchipuram",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Kanchipuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kanyakumari",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Kanyakumari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Karur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Krishnagiri",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Krishnagiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Madurai",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Madurai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mayiladuthurai",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Mayiladuthurai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nagapattinam",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Nagapattinam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Namakkal",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Namakkal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nilgiris",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Nilgiris",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Perambalur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Perambalur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pudukkottai",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Pudukkottai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ramanathapuram",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Ramanathapuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ranipet",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Ranipet",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Salem",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Salem",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sivaganga",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Sivaganga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tenkasi",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tenkasi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thanjavur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Thanjavur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Theni",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Theni",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thoothukudi",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Thoothukudi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tiruchirappalli",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tiruchirappalli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tirunelveli",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tirunelveli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tirupattur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tirupattur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tiruppur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tiruppur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tiruvallur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tiruvallur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tiruvannamalai",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tiruvannamalai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tiruvarur",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Tiruvarur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vellore",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Vellore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Viluppuram",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Viluppuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Virudhunagar",
+    "stateCode": "TN",
+    "cities": [
+      {
+        "name": "Virudhunagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Alipurduar",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Alipurduar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bankura",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Bankura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Birbhum",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Birbhum",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Cooch Behar",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Cooch Behar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dakshin Dinajpur",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Dakshin Dinajpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Darjeeling",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Darjeeling",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hooghly",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Hooghly",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Howrah",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Howrah",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalpaiguri",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Jalpaiguri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhargram",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Jhargram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kalimpong",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Kalimpong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kolkata",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Kolkata",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Malda",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Malda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Murshidabad",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Murshidabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nadia",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Nadia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North 24 Parganas",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "North 24 Parganas",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Paschim Bardhaman",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Paschim Bardhaman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Paschim Medinipur",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Paschim Medinipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Purba Bardhaman",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Purba Bardhaman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Purba Medinipur",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Purba Medinipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Purulia",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Purulia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South 24 Parganas",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "South 24 Parganas",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Uttar Dinajpur",
+    "stateCode": "WB",
+    "cities": [
+      {
+        "name": "Uttar Dinajpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Adilabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Adilabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhadradri Kothagudem",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Bhadradri Kothagudem",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hanumakonda",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Hanumakonda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hyderabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Hyderabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jagtial",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Jagtial",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jangaon",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Jangaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jayashankar Bhupalpally",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Jayashankar Bhupalpally",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jogulamba Gadwal",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Jogulamba Gadwal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kamareddy",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Kamareddy",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karimnagar",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Karimnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khammam",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Khammam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Komaram Bheem Asifabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Komaram Bheem Asifabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahabubabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Mahabubabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahabubnagar",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Mahabubnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mancherial",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Mancherial",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Medak",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Medak",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Medchal-Malkajgiri",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Medchal-Malkajgiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mulugu",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Mulugu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nagarkurnool",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Nagarkurnool",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nalgonda",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Nalgonda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Narayanpet",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Narayanpet",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nirmal",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Nirmal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nizamabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Nizamabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Peddapalli",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Peddapalli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajanna Sircilla",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Rajanna Sircilla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ranga Reddy",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Ranga Reddy",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sangareddy",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Sangareddy",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Siddipet",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Siddipet",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Suryapet",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Suryapet",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vikarabad",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Vikarabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Wanaparthy",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Wanaparthy",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Warangal",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Warangal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Yadadri Bhuvanagiri",
+    "stateCode": "TS",
+    "cities": [
+      {
+        "name": "Yadadri Bhuvanagiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Alluri Sitharama Raju",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Alluri Sitharama Raju",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anakapalli",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Anakapalli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anantapur",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Anantapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Annamayya",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Annamayya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bapatla",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Bapatla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chittoor",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Chittoor",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dr. B.R. Ambedkar Konaseema",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Dr. B.R. Ambedkar Konaseema",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Godavari",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "East Godavari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Eluru",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Eluru",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Guntur",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Guntur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kakinada",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Kakinada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Krishna",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Krishna",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kurnool",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Kurnool",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nandyal",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Nandyal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nellore",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Nellore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "NTR",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "NTR",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Palnadu",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Palnadu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Parvathipuram Manyam",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Parvathipuram Manyam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Prakasam",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Prakasam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sri Potti Sriramulu Nellore",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Sri Potti Sriramulu Nellore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sri Sathya Sai",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Sri Sathya Sai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Srikakulam",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Srikakulam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tirupati",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Tirupati",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Visakhapatnam",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Visakhapatnam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Vizianagaram",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "Vizianagaram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Godavari",
+    "stateCode": "AP",
+    "cities": [
+      {
+        "name": "West Godavari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Angul",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Angul",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balangir",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Balangir",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balasore",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Balasore",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bargarh",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Bargarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhadrak",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Bhadrak",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Boudh",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Boudh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Cuttack",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Cuttack",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Deogarh",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Deogarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhenkanal",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Dhenkanal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gajapati",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Gajapati",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ganjam",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Ganjam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jagatsinghpur",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Jagatsinghpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jajpur",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Jajpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jharsuguda",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Jharsuguda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kalahandi",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Kalahandi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kandhamal",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Kandhamal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kendrapara",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Kendrapara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kendujhar",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Kendujhar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khordha",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Khordha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Koraput",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Koraput",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Malkangiri",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Malkangiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mayurbhanj",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Mayurbhanj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nabarangpur",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Nabarangpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nayagarh",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Nayagarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nuapada",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Nuapada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Puri",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Puri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rayagada",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Rayagada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sambalpur",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Sambalpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Subarnapur",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Subarnapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sundargarh",
+    "stateCode": "OD",
+    "cities": [
+      {
+        "name": "Sundargarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Alappuzha",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Alappuzha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ernakulam",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Ernakulam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Idukki",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Idukki",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kannur",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Kannur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kasaragod",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Kasaragod",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kollam",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Kollam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kottayam",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Kottayam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kozhikode",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Kozhikode",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Malappuram",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Malappuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Palakkad",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Palakkad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pathanamthitta",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Pathanamthitta",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thiruvananthapuram",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Thiruvananthapuram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thrissur",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Thrissur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Wayanad",
+    "stateCode": "KL",
+    "cities": [
+      {
+        "name": "Wayanad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ambala",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Ambala",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bhiwani",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Bhiwani",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Charkhi Dadri",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Charkhi Dadri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Faridabad",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Faridabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Fatehabad",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Fatehabad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gurugram",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Gurugram",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hisar",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Hisar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jhajjar",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Jhajjar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jind",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Jind",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kaithal",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Kaithal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karnal",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Karnal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kurukshetra",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Kurukshetra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahendragarh",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Mahendragarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nuh",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Nuh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Palwal",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Palwal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Panchkula",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Panchkula",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Panipat",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Panipat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rewari",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Rewari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rohtak",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Rohtak",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sirsa",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Sirsa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sonipat",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Sonipat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Yamunanagar",
+    "stateCode": "HR",
+    "cities": [
+      {
+        "name": "Yamunanagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Amritsar",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Amritsar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Barnala",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Barnala",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bathinda",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Bathinda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Faridkot",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Faridkot",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Fatehgarh Sahib",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Fatehgarh Sahib",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Fazilka",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Fazilka",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ferozepur",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Ferozepur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gurdaspur",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Gurdaspur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hoshiarpur",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Hoshiarpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jalandhar",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Jalandhar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kapurthala",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Kapurthala",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ludhiana",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Ludhiana",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Malerkotla",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Malerkotla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mansa",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Mansa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Moga",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Moga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mohali (SAS Nagar)",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Mohali (SAS Nagar)",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Muktsar",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Muktsar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pathankot",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Pathankot",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Patiala",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Patiala",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rupnagar",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Rupnagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sangrur",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Sangrur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shaheed Bhagat Singh Nagar",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Shaheed Bhagat Singh Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tarn Taran",
+    "stateCode": "PB",
+    "cities": [
+      {
+        "name": "Tarn Taran",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bilaspur",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Bilaspur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chamba",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Chamba",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hamirpur",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Hamirpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kangra",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Kangra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kinnaur",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Kinnaur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kullu",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Kullu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lahaul and Spiti",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Lahaul and Spiti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mandi",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Mandi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shimla",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Shimla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sirmaur",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Sirmaur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Solan",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Solan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Una",
+    "stateCode": "HP",
+    "cities": [
+      {
+        "name": "Una",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bokaro",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Bokaro",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chatra",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Chatra",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Deoghar",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Deoghar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhanbad",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Dhanbad",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dumka",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Dumka",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Singhbhum",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "East Singhbhum",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Garhwa",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Garhwa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Giridih",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Giridih",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Godda",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Godda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gumla",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Gumla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hazaribagh",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Hazaribagh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jamtara",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Jamtara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khunti",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Khunti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Koderma",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Koderma",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Latehar",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Latehar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lohardaga",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Lohardaga",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pakur",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Pakur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Palamu",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Palamu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ramgarh",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Ramgarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ranchi",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Ranchi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sahebganj",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Sahebganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Seraikela Kharsawan",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Seraikela Kharsawan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Simdega",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "Simdega",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Singhbhum",
+    "stateCode": "JH",
+    "cities": [
+      {
+        "name": "West Singhbhum",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balod",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Balod",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Baloda Bazar",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Baloda Bazar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Balrampur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Balrampur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bastar",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Bastar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bemetara",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Bemetara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bijapur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Bijapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bilaspur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Bilaspur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dantewada",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Dantewada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhamtari",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Dhamtari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Durg",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Durg",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gariaband",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Gariaband",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gaurela-Pendra-Marwahi",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Gaurela-Pendra-Marwahi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Janjgir-Champa",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Janjgir-Champa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jashpur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Jashpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kabirdham",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Kabirdham",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kanker",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Kanker",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khairagarh-Chhuikhadan-Gandai",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Khairagarh-Chhuikhadan-Gandai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kondagaon",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Kondagaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Korba",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Korba",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Koriya",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Koriya",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mahasamund",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Mahasamund",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Manendragarh-Chirmiri-Bharatpur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Manendragarh-Chirmiri-Bharatpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mohla-Manpur-Ambagarh Chowki",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Mohla-Manpur-Ambagarh Chowki",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mungeli",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Mungeli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Narayanpur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Narayanpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raigarh",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Raigarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Raipur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Raipur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajnandgaon",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Rajnandgaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sakti",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Sakti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sarangarh-Bilaigarh",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Sarangarh-Bilaigarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sukma",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Sukma",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Surajpur",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Surajpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Surguja",
+    "stateCode": "CG",
+    "cities": [
+      {
+        "name": "Surguja",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Almora",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Almora",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bageshwar",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Bageshwar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chamoli",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Chamoli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Champawat",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Champawat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dehradun",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Dehradun",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Haridwar",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Haridwar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nainital",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Nainital",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pauri Garhwal",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Pauri Garhwal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pithoragarh",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Pithoragarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rudraprayag",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Rudraprayag",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tehri Garhwal",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Tehri Garhwal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Udham Singh Nagar",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Udham Singh Nagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Uttarkashi",
+    "stateCode": "UK",
+    "cities": [
+      {
+        "name": "Uttarkashi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Central Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "Central Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "East Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "New Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "New Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "North Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North East Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "North East Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North West Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "North West Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shahdara",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "Shahdara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "South Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South East Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "South East Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South West Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "South West Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Delhi",
+    "stateCode": "DL",
+    "cities": [
+      {
+        "name": "West Delhi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anantnag",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Anantnag",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bandipora",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Bandipora",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Baramulla",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Baramulla",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Budgam",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Budgam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Doda",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Doda",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ganderbal",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Ganderbal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jammu",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Jammu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kathua",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Kathua",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kishtwar",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Kishtwar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kulgam",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Kulgam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kupwara",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Kupwara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Poonch",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Poonch",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pulwama",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Pulwama",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Rajouri",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Rajouri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ramban",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Ramban",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Reasi",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Reasi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Samba",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Samba",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shopian",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Shopian",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Srinagar",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Srinagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Udhampur",
+    "stateCode": "JK",
+    "cities": [
+      {
+        "name": "Udhampur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Anjaw",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Anjaw",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Changlang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Changlang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dibang Valley",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Dibang Valley",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Kameng",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "East Kameng",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Siang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "East Siang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kamle",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Kamle",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kra Daadi",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Kra Daadi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kurung Kumey",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Kurung Kumey",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Leparada",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Leparada",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lohit",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Lohit",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Longding",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Longding",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lower Dibang Valley",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Lower Dibang Valley",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lower Siang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Lower Siang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lower Subansiri",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Lower Subansiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Namsai",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Namsai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pakke-Kessang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Pakke-Kessang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Papum Pare",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Papum Pare",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shi-Yomi",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Shi-Yomi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Siang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Siang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tawang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Tawang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tirap",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Tirap",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Upper Siang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Upper Siang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Upper Subansiri",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Upper Subansiri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Kameng",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "West Kameng",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Siang",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "West Siang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Itanagar Capital Complex",
+    "stateCode": "AR",
+    "cities": [
+      {
+        "name": "Itanagar Capital Complex",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Baksa",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Baksa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Barpeta",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Barpeta",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Biswanath",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Biswanath",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bongaigaon",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Bongaigaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Cachar",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Cachar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Charaideo",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Charaideo",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chirang",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Chirang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Darrang",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Darrang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhemaji",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Dhemaji",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhubri",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Dhubri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dibrugarh",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Dibrugarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dima Hasao",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Dima Hasao",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Goalpara",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Goalpara",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Golaghat",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Golaghat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hailakandi",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Hailakandi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hojai",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Hojai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jorhat",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Jorhat",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kamrup",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Kamrup",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kamrup Metropolitan",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Kamrup Metropolitan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karbi Anglong",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Karbi Anglong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Karimganj",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Karimganj",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kokrajhar",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Kokrajhar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lakhimpur",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Lakhimpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Majuli",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Majuli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Morigaon",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Morigaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nagaon",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Nagaon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nalbari",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Nalbari",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sivasagar",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Sivasagar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sonitpur",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Sonitpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Salmara-Mankachar",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "South Salmara-Mankachar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tamulpur",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Tamulpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tinsukia",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Tinsukia",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Udalguri",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "Udalguri",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Karbi Anglong",
+    "stateCode": "AS",
+    "cities": [
+      {
+        "name": "West Karbi Anglong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Garo Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "East Garo Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Jaintia Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "East Jaintia Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "East Khasi Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "East Khasi Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North Garo Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "North Garo Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ri Bhoi",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "Ri Bhoi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Garo Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "South Garo Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South West Garo Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "South West Garo Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South West Khasi Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "South West Khasi Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Garo Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "West Garo Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Jaintia Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "West Jaintia Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Khasi Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "West Khasi Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Eastern West Khasi Hills",
+    "stateCode": "ML",
+    "cities": [
+      {
+        "name": "Eastern West Khasi Hills",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Bishnupur",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Bishnupur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chandel",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Chandel",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Churachandpur",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Churachandpur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Imphal East",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Imphal East",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Imphal West",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Imphal West",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Jiribam",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Jiribam",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kakching",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Kakching",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kamjong",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Kamjong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kangpokpi",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Kangpokpi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Noney",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Noney",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pherzawl",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Pherzawl",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Senapati",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Senapati",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tamenglong",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Tamenglong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tengnoupal",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Tengnoupal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Thoubal",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Thoubal",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Ukhrul",
+    "stateCode": "MN",
+    "cities": [
+      {
+        "name": "Ukhrul",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Aizawl",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Aizawl",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Champhai",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Champhai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Hnahthial",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Hnahthial",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khawzawl",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Khawzawl",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kolasib",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Kolasib",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lawngtlai",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Lawngtlai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Lunglei",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Lunglei",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mamit",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Mamit",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Saiha",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Saiha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Serchhip",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Serchhip",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Saitual",
+    "stateCode": "MZ",
+    "cities": [
+      {
+        "name": "Saitual",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chümoukedima",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Chümoukedima",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dimapur",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Dimapur",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kiphire",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Kiphire",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kohima",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Kohima",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Longleng",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Longleng",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mokokchung",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Mokokchung",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mon",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Mon",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Niuland",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Niuland",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Noklak",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Noklak",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Peren",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Peren",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Phek",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Phek",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Shamator",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Shamator",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tseminyü",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Tseminyü",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Tuensang",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Tuensang",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Wokha",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Wokha",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Zunheboto",
+    "stateCode": "NL",
+    "cities": [
+      {
+        "name": "Zunheboto",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dhalai",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "Dhalai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gomati",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "Gomati",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Khowai",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "Khowai",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North Tripura",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "North Tripura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Sepahijala",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "Sepahijala",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Tripura",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "South Tripura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Unakoti",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "Unakoti",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "West Tripura",
+    "stateCode": "TR",
+    "cities": [
+      {
+        "name": "West Tripura",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gangtok",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Gangtok",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Gyalshing",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Gyalshing",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Mangan",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Mangan",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Namchi",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Namchi",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Pakyong",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Pakyong",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Soreng",
+    "stateCode": "SK",
+    "cities": [
+      {
+        "name": "Soreng",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North Goa",
+    "stateCode": "GA",
+    "cities": [
+      {
+        "name": "North Goa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Goa",
+    "stateCode": "GA",
+    "cities": [
+      {
+        "name": "South Goa",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Nicobar",
+    "stateCode": "AN",
+    "cities": [
+      {
+        "name": "Nicobar",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "North and Middle Andaman",
+    "stateCode": "AN",
+    "cities": [
+      {
+        "name": "North and Middle Andaman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "South Andaman",
+    "stateCode": "AN",
+    "cities": [
+      {
+        "name": "South Andaman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Chandigarh",
+    "stateCode": "CH",
+    "cities": [
+      {
+        "name": "Chandigarh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Dadra and Nagar Haveli",
+    "stateCode": "DN",
+    "cities": [
+      {
+        "name": "Dadra and Nagar Haveli",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Daman",
+    "stateCode": "DN",
+    "cities": [
+      {
+        "name": "Daman",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Diu",
+    "stateCode": "DN",
+    "cities": [
+      {
+        "name": "Diu",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Leh",
+    "stateCode": "LA",
+    "cities": [
+      {
+        "name": "Leh",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  },
+  {
+    "districtName": "Kargil",
+    "stateCode": "LA",
+    "cities": [
+      {
+        "name": "Kargil",
+        "isHQ": true,
+        "latitude": null,
+        "longitude": null
+      }
+    ]
+  }
+]

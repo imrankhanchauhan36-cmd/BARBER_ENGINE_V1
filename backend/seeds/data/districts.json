@@ -1,0 +1,7013 @@
+[
+  {
+    "stateCode": "MH",
+    "name": "Ahmednagar",
+    "code": "AHM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "001"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Akola",
+    "code": "AKL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "002"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Amravati",
+    "code": "AMR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "003"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Aurangabad",
+    "code": "AUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "004"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Beed",
+    "code": "BED",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "005"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Bhandara",
+    "code": "BHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "006"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Buldhana",
+    "code": "BUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "007"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Chandrapur",
+    "code": "CHN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "008"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Dhule",
+    "code": "DHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "009"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Gadchiroli",
+    "code": "GAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "010"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Gondia",
+    "code": "GON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "011"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Hingoli",
+    "code": "HIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "012"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Jalgaon",
+    "code": "JLG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "013"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Jalna",
+    "code": "JAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "014"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Kolhapur",
+    "code": "KOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "015"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Latur",
+    "code": "LAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "016"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Mumbai City",
+    "code": "MCI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "017"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Mumbai Suburban",
+    "code": "MSU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "018"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Nagpur",
+    "code": "NGP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "019"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Nanded",
+    "code": "NAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "020"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Nandurbar",
+    "code": "NDB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "021"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Nashik",
+    "code": "NSK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "022"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Osmanabad",
+    "code": "OSM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "023"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Palghar",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "024"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Parbhani",
+    "code": "PRB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "025"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Pune",
+    "code": "PUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "026"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Raigad",
+    "code": "RAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "027"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Ratnagiri",
+    "code": "RAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "028"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Sangli",
+    "code": "SAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "029"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Satara",
+    "code": "SAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "030"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Sindhudurg",
+    "code": "SIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "031"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Solapur",
+    "code": "SOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "032"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Thane",
+    "code": "THA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "033"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Wardha",
+    "code": "WAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "034"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Washim",
+    "code": "WAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "035"
+  },
+  {
+    "stateCode": "MH",
+    "name": "Yavatmal",
+    "code": "YAV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "036"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Agra",
+    "code": "AGR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "037"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Aligarh",
+    "code": "ALG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "038"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Ambedkar Nagar",
+    "code": "AMB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "039"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Amethi",
+    "code": "AME",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "040"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Amroha",
+    "code": "AMR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "041"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Auraiya",
+    "code": "AUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "042"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Ayodhya",
+    "code": "AYO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "043"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Azamgarh",
+    "code": "AZA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "044"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Baghpat",
+    "code": "BAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "045"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Bahraich",
+    "code": "BAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "046"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Ballia",
+    "code": "BAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "047"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Balrampur",
+    "code": "BLR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "048"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Banda",
+    "code": "BAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "049"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Barabanki",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "050"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Bareilly",
+    "code": "BRL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "051"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Basti",
+    "code": "BST",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "052"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Bhadohi",
+    "code": "BHD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "053"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Bijnor",
+    "code": "BIJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "054"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Budaun",
+    "code": "BUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "055"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Bulandshahr",
+    "code": "BUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "056"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Chandauli",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "057"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Chitrakoot",
+    "code": "CHT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "058"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Deoria",
+    "code": "DEO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "059"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Etah",
+    "code": "ETA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "060"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Etawah",
+    "code": "ETW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "061"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Farrukhabad",
+    "code": "FRR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "062"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Fatehpur",
+    "code": "FAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "063"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Firozabad",
+    "code": "FIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "064"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Gautam Buddha Nagar",
+    "code": "GBN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "065"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Ghaziabad",
+    "code": "GZB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "066"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Ghazipur",
+    "code": "GHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "067"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Gonda",
+    "code": "GON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "068"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Gorakhpur",
+    "code": "GOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "069"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Hamirpur",
+    "code": "HAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "070"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Hapur",
+    "code": "HAP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "071"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Hardoi",
+    "code": "HAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "072"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Hathras",
+    "code": "HAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "073"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Jalaun",
+    "code": "JAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "074"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Jaunpur",
+    "code": "JAU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "075"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Jhansi",
+    "code": "JHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "076"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kannauj",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "077"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kanpur Dehat",
+    "code": "KND",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "078"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kanpur Nagar",
+    "code": "KNN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "079"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kasganj",
+    "code": "KAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "080"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kaushambi",
+    "code": "KAU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "081"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kheri",
+    "code": "KHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "082"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Kushinagar",
+    "code": "KUS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "083"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Lalitpur",
+    "code": "LAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "084"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Lucknow",
+    "code": "LKO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "085"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Maharajganj",
+    "code": "MAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "086"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Mahoba",
+    "code": "MHB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "087"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Mainpuri",
+    "code": "MNP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "088"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Mathura",
+    "code": "MTH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "089"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Mau",
+    "code": "MAU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "090"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Meerut",
+    "code": "MER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "091"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Mirzapur",
+    "code": "MIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "092"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Moradabad",
+    "code": "MOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "093"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Muzaffarnagar",
+    "code": "MUZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "094"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Pilibhit",
+    "code": "PIL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "095"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Pratapgarh",
+    "code": "PRT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "096"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Prayagraj",
+    "code": "PRY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "097"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Raebareli",
+    "code": "RAE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "098"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Rampur",
+    "code": "RAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "099"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Saharanpur",
+    "code": "SAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "100"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Sambhal",
+    "code": "SAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "101"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Sant Kabir Nagar",
+    "code": "SKN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "102"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Shahjahanpur",
+    "code": "SHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "103"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Shamli",
+    "code": "SHM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "104"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Shravasti",
+    "code": "SHR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "105"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Siddharthnagar",
+    "code": "SID",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "106"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Sitapur",
+    "code": "SIT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "107"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Sonbhadra",
+    "code": "SON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "108"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Sultanpur",
+    "code": "SUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "109"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Unnao",
+    "code": "UNN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "110"
+  },
+  {
+    "stateCode": "UP",
+    "name": "Varanasi",
+    "code": "VAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "111"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Ajmer",
+    "code": "AJM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "112"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Alwar",
+    "code": "ALW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "113"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Anupgarh",
+    "code": "ANU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "114"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Balotra",
+    "code": "BAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "115"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Banswara",
+    "code": "BNS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "116"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Baran",
+    "code": "BRN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "117"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Barmer",
+    "code": "BMR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "118"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Beawar",
+    "code": "BEA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "119"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Bharatpur",
+    "code": "BHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "120"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Bhilwara",
+    "code": "BHL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "121"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Bikaner",
+    "code": "BIK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "122"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Bundi",
+    "code": "BUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "123"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Chittorgarh",
+    "code": "CHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "124"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Churu",
+    "code": "CHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "125"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Dausa",
+    "code": "DAU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "126"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Deeg",
+    "code": "DEE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "127"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Dholpur",
+    "code": "DHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "128"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Didwana-Kuchaman",
+    "code": "DDK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "129"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Dungarpur",
+    "code": "DUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "130"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Gangapur City",
+    "code": "GGC",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "131"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Ganganagar",
+    "code": "GNG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "132"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Hanumangarh",
+    "code": "HAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "133"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jaipur",
+    "code": "JAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "134"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jaipur Rural",
+    "code": "JAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "135"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jaisalmer",
+    "code": "JSM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "136"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jalore",
+    "code": "JAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "137"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jhalawar",
+    "code": "JHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "138"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jhunjhunu",
+    "code": "JHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "139"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jodhpur",
+    "code": "JOD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "140"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Jodhpur Rural",
+    "code": "JOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "141"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Karauli",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "142"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Kekri",
+    "code": "KEK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "143"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Khairthal-Tijara",
+    "code": "KHT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "144"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Kota",
+    "code": "KOT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "145"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Kotputli-Behror",
+    "code": "KPB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "146"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Nagaur",
+    "code": "NAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "147"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Neem Ka Thana",
+    "code": "NKT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "148"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Pali",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "149"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Phalodi",
+    "code": "PHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "150"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Pratapgarh",
+    "code": "PRT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "151"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Rajsamand",
+    "code": "RAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "152"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Salumbar",
+    "code": "SAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "153"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Sanchore",
+    "code": "SAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "154"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Sawai Madhopur",
+    "code": "SAW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "155"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Shahpura",
+    "code": "SHP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "156"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Sikar",
+    "code": "SIK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "157"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Sirohi",
+    "code": "SIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "158"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Sri Ganganagar",
+    "code": "SGN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "159"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Tonk",
+    "code": "TON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "160"
+  },
+  {
+    "stateCode": "RJ",
+    "name": "Udaipur",
+    "code": "UDA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "161"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Bagalkot",
+    "code": "BGK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "162"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Ballari",
+    "code": "BLL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "163"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Belagavi",
+    "code": "BLG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "164"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Bengaluru Rural",
+    "code": "BRU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "165"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Bengaluru Urban",
+    "code": "BUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "166"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Bidar",
+    "code": "BID",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "167"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Chamarajanagar",
+    "code": "CMN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "168"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Chikkaballapur",
+    "code": "CKB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "169"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Chikkamagaluru",
+    "code": "CKM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "170"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Chitradurga",
+    "code": "CTD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "171"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Dakshina Kannada",
+    "code": "DKA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "172"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Davanagere",
+    "code": "DAV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "173"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Dharwad",
+    "code": "DHW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "174"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Gadag",
+    "code": "GAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "175"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Hassan",
+    "code": "HAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "176"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Haveri",
+    "code": "HAV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "177"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Kalaburagi",
+    "code": "KLB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "178"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Kodagu",
+    "code": "KOD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "179"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Kolar",
+    "code": "KLR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "180"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Koppal",
+    "code": "KOP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "181"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Mandya",
+    "code": "MAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "182"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Mysuru",
+    "code": "MYS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "183"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Raichur",
+    "code": "RAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "184"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Ramanagara",
+    "code": "RAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "185"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Shivamogga",
+    "code": "SHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "186"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Tumakuru",
+    "code": "TUM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "187"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Udupi",
+    "code": "UDP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "188"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Uttara Kannada",
+    "code": "UTK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "189"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Vijayapura",
+    "code": "VJP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "190"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Vijayanagara",
+    "code": "VJN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "191"
+  },
+  {
+    "stateCode": "KA",
+    "name": "Yadgir",
+    "code": "YAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "192"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Ahmedabad",
+    "code": "AHM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "193"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Amreli",
+    "code": "AMR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "194"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Anand",
+    "code": "AND",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "195"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Aravalli",
+    "code": "ARV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "196"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Banaskantha",
+    "code": "BNK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "197"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Bharuch",
+    "code": "BHR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "198"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Bhavnagar",
+    "code": "BHV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "199"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Botad",
+    "code": "BOT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "200"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Chhota Udaipur",
+    "code": "CUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "201"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Dahod",
+    "code": "DAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "202"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Dang",
+    "code": "DNG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "203"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Devbhoomi Dwarka",
+    "code": "DBD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "204"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Gandhinagar",
+    "code": "GND",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "205"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Gir Somnath",
+    "code": "GSM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "206"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Jamnagar",
+    "code": "JAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "207"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Junagadh",
+    "code": "JUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "208"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Kheda",
+    "code": "KHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "209"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Kutch",
+    "code": "KUT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "210"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Mahisagar",
+    "code": "MHS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "211"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Mehsana",
+    "code": "MEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "212"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Morbi",
+    "code": "MOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "213"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Narmada",
+    "code": "NRM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "214"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Navsari",
+    "code": "NAV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "215"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Panchmahal",
+    "code": "PAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "216"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Patan",
+    "code": "PAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "217"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Porbandar",
+    "code": "POR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "218"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Rajkot",
+    "code": "RAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "219"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Sabarkantha",
+    "code": "SAB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "220"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Surat",
+    "code": "SUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "221"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Surendranagar",
+    "code": "SNR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "222"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Tapi",
+    "code": "TAP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "223"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Vadodara",
+    "code": "VAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "224"
+  },
+  {
+    "stateCode": "GJ",
+    "name": "Valsad",
+    "code": "VAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "225"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Araria",
+    "code": "ARA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "226"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Arwal",
+    "code": "ARW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "227"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Aurangabad",
+    "code": "AUB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "228"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Banka",
+    "code": "BNK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "229"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Begusarai",
+    "code": "BEG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "230"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Bhagalpur",
+    "code": "BGP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "231"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Bhojpur",
+    "code": "BHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "232"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Buxar",
+    "code": "BUX",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "233"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Darbhanga",
+    "code": "DAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "234"
+  },
+  {
+    "stateCode": "BR",
+    "name": "East Champaran",
+    "code": "ECH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "235"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Gaya",
+    "code": "GAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "236"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Gopalganj",
+    "code": "GOP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "237"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Jamui",
+    "code": "JAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "238"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Jehanabad",
+    "code": "JEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "239"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Kaimur",
+    "code": "KAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "240"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Katihar",
+    "code": "KAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "241"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Khagaria",
+    "code": "KHG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "242"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Kishanganj",
+    "code": "KIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "243"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Lakhisarai",
+    "code": "LAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "244"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Madhepura",
+    "code": "MAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "245"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Madhubani",
+    "code": "MHB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "246"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Munger",
+    "code": "MUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "247"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Muzaffarpur",
+    "code": "MUZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "248"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Nalanda",
+    "code": "NAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "249"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Nawada",
+    "code": "NAW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "250"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Patna",
+    "code": "PAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "251"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Purnia",
+    "code": "PUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "252"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Rohtas",
+    "code": "ROH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "253"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Saharsa",
+    "code": "SAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "254"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Samastipur",
+    "code": "SAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "255"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Saran",
+    "code": "SAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "256"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Sheikhpura",
+    "code": "SHP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "257"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Sheohar",
+    "code": "SHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "258"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Sitamarhi",
+    "code": "SIT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "259"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Siwan",
+    "code": "SIW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "260"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Supaul",
+    "code": "SUP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "261"
+  },
+  {
+    "stateCode": "BR",
+    "name": "Vaishali",
+    "code": "VAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "262"
+  },
+  {
+    "stateCode": "BR",
+    "name": "West Champaran",
+    "code": "WCH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "263"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Agar Malwa",
+    "code": "AGM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "264"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Alirajpur",
+    "code": "ALR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "265"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Anuppur",
+    "code": "ANU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "266"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Ashoknagar",
+    "code": "ASH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "267"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Balaghat",
+    "code": "BAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "268"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Barwani",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "269"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Betul",
+    "code": "BET",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "270"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Bhind",
+    "code": "BHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "271"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Bhopal",
+    "code": "BHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "272"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Burhanpur",
+    "code": "BUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "273"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Chhatarpur",
+    "code": "CHH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "274"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Chhindwara",
+    "code": "CHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "275"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Damoh",
+    "code": "DAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "276"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Datia",
+    "code": "DAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "277"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Dewas",
+    "code": "DEW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "278"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Dhar",
+    "code": "DHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "279"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Dindori",
+    "code": "DIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "280"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Guna",
+    "code": "GUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "281"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Gwalior",
+    "code": "GWA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "282"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Harda",
+    "code": "HAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "283"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Indore",
+    "code": "IND",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "284"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Jabalpur",
+    "code": "JAB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "285"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Jhabua",
+    "code": "JHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "286"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Katni",
+    "code": "KAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "287"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Khandwa",
+    "code": "KHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "288"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Khargone",
+    "code": "KHG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "289"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Maihar",
+    "code": "MAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "290"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Mandla",
+    "code": "MAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "291"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Mandsaur",
+    "code": "MDS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "292"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Morena",
+    "code": "MOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "293"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Narmadapuram",
+    "code": "NAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "294"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Narsinghpur",
+    "code": "NAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "295"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Neemuch",
+    "code": "NEE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "296"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Niwari",
+    "code": "NIW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "297"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Panna",
+    "code": "PAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "298"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Pandhurna",
+    "code": "PDH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "299"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Raisen",
+    "code": "RAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "300"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Rajgarh",
+    "code": "RAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "301"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Ratlam",
+    "code": "RAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "302"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Rewa",
+    "code": "REW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "303"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Sagar",
+    "code": "SAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "304"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Satna",
+    "code": "SAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "305"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Sehore",
+    "code": "SEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "306"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Seoni",
+    "code": "SEO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "307"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Shahdol",
+    "code": "SHD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "308"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Shajapur",
+    "code": "SHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "309"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Sheopur",
+    "code": "SHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "310"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Shivpuri",
+    "code": "SHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "311"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Sidhi",
+    "code": "SID",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "312"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Singrauli",
+    "code": "SIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "313"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Tikamgarh",
+    "code": "TIK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "314"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Ujjain",
+    "code": "UJJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "315"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Umaria",
+    "code": "UMA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "316"
+  },
+  {
+    "stateCode": "MP",
+    "name": "Vidisha",
+    "code": "VID",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "317"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Ariyalur",
+    "code": "ARI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "318"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Chengalpattu",
+    "code": "CGL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "319"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Chennai",
+    "code": "CHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "320"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Coimbatore",
+    "code": "COI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "321"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Cuddalore",
+    "code": "CUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "322"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Dharmapuri",
+    "code": "DHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "323"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Dindigul",
+    "code": "DIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "324"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Erode",
+    "code": "ERO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "325"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Kallakurichi",
+    "code": "KAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "326"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Kanchipuram",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "327"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Kanyakumari",
+    "code": "KNY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "328"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Karur",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "329"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Krishnagiri",
+    "code": "KRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "330"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Madurai",
+    "code": "MAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "331"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Mayiladuthurai",
+    "code": "MAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "332"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Nagapattinam",
+    "code": "NAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "333"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Namakkal",
+    "code": "NAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "334"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Nilgiris",
+    "code": "NIL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "335"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Perambalur",
+    "code": "PER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "336"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Pudukkottai",
+    "code": "PUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "337"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Ramanathapuram",
+    "code": "RAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "338"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Ranipet",
+    "code": "RAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "339"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Salem",
+    "code": "SAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "340"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Sivaganga",
+    "code": "SIV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "341"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tenkasi",
+    "code": "TEN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "342"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Thanjavur",
+    "code": "THA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "343"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Theni",
+    "code": "THE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "344"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Thoothukudi",
+    "code": "THO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "345"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tiruchirappalli",
+    "code": "TRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "346"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tirunelveli",
+    "code": "TIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "347"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tirupattur",
+    "code": "TPR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "348"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tiruppur",
+    "code": "TPU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "349"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tiruvallur",
+    "code": "TVL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "350"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tiruvannamalai",
+    "code": "TVA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "351"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Tiruvarur",
+    "code": "TVR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "352"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Vellore",
+    "code": "VEL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "353"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Viluppuram",
+    "code": "VIL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "354"
+  },
+  {
+    "stateCode": "TN",
+    "name": "Virudhunagar",
+    "code": "VIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "355"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Alipurduar",
+    "code": "ALP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "356"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Bankura",
+    "code": "BNK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "357"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Birbhum",
+    "code": "BIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "358"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Cooch Behar",
+    "code": "COB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "359"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Dakshin Dinajpur",
+    "code": "DDI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "360"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Darjeeling",
+    "code": "DAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "361"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Hooghly",
+    "code": "HOO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "362"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Howrah",
+    "code": "HOW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "363"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Jalpaiguri",
+    "code": "JAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "364"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Jhargram",
+    "code": "JHR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "365"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Kalimpong",
+    "code": "KAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "366"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Kolkata",
+    "code": "KOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "367"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Malda",
+    "code": "MAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "368"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Murshidabad",
+    "code": "MUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "369"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Nadia",
+    "code": "NAD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "370"
+  },
+  {
+    "stateCode": "WB",
+    "name": "North 24 Parganas",
+    "code": "N24",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "371"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Paschim Bardhaman",
+    "code": "PBA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "372"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Paschim Medinipur",
+    "code": "PME",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "373"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Purba Bardhaman",
+    "code": "PBB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "374"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Purba Medinipur",
+    "code": "PMD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "375"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Purulia",
+    "code": "PUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "376"
+  },
+  {
+    "stateCode": "WB",
+    "name": "South 24 Parganas",
+    "code": "S24",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "377"
+  },
+  {
+    "stateCode": "WB",
+    "name": "Uttar Dinajpur",
+    "code": "UDI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "378"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Adilabad",
+    "code": "ADI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "379"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Bhadradri Kothagudem",
+    "code": "BKG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "380"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Hanumakonda",
+    "code": "HNK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "381"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Hyderabad",
+    "code": "HYD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "382"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Jagtial",
+    "code": "JAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "383"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Jangaon",
+    "code": "JAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "384"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Jayashankar Bhupalpally",
+    "code": "JBP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "385"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Jogulamba Gadwal",
+    "code": "JGG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "386"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Kamareddy",
+    "code": "KAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "387"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Karimnagar",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "388"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Khammam",
+    "code": "KHM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "389"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Komaram Bheem Asifabad",
+    "code": "KBA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "390"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Mahabubabad",
+    "code": "MHB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "391"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Mahabubnagar",
+    "code": "MBN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "392"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Mancherial",
+    "code": "MCH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "393"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Medak",
+    "code": "MED",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "394"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Medchal-Malkajgiri",
+    "code": "MCM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "395"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Mulugu",
+    "code": "MUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "396"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Nagarkurnool",
+    "code": "NGK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "397"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Nalgonda",
+    "code": "NAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "398"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Narayanpet",
+    "code": "NAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "399"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Nirmal",
+    "code": "NIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "400"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Nizamabad",
+    "code": "NIZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "401"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Peddapalli",
+    "code": "PED",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "402"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Rajanna Sircilla",
+    "code": "RSI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "403"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Ranga Reddy",
+    "code": "RRD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "404"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Sangareddy",
+    "code": "SAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "405"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Siddipet",
+    "code": "SID",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "406"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Suryapet",
+    "code": "SUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "407"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Vikarabad",
+    "code": "VIK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "408"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Wanaparthy",
+    "code": "WAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "409"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Warangal",
+    "code": "WAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "410"
+  },
+  {
+    "stateCode": "TS",
+    "name": "Yadadri Bhuvanagiri",
+    "code": "YBG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "411"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Alluri Sitharama Raju",
+    "code": "ASR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "412"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Anakapalli",
+    "code": "ANA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "413"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Anantapur",
+    "code": "ANT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "414"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Annamayya",
+    "code": "ANN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "415"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Bapatla",
+    "code": "BAP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "416"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Chittoor",
+    "code": "CHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "417"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Dr. B.R. Ambedkar Konaseema",
+    "code": "KON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "418"
+  },
+  {
+    "stateCode": "AP",
+    "name": "East Godavari",
+    "code": "EGD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "419"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Eluru",
+    "code": "ELU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "420"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Guntur",
+    "code": "GUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "421"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Kakinada",
+    "code": "KAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "422"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Krishna",
+    "code": "KRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "423"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Kurnool",
+    "code": "KUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "424"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Nandyal",
+    "code": "NAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "425"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Nellore",
+    "code": "NEL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "426"
+  },
+  {
+    "stateCode": "AP",
+    "name": "NTR",
+    "code": "NTR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "427"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Palnadu",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "428"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Parvathipuram Manyam",
+    "code": "PMN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "429"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Prakasam",
+    "code": "PRA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "430"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Sri Potti Sriramulu Nellore",
+    "code": "SPS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "431"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Sri Sathya Sai",
+    "code": "SSS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "432"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Srikakulam",
+    "code": "SRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "433"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Tirupati",
+    "code": "TIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "434"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Visakhapatnam",
+    "code": "VIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "435"
+  },
+  {
+    "stateCode": "AP",
+    "name": "Vizianagaram",
+    "code": "VIZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "436"
+  },
+  {
+    "stateCode": "AP",
+    "name": "West Godavari",
+    "code": "WGD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "437"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Angul",
+    "code": "ANG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "438"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Balangir",
+    "code": "BAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "439"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Balasore",
+    "code": "BLS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "440"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Bargarh",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "441"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Bhadrak",
+    "code": "BHD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "442"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Boudh",
+    "code": "BOU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "443"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Cuttack",
+    "code": "CUT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "444"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Deogarh",
+    "code": "DEO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "445"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Dhenkanal",
+    "code": "DHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "446"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Gajapati",
+    "code": "GAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "447"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Ganjam",
+    "code": "GAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "448"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Jagatsinghpur",
+    "code": "JAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "449"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Jajpur",
+    "code": "JAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "450"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Jharsuguda",
+    "code": "JHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "451"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Kalahandi",
+    "code": "KAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "452"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Kandhamal",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "453"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Kendrapara",
+    "code": "KEN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "454"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Kendujhar",
+    "code": "KEO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "455"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Khordha",
+    "code": "KHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "456"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Koraput",
+    "code": "KOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "457"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Malkangiri",
+    "code": "MAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "458"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Mayurbhanj",
+    "code": "MAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "459"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Nabarangpur",
+    "code": "NAB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "460"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Nayagarh",
+    "code": "NAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "461"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Nuapada",
+    "code": "NUA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "462"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Puri",
+    "code": "PUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "463"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Rayagada",
+    "code": "RAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "464"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Sambalpur",
+    "code": "SAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "465"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Subarnapur",
+    "code": "SUB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "466"
+  },
+  {
+    "stateCode": "OD",
+    "name": "Sundargarh",
+    "code": "SUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "467"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Alappuzha",
+    "code": "ALP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "468"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Ernakulam",
+    "code": "ERN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "469"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Idukki",
+    "code": "IDU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "470"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Kannur",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "471"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Kasaragod",
+    "code": "KAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "472"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Kollam",
+    "code": "KOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "473"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Kottayam",
+    "code": "KOT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "474"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Kozhikode",
+    "code": "KOZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "475"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Malappuram",
+    "code": "MAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "476"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Palakkad",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "477"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Pathanamthitta",
+    "code": "PAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "478"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Thiruvananthapuram",
+    "code": "THI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "479"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Thrissur",
+    "code": "THR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "480"
+  },
+  {
+    "stateCode": "KL",
+    "name": "Wayanad",
+    "code": "WAY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "481"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Ambala",
+    "code": "AMB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "482"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Bhiwani",
+    "code": "BHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "483"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Charkhi Dadri",
+    "code": "CDR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "484"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Faridabad",
+    "code": "FAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "485"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Fatehabad",
+    "code": "FAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "486"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Gurugram",
+    "code": "GUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "487"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Hisar",
+    "code": "HIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "488"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Jhajjar",
+    "code": "JHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "489"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Jind",
+    "code": "JIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "490"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Kaithal",
+    "code": "KAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "491"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Karnal",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "492"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Kurukshetra",
+    "code": "KUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "493"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Mahendragarh",
+    "code": "MAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "494"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Nuh",
+    "code": "NUH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "495"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Palwal",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "496"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Panchkula",
+    "code": "PAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "497"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Panipat",
+    "code": "PPT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "498"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Rewari",
+    "code": "REW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "499"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Rohtak",
+    "code": "ROH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "500"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Sirsa",
+    "code": "SIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "501"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Sonipat",
+    "code": "SON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "502"
+  },
+  {
+    "stateCode": "HR",
+    "name": "Yamunanagar",
+    "code": "YAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "503"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Amritsar",
+    "code": "AMR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "504"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Barnala",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "505"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Bathinda",
+    "code": "BAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "506"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Faridkot",
+    "code": "FRK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "507"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Fatehgarh Sahib",
+    "code": "FGS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "508"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Fazilka",
+    "code": "FAZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "509"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Ferozepur",
+    "code": "FER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "510"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Gurdaspur",
+    "code": "GUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "511"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Hoshiarpur",
+    "code": "HOS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "512"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Jalandhar",
+    "code": "JAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "513"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Kapurthala",
+    "code": "KAP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "514"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Ludhiana",
+    "code": "LUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "515"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Malerkotla",
+    "code": "MLK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "516"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Mansa",
+    "code": "MAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "517"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Moga",
+    "code": "MOG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "518"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Mohali (SAS Nagar)",
+    "code": "MOH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "519"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Muktsar",
+    "code": "MUK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "520"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Pathankot",
+    "code": "PAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "521"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Patiala",
+    "code": "PTL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "522"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Rupnagar",
+    "code": "RUP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "523"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Sangrur",
+    "code": "SAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "524"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Shaheed Bhagat Singh Nagar",
+    "code": "SBS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "525"
+  },
+  {
+    "stateCode": "PB",
+    "name": "Tarn Taran",
+    "code": "TAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "526"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Bilaspur",
+    "code": "BIL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "527"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Chamba",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "528"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Hamirpur",
+    "code": "HAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "529"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Kangra",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "530"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Kinnaur",
+    "code": "KIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "531"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Kullu",
+    "code": "KUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "532"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Lahaul and Spiti",
+    "code": "LAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "533"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Mandi",
+    "code": "MAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "534"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Shimla",
+    "code": "SHI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "535"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Sirmaur",
+    "code": "SIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "536"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Solan",
+    "code": "SOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "537"
+  },
+  {
+    "stateCode": "HP",
+    "name": "Una",
+    "code": "UNA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "538"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Bokaro",
+    "code": "BOK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "539"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Chatra",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "540"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Deoghar",
+    "code": "DEO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "541"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Dhanbad",
+    "code": "DHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "542"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Dumka",
+    "code": "DUM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "543"
+  },
+  {
+    "stateCode": "JH",
+    "name": "East Singhbhum",
+    "code": "ESB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "544"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Garhwa",
+    "code": "GAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "545"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Giridih",
+    "code": "GIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "546"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Godda",
+    "code": "GOD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "547"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Gumla",
+    "code": "GUM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "548"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Hazaribagh",
+    "code": "HAZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "549"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Jamtara",
+    "code": "JAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "550"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Khunti",
+    "code": "KHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "551"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Koderma",
+    "code": "KOD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "552"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Latehar",
+    "code": "LAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "553"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Lohardaga",
+    "code": "LOH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "554"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Pakur",
+    "code": "PAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "555"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Palamu",
+    "code": "PAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "556"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Ramgarh",
+    "code": "RAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "557"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Ranchi",
+    "code": "RAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "558"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Sahebganj",
+    "code": "SAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "559"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Seraikela Kharsawan",
+    "code": "SER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "560"
+  },
+  {
+    "stateCode": "JH",
+    "name": "Simdega",
+    "code": "SIM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "561"
+  },
+  {
+    "stateCode": "JH",
+    "name": "West Singhbhum",
+    "code": "WSB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "562"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Balod",
+    "code": "BAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "563"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Baloda Bazar",
+    "code": "BBA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "564"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Balrampur",
+    "code": "BRP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "565"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Bastar",
+    "code": "BAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "566"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Bemetara",
+    "code": "BEM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "567"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Bijapur",
+    "code": "BIJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "568"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Bilaspur",
+    "code": "BIL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "569"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Dantewada",
+    "code": "DAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "570"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Dhamtari",
+    "code": "DHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "571"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Durg",
+    "code": "DUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "572"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Gariaband",
+    "code": "GAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "573"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Gaurela-Pendra-Marwahi",
+    "code": "GPM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "574"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Janjgir-Champa",
+    "code": "JJC",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "575"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Jashpur",
+    "code": "JAS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "576"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Kabirdham",
+    "code": "KAB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "577"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Kanker",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "578"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Khairagarh-Chhuikhadan-Gandai",
+    "code": "KCG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "579"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Kondagaon",
+    "code": "KON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "580"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Korba",
+    "code": "KOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "581"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Koriya",
+    "code": "KRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "582"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Mahasamund",
+    "code": "MAH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "583"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Manendragarh-Chirmiri-Bharatpur",
+    "code": "MCB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "584"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Mohla-Manpur-Ambagarh Chowki",
+    "code": "MMA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "585"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Mungeli",
+    "code": "MUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "586"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Narayanpur",
+    "code": "NAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "587"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Raigarh",
+    "code": "RAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "588"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Raipur",
+    "code": "RPR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "589"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Rajnandgaon",
+    "code": "RAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "590"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Sakti",
+    "code": "SAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "591"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Sarangarh-Bilaigarh",
+    "code": "SBI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "592"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Sukma",
+    "code": "SUK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "593"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Surajpur",
+    "code": "SUR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "594"
+  },
+  {
+    "stateCode": "CG",
+    "name": "Surguja",
+    "code": "SRG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "595"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Almora",
+    "code": "ALM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "596"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Bageshwar",
+    "code": "BAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "597"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Chamoli",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "598"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Champawat",
+    "code": "CHP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "599"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Dehradun",
+    "code": "DEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "600"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Haridwar",
+    "code": "HAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "601"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Nainital",
+    "code": "NAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "602"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Pauri Garhwal",
+    "code": "PAU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "603"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Pithoragarh",
+    "code": "PIT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "604"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Rudraprayag",
+    "code": "RUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "605"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Tehri Garhwal",
+    "code": "TEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "606"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Udham Singh Nagar",
+    "code": "USN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "607"
+  },
+  {
+    "stateCode": "UK",
+    "name": "Uttarkashi",
+    "code": "UTK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "608"
+  },
+  {
+    "stateCode": "DL",
+    "name": "Central Delhi",
+    "code": "CDL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "609"
+  },
+  {
+    "stateCode": "DL",
+    "name": "East Delhi",
+    "code": "EDL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "610"
+  },
+  {
+    "stateCode": "DL",
+    "name": "New Delhi",
+    "code": "NDL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "611"
+  },
+  {
+    "stateCode": "DL",
+    "name": "North Delhi",
+    "code": "NDH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "612"
+  },
+  {
+    "stateCode": "DL",
+    "name": "North East Delhi",
+    "code": "NED",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "613"
+  },
+  {
+    "stateCode": "DL",
+    "name": "North West Delhi",
+    "code": "NWD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "614"
+  },
+  {
+    "stateCode": "DL",
+    "name": "Shahdara",
+    "code": "SHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "615"
+  },
+  {
+    "stateCode": "DL",
+    "name": "South Delhi",
+    "code": "SDL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "616"
+  },
+  {
+    "stateCode": "DL",
+    "name": "South East Delhi",
+    "code": "SED",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "617"
+  },
+  {
+    "stateCode": "DL",
+    "name": "South West Delhi",
+    "code": "SWD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "618"
+  },
+  {
+    "stateCode": "DL",
+    "name": "West Delhi",
+    "code": "WDL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "619"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Anantnag",
+    "code": "ANA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "620"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Bandipora",
+    "code": "BAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "621"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Baramulla",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "622"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Budgam",
+    "code": "BUD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "623"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Doda",
+    "code": "DOD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "624"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Ganderbal",
+    "code": "GAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "625"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Jammu",
+    "code": "JAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "626"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Kathua",
+    "code": "KAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "627"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Kishtwar",
+    "code": "KIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "628"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Kulgam",
+    "code": "KUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "629"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Kupwara",
+    "code": "KUP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "630"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Poonch",
+    "code": "POO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "631"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Pulwama",
+    "code": "PUL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "632"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Rajouri",
+    "code": "RAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "633"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Ramban",
+    "code": "RAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "634"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Reasi",
+    "code": "REA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "635"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Samba",
+    "code": "SAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "636"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Shopian",
+    "code": "SHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "637"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Srinagar",
+    "code": "SRI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "638"
+  },
+  {
+    "stateCode": "JK",
+    "name": "Udhampur",
+    "code": "UDH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "639"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Anjaw",
+    "code": "ANJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "640"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Changlang",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "641"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Dibang Valley",
+    "code": "DBV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "642"
+  },
+  {
+    "stateCode": "AR",
+    "name": "East Kameng",
+    "code": "EKA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "643"
+  },
+  {
+    "stateCode": "AR",
+    "name": "East Siang",
+    "code": "ESI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "644"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Kamle",
+    "code": "KAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "645"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Kra Daadi",
+    "code": "KRD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "646"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Kurung Kumey",
+    "code": "KUK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "647"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Leparada",
+    "code": "LEP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "648"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Lohit",
+    "code": "LOH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "649"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Longding",
+    "code": "LON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "650"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Lower Dibang Valley",
+    "code": "LDV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "651"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Lower Siang",
+    "code": "LSI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "652"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Lower Subansiri",
+    "code": "LSU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "653"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Namsai",
+    "code": "NAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "654"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Pakke-Kessang",
+    "code": "PKK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "655"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Papum Pare",
+    "code": "PAP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "656"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Shi-Yomi",
+    "code": "SHY",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "657"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Siang",
+    "code": "SIA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "658"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Tawang",
+    "code": "TAW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "659"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Tirap",
+    "code": "TIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "660"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Upper Siang",
+    "code": "USI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "661"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Upper Subansiri",
+    "code": "USU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "662"
+  },
+  {
+    "stateCode": "AR",
+    "name": "West Kameng",
+    "code": "WKA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "663"
+  },
+  {
+    "stateCode": "AR",
+    "name": "West Siang",
+    "code": "WSI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "664"
+  },
+  {
+    "stateCode": "AR",
+    "name": "Itanagar Capital Complex",
+    "code": "ICC",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "665"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Baksa",
+    "code": "BAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "666"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Barpeta",
+    "code": "BAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "667"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Biswanath",
+    "code": "BIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "668"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Bongaigaon",
+    "code": "BON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "669"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Cachar",
+    "code": "CAC",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "670"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Charaideo",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "671"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Chirang",
+    "code": "CHR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "672"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Darrang",
+    "code": "DAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "673"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Dhemaji",
+    "code": "DHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "674"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Dhubri",
+    "code": "DHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "675"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Dibrugarh",
+    "code": "DIB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "676"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Dima Hasao",
+    "code": "DIM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "677"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Goalpara",
+    "code": "GOA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "678"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Golaghat",
+    "code": "GOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "679"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Hailakandi",
+    "code": "HAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "680"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Hojai",
+    "code": "HOJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "681"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Jorhat",
+    "code": "JOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "682"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Kamrup",
+    "code": "KAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "683"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Kamrup Metropolitan",
+    "code": "KAMM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "684"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Karbi Anglong",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "685"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Karimganj",
+    "code": "KRG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "686"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Kokrajhar",
+    "code": "KOK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "687"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Lakhimpur",
+    "code": "LAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "688"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Majuli",
+    "code": "MAJ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "689"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Morigaon",
+    "code": "MOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "690"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Nagaon",
+    "code": "NAG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "691"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Nalbari",
+    "code": "NAL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "692"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Sivasagar",
+    "code": "SIV",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "693"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Sonitpur",
+    "code": "SON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "694"
+  },
+  {
+    "stateCode": "AS",
+    "name": "South Salmara-Mankachar",
+    "code": "SSM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "695"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Tamulpur",
+    "code": "TAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "696"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Tinsukia",
+    "code": "TIN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "697"
+  },
+  {
+    "stateCode": "AS",
+    "name": "Udalguri",
+    "code": "UDA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "698"
+  },
+  {
+    "stateCode": "AS",
+    "name": "West Karbi Anglong",
+    "code": "WKA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "699"
+  },
+  {
+    "stateCode": "ML",
+    "name": "East Garo Hills",
+    "code": "EGH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "700"
+  },
+  {
+    "stateCode": "ML",
+    "name": "East Jaintia Hills",
+    "code": "EJH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "701"
+  },
+  {
+    "stateCode": "ML",
+    "name": "East Khasi Hills",
+    "code": "EKH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "702"
+  },
+  {
+    "stateCode": "ML",
+    "name": "North Garo Hills",
+    "code": "NGH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "703"
+  },
+  {
+    "stateCode": "ML",
+    "name": "Ri Bhoi",
+    "code": "RIB",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "704"
+  },
+  {
+    "stateCode": "ML",
+    "name": "South Garo Hills",
+    "code": "SGH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "705"
+  },
+  {
+    "stateCode": "ML",
+    "name": "South West Garo Hills",
+    "code": "SWG",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "706"
+  },
+  {
+    "stateCode": "ML",
+    "name": "South West Khasi Hills",
+    "code": "SWK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "707"
+  },
+  {
+    "stateCode": "ML",
+    "name": "West Garo Hills",
+    "code": "WGH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "708"
+  },
+  {
+    "stateCode": "ML",
+    "name": "West Jaintia Hills",
+    "code": "WJH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "709"
+  },
+  {
+    "stateCode": "ML",
+    "name": "West Khasi Hills",
+    "code": "WKH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "710"
+  },
+  {
+    "stateCode": "ML",
+    "name": "Eastern West Khasi Hills",
+    "code": "EWK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "711"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Bishnupur",
+    "code": "BIS",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "712"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Chandel",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "713"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Churachandpur",
+    "code": "CHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "714"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Imphal East",
+    "code": "IME",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "715"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Imphal West",
+    "code": "IMW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "716"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Jiribam",
+    "code": "JIR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "717"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Kakching",
+    "code": "KAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "718"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Kamjong",
+    "code": "KAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "719"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Kangpokpi",
+    "code": "KAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "720"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Noney",
+    "code": "NON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "721"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Pherzawl",
+    "code": "PHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "722"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Senapati",
+    "code": "SEN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "723"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Tamenglong",
+    "code": "TAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "724"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Tengnoupal",
+    "code": "TEN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "725"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Thoubal",
+    "code": "THO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "726"
+  },
+  {
+    "stateCode": "MN",
+    "name": "Ukhrul",
+    "code": "UKH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "727"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Aizawl",
+    "code": "AIZ",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "728"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Champhai",
+    "code": "CHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "729"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Hnahthial",
+    "code": "HNA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "730"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Khawzawl",
+    "code": "KHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "731"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Kolasib",
+    "code": "KOL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "732"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Lawngtlai",
+    "code": "LAW",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "733"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Lunglei",
+    "code": "LUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "734"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Mamit",
+    "code": "MAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "735"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Saiha",
+    "code": "SAI",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "736"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Serchhip",
+    "code": "SER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "737"
+  },
+  {
+    "stateCode": "MZ",
+    "name": "Saitual",
+    "code": "SAT",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "738"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Chümoukedima",
+    "code": "CHU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "739"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Dimapur",
+    "code": "DIM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "740"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Kiphire",
+    "code": "KIP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "741"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Kohima",
+    "code": "KOH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "742"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Longleng",
+    "code": "LON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "743"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Mokokchung",
+    "code": "MOK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "744"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Mon",
+    "code": "MON",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "745"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Niuland",
+    "code": "NIU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "746"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Noklak",
+    "code": "NOK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "747"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Peren",
+    "code": "PER",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "748"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Phek",
+    "code": "PHE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "749"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Shamator",
+    "code": "SHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "750"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Tseminyü",
+    "code": "TSE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "751"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Tuensang",
+    "code": "TUE",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "752"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Wokha",
+    "code": "WOK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "753"
+  },
+  {
+    "stateCode": "NL",
+    "name": "Zunheboto",
+    "code": "ZUN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "754"
+  },
+  {
+    "stateCode": "TR",
+    "name": "Dhalai",
+    "code": "DHA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "755"
+  },
+  {
+    "stateCode": "TR",
+    "name": "Gomati",
+    "code": "GOM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "756"
+  },
+  {
+    "stateCode": "TR",
+    "name": "Khowai",
+    "code": "KHO",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "757"
+  },
+  {
+    "stateCode": "TR",
+    "name": "North Tripura",
+    "code": "NTR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "758"
+  },
+  {
+    "stateCode": "TR",
+    "name": "Sepahijala",
+    "code": "SEP",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "759"
+  },
+  {
+    "stateCode": "TR",
+    "name": "South Tripura",
+    "code": "STR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "760"
+  },
+  {
+    "stateCode": "TR",
+    "name": "Unakoti",
+    "code": "UNA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "761"
+  },
+  {
+    "stateCode": "TR",
+    "name": "West Tripura",
+    "code": "WTR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "762"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Gangtok",
+    "code": "GAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "763"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Gyalshing",
+    "code": "GYL",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "764"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Mangan",
+    "code": "MAN",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "765"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Namchi",
+    "code": "NAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "766"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Pakyong",
+    "code": "PAK",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "767"
+  },
+  {
+    "stateCode": "SK",
+    "name": "Soreng",
+    "code": "SOR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "768"
+  },
+  {
+    "stateCode": "GA",
+    "name": "North Goa",
+    "code": "NGA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "769"
+  },
+  {
+    "stateCode": "GA",
+    "name": "South Goa",
+    "code": "SGA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "770"
+  },
+  {
+    "stateCode": "AN",
+    "name": "Nicobar",
+    "code": "NIC",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "771"
+  },
+  {
+    "stateCode": "AN",
+    "name": "North and Middle Andaman",
+    "code": "NMA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "772"
+  },
+  {
+    "stateCode": "AN",
+    "name": "South Andaman",
+    "code": "SAA",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "773"
+  },
+  {
+    "stateCode": "CH",
+    "name": "Chandigarh",
+    "code": "CHD",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "774"
+  },
+  {
+    "stateCode": "DN",
+    "name": "Dadra and Nagar Haveli",
+    "code": "DNH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "775"
+  },
+  {
+    "stateCode": "DN",
+    "name": "Daman",
+    "code": "DAM",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "776"
+  },
+  {
+    "stateCode": "DN",
+    "name": "Diu",
+    "code": "DIU",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "777"
+  },
+  {
+    "stateCode": "LA",
+    "name": "Leh",
+    "code": "LEH",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "778"
+  },
+  {
+    "stateCode": "LA",
+    "name": "Kargil",
+    "code": "KAR",
+    "priority": 0,
+    "isActive": true,
+    "launchStatus": "PRE_LAUNCH",
+    "admin2Code": "779"
+  }
+]
