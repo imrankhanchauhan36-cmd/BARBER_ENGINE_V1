@@ -1,0 +1,552 @@
+import Booking from "../models/Booking.js";
+import Chair   from "../models/Chair.js";
+import { getIO } from "../socket/io.js";          // your existing Socket.IO instance
+
+//////////////////////////////////////////////////////////////
+// 🔥 CONFIG
+//////////////////////////////////////////////////////////////
+
+/**
+ * How many minutes after serviceCompletedAt the chair stays in
+ * BUFFER_CLEANUP state before becoming AVAILABLE again.
+ *
+ * Note: each booking already carries its own bufferTime field.
+ * This constant is only the FALLBACK if bufferTime is missing.
+ */
+const DEFAULT_BUFFER_MINUTES = 10;
+
+/**
+ * FIX-4: SOCKET THROTTLE — debounce window in milliseconds.
+ *
+ * Problem: high-frequency salons may trigger many booking transitions
+ * in a short burst (check-in + OTP verify + service start all fire
+ * within seconds). Each transition calls emitChairGridUpdate, which
+ * re-queries DB and emits. This is wasteful and can spam dashboards.
+ *
+ * Solution: per-salon debounce map.
+ * First call within the window fires immediately.
+ * Subsequent calls within THROTTLE_MS are coalesced into ONE emit
+ * that fires after the window closes.
+ *
+ * Result: dashboard never receives more than 1 full grid update
+ * per salon per THROTTLE_MS window, regardless of burst volume.
+ *
+ * Set to 0 to disable throttling (e.g. in tests).
+ */
+const GRID_EMIT_THROTTLE_MS = 300;
+
+/** @type {Map<string, ReturnType<typeof setTimeout>>} */
+const _gridEmitTimers = new Map();
+
+//////////////////////////////////////////////////////////////
+// 🔥 CHAIR STATES
+// These are COMPUTED states — derived from bookings at query time.
+// They are NEVER stored in the database.
+//////////////////////////////////////////////////////////////
+
+export const CHAIR_STATE = Object.freeze({
+  AVAILABLE:        "AVAILABLE",
+  HOLD:             "HOLD",             // FIX-1: payment pending — booking not yet confirmed
+  RESERVED:         "RESERVED",         // FIX-1: confirmed future booking — customer not yet arrived
+  OCCUPIED:         "OCCUPIED",         // CHECKED_IN or ONGOING — physically in use
+  BUFFER_CLEANUP:   "BUFFER_CLEANUP",   // service done, cleanup window active
+  CUSTOMER_DELAYED: "CUSTOMER_DELAYED", // grace period running, chair held
+  DISABLED:         "DISABLED",         // chair manually disabled by salon
+});
+
+//////////////////////////////////////////////////////////////
+// CHAIR STATE REFERENCE
+//
+//  HOLD             → booking.status === "HOLD"
+//                     payment not yet captured; slot reserved short-term.
+//                     Chair shown as soft-blocked. Will auto-release on expiry.
+//
+//  RESERVED         → booking.status === "CONFIRMED"
+//                     payment confirmed; future appointment locked in.
+//                     Chair shown as hard-blocked. Customer expected to arrive.
+//
+//  OCCUPIED         → booking.status === "CHECKED_IN" | "ONGOING"
+//                     Chair physically in use. Service in progress.
+//
+//  BUFFER_CLEANUP   → booking.status === "COMPLETED" + within bufferTime window
+//                     Service finished. Chair being cleaned. Not yet available.
+//
+//  CUSTOMER_DELAYED → booking.status === "CONFIRMED" + customerDelayedAt set
+//                     Customer marked as late. Grace period running.
+//                     Salon must decide: wait / release / check in.
+//
+//  DISABLED         → chair.isDisabled === true
+//                     Hard override. No bookings should land here.
+//////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////
+// 🧠 HELPERS
+//////////////////////////////////////////////////////////////
+
+/**
+ * Returns true if `now` is within the post-service buffer window.
+ *
+ * Buffer window = [serviceCompletedAt, serviceCompletedAt + bufferTime]
+ */
+const isInBufferWindow = (booking, now) => {
+  if (!booking.serviceCompletedAt) return false;
+
+  const bufferMs =
+    (booking.bufferTime ?? DEFAULT_BUFFER_MINUTES) * 60 * 1000;
+
+  const bufferEnd = new Date(
+    booking.serviceCompletedAt.getTime() + bufferMs
+  );
+
+  return now >= booking.serviceCompletedAt && now <= bufferEnd;
+};
+
+//////////////////////////////////////////////////////////////
+// 🧠 COMPUTE SINGLE CHAIR STATE
+//
+// Priority order:
+//   DISABLED > CUSTOMER_DELAYED > OCCUPIED > RESERVED > HOLD > BUFFER_CLEANUP > AVAILABLE
+//
+// Why this order?
+//   - DISABLED: hard override — chair is physically unusable.
+//   - CUSTOMER_DELAYED: active operational issue requiring salon action.
+//   - OCCUPIED: chair physically in use (CHECKED_IN / ONGOING).
+//   - RESERVED: confirmed booking, customer expected — hard slot block.
+//   - HOLD: payment pending — soft slot block, will auto-expire.
+//   - BUFFER_CLEANUP: service done but cleanup window still running.
+//   - AVAILABLE: fallback — no blocking state found.
+//////////////////////////////////////////////////////////////
+
+const computeChairState = (chair, activeBooking, now) => {
+  // 1. Hard override — chair manually disabled
+  if (chair.isDisabled) {
+    return {
+      state:   CHAIR_STATE.DISABLED,
+      booking: null,
+      meta:    { reason: chair.disabledReason ?? "Manually disabled" },
+    };
+  }
+
+  // No active booking on this chair right now
+  if (!activeBooking) {
+    return { state: CHAIR_STATE.AVAILABLE, booking: null, meta: {} };
+  }
+
+  const b = activeBooking;
+
+  // 2. CUSTOMER_DELAYED — FIX-2: correct trigger condition.
+  //
+  //    Old (wrong):  customerDelayedAt && arrivalGraceUntil && now < graceUntil
+  //    Problem:      arrivalGraceUntil may not yet be set when delayed first fires,
+  //                  or grace may have expired — both cases silently skipped delayed.
+  //
+  //    New (correct): customerDelayedAt set + booking still CONFIRMED
+  //    Meaning:       salon marked customer as late; booking not yet cancelled.
+  //                   The grace window (if any) is shown as meta — NOT as a gate.
+  if (b.customerDelayedAt && b.status === "CONFIRMED") {
+    return {
+      state:   CHAIR_STATE.CUSTOMER_DELAYED,
+      booking: _safeBookingPayload(b),
+      meta: {
+        customerDelayedAt: b.customerDelayedAt,
+        // graceEndsAt shown for UI only — does NOT gate this state
+        graceEndsAt:      b.arrivalGraceUntil ?? null,
+        graceRemainingMs: b.arrivalGraceUntil
+          ? Math.max(0, new Date(b.arrivalGraceUntil) - now)
+          : null,
+      },
+    };
+  }
+
+  // 3. OCCUPIED — service is physically in progress
+  if (b.status === "CHECKED_IN" || b.status === "ONGOING") {
+    return {
+      state:   CHAIR_STATE.OCCUPIED,
+      booking: _safeBookingPayload(b),
+      meta: {
+        serviceStartedAt: b.serviceStartedAt ?? null,
+        expectedDuration: b.serviceDuration  ?? null,
+      },
+    };
+  }
+
+  // 4. BUFFER_CLEANUP — service finished, cleanup window active
+  if (b.status === "COMPLETED" && isInBufferWindow(b, now)) {
+    const bufferMs  = (b.bufferTime ?? DEFAULT_BUFFER_MINUTES) * 60 * 1000;
+    const bufferEnd = new Date(b.serviceCompletedAt.getTime() + bufferMs);
+
+    return {
+      state:   CHAIR_STATE.BUFFER_CLEANUP,
+      booking: _safeBookingPayload(b),
+      meta: {
+        serviceCompletedAt: b.serviceCompletedAt,
+        bufferEndsAt:       bufferEnd,
+        bufferRemainingMs:  bufferEnd - now,
+      },
+    };
+  }
+
+  // 5. HOLD — FIX-3: expired HOLD → AVAILABLE immediately.
+  //
+  //    Background workers may not have cleaned up an expired HOLD yet.
+  //    Rather than showing a stale HOLD state on the dashboard until the
+  //    worker runs, we treat it as AVAILABLE during compute — zero DB writes,
+  //    purely defensive runtime check.
+  if (b.status === "HOLD") {
+    if (b.holdExpiresAt && now > new Date(b.holdExpiresAt)) {
+      // HOLD has expired — treat chair as available right now.
+      // Worker will formally cancel the booking asynchronously.
+      return {
+        state:   CHAIR_STATE.AVAILABLE,
+        booking: null,
+        meta:    { expiredHoldId: b._id },   // optional: dashboard can log this
+      };
+    }
+
+    // HOLD still active — FIX-1: HOLD = payment pending
+    return {
+      state:   CHAIR_STATE.HOLD,
+      booking: _safeBookingPayload(b),
+      meta: {
+        holdExpiresAt:   b.holdExpiresAt ?? null,
+        holdRemainingMs: b.holdExpiresAt
+          ? Math.max(0, new Date(b.holdExpiresAt) - now)
+          : null,
+      },
+    };
+  }
+
+  // 6. RESERVED — FIX-1: CONFIRMED = payment done, future appointment locked.
+  //    Distinct from HOLD: customer is expected, chair is hard-blocked.
+  if (b.status === "CONFIRMED") {
+    return {
+      state:   CHAIR_STATE.RESERVED,
+      booking: _safeBookingPayload(b),
+      meta: {
+        scheduledAt:        b.scheduledAt ?? null,
+        minutesUntilArrival: b.scheduledAt
+          ? Math.round((new Date(b.scheduledAt) - now) / 60000)
+          : null,
+      },
+    };
+  }
+
+  // 7. Fallback — no blocking state matched
+  return { state: CHAIR_STATE.AVAILABLE, booking: null, meta: {} };
+};
+
+//////////////////////////////////////////////////////////////
+// 🧠 SAFE BOOKING PAYLOAD
+// Strips sensitive / heavy fields before sending to clients.
+//////////////////////////////////////////////////////////////
+
+const _safeBookingPayload = (b) => ({
+  _id:              b._id,
+  status:           b.status,
+  scheduledAt:      b.scheduledAt,
+  serviceStartedAt: b.serviceStartedAt ?? null,
+  serviceDuration:  b.serviceDuration  ?? null,
+  bufferTime:       b.bufferTime       ?? null,
+  customerName:     b.customerName     ?? null,   // adjust to your schema
+  serviceId:        b.serviceId        ?? null,
+});
+
+//////////////////////////////////////////////////////////////
+// 🧠 FETCH ACTIVE BOOKINGS FOR TODAY
+//
+// "Active" means: any booking that could currently occupy a
+// chair — covers HOLD, CONFIRMED, CHECKED_IN, ONGOING, and
+// very-recently COMPLETED (within max possible buffer window).
+//
+// We fetch with a generous time window and let computeChairState
+// determine the precise state — keeping DB queries simple and
+// all business logic in JS.
+//////////////////////////////////////////////////////////////
+
+const fetchActiveBookings = async (salonId, now) => {
+  // Day boundaries in UTC (compatible with any timezone on server)
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // Maximum buffer we'd ever care about = 60 min safety window
+  const maxBufferMs   = 60 * 60 * 1000;
+  const bufferLookback = new Date(now.getTime() - maxBufferMs);
+
+  return Booking.find({
+    salonId,
+    $or: [
+      // Active / in-progress bookings for today
+      {
+        status:      { $in: ["HOLD", "CONFIRMED", "CHECKED_IN", "ONGOING"] },
+        scheduledAt: { $gte: dayStart, $lte: dayEnd },
+      },
+      // Recently completed — still inside potential buffer window
+      {
+        status:             "COMPLETED",
+        serviceCompletedAt: { $gte: bufferLookback },
+      },
+    ],
+  })
+    .select(
+      "chairId status scheduledAt serviceStartedAt serviceCompletedAt " +
+      "serviceDuration bufferTime holdExpiresAt customerDelayedAt " +
+      "arrivalGraceUntil customerName serviceId"
+    )
+    .lean();
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 COMPUTE FULL CHAIR GRID SNAPSHOT
+//
+// Returns the live state of every chair in the salon.
+// This is a pure read — nothing is written to the DB.
+//
+// @param {string|ObjectId} salonId
+// @returns {Array<ChairGridEntry>}
+//////////////////////////////////////////////////////////////
+
+export const getChairGridSnapshot = async (salonId) => {
+  const now = new Date();
+
+  // 1. Load all chairs for this salon
+  const chairs = await Chair.find({ salonId })
+    .select("_id label priority isDisabled disabledReason")
+    .lean();
+
+  if (!chairs.length) return [];
+
+  // 2. Load all active bookings for today in one query
+  const activeBookings = await fetchActiveBookings(salonId, now);
+
+  // 3. Build chairId → booking map (one active booking per chair max)
+  //
+  //    If somehow two active bookings exist for the same chair
+  //    (shouldn't happen with proper transition guards), we pick
+  //    the one with the highest-priority status.
+  // FIX-1: CONFIRMED (RESERVED) ranked above HOLD — confirmed booking
+  // is a stronger claim on a chair than a payment-pending hold.
+  const STATUS_PRIORITY = {
+    ONGOING:    6,
+    CHECKED_IN: 5,
+    CONFIRMED:  4,   // RESERVED in computed state
+    HOLD:       3,   // HOLD in computed state
+    COMPLETED:  2,   // BUFFER_CLEANUP if inside buffer window
+  };
+
+  const bookingByChair = {};
+
+  for (const booking of activeBookings) {
+    const cid    = booking.chairId?.toString();
+    const weight = STATUS_PRIORITY[booking.status] ?? 0;
+
+    if (!bookingByChair[cid] ||
+        weight > (STATUS_PRIORITY[bookingByChair[cid].status] ?? 0)) {
+      bookingByChair[cid] = booking;
+    }
+  }
+
+  // 4. Compute state for each chair
+  return chairs.map((chair) => {
+    const cid           = chair._id.toString();
+    const activeBooking = bookingByChair[cid] ?? null;
+    const computed      = computeChairState(chair, activeBooking, now);
+
+    return {
+      chairId:  chair._id,
+      label:    chair.label,
+      priority: chair.priority,
+      ...computed,    // { state, booking, meta }
+      computedAt: now,
+    };
+  });
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 EMIT CHAIR GRID UPDATE VIA SOCKET.IO
+//
+// Call this whenever a booking changes state — from your
+// booking transition handlers (confirm, checkIn, startService,
+// complete, noShow, etc.).
+//
+// Room convention: `salon:${salonId}`
+// Same room used by your existing realtime engine.
+//
+// @param {string|ObjectId} salonId
+//////////////////////////////////////////////////////////////
+
+export const emitChairGridUpdate = (salonId) => {
+  // FIX-4: debounced emit — coalesce burst transitions into one emit.
+  //
+  // Pattern: leading-edge + trailing-edge debounce.
+  //   - If no timer exists → emit immediately (leading edge, zero lag).
+  //   - Reset the timer on every call within the window.
+  //   - When the window closes with no further calls → emit once more
+  //     (trailing edge) to capture the final settled state.
+  //
+  // This guarantees:
+  //   ✅ Dashboard sees the first transition instantly (leading emit).
+  //   ✅ Burst of transitions → only ONE trailing emit after burst ends.
+  //   ✅ DB is never queried more than twice per burst regardless of size.
+
+  if (GRID_EMIT_THROTTLE_MS <= 0) {
+    // Throttling disabled — fire immediately (useful in tests)
+    _doEmitChairGrid(salonId);
+    return;
+  }
+
+  const key = salonId.toString();
+
+  if (!_gridEmitTimers.has(key)) {
+    // Leading edge — emit right away
+    _doEmitChairGrid(salonId);
+  } else {
+    // Already have a pending timer — cancel it; we'll reschedule below
+    clearTimeout(_gridEmitTimers.get(key));
+  }
+
+  // Schedule trailing-edge emit after the window
+  const timer = setTimeout(() => {
+    _gridEmitTimers.delete(key);
+    _doEmitChairGrid(salonId);
+  }, GRID_EMIT_THROTTLE_MS);
+
+  _gridEmitTimers.set(key, timer);
+};
+
+/** Internal: performs the actual DB query + socket emit. */
+const _doEmitChairGrid = async (salonId) => {
+  try {
+    const grid = await getChairGridSnapshot(salonId);
+    const io   = getIO();
+
+    io.to(`salon:${salonId}`).emit("chair:grid:update", {
+      salonId,
+      grid,
+      emittedAt: new Date(),
+    });
+  } catch (err) {
+    console.error(
+      `[ChairGrid] emitChairGridUpdate failed for salon=${salonId}:`,
+      err.message
+    );
+    // Non-fatal — booking state is already saved; only realtime push failed.
+    // The dashboard will re-sync on next poll or reconnect.
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 EMIT SINGLE CHAIR UPDATE
+//
+// Lighter-weight alternative when only one chair changed.
+// Use this from tight booking transition handlers to avoid
+// re-querying ALL chairs on every single state change.
+//
+// @param {string|ObjectId} salonId
+// @param {string|ObjectId} chairId
+//////////////////////////////////////////////////////////////
+
+export const emitSingleChairUpdate = async (salonId, chairId) => {
+  try {
+    const now    = new Date();
+    const chair  = await Chair.findById(chairId)
+      .select("_id label priority isDisabled disabledReason")
+      .lean();
+
+    if (!chair) return;
+
+    // One targeted query for this chair's active booking only
+    const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd   = new Date(now); dayEnd.setHours(23, 59, 59, 999);
+    const maxLookback = new Date(now.getTime() - 60 * 60 * 1000);
+
+    const activeBooking = await Booking.findOne({
+      salonId,
+      chairId,
+      $or: [
+        {
+          status:      { $in: ["HOLD", "CONFIRMED", "CHECKED_IN", "ONGOING"] },
+          scheduledAt: { $gte: dayStart, $lte: dayEnd },
+        },
+        {
+          status:             "COMPLETED",
+          serviceCompletedAt: { $gte: maxLookback },
+        },
+      ],
+    })
+      .select(
+        "chairId status scheduledAt serviceStartedAt serviceCompletedAt " +
+        "serviceDuration bufferTime holdExpiresAt customerDelayedAt " +
+        "arrivalGraceUntil customerName serviceId"
+      )
+      .sort({ updatedAt: -1 })  // most recently updated wins if multiple
+      .lean();
+
+    const computed = computeChairState(chair, activeBooking, now);
+
+    const payload = {
+      chairId:  chair._id,
+      label:    chair.label,
+      priority: chair.priority,
+      ...computed,
+      computedAt: now,
+    };
+
+    const io = getIO();
+
+    // Emit targeted single-chair update
+    io.to(`salon:${salonId}`).emit("chair:single:update", {
+      salonId,
+      chair: payload,
+      emittedAt: now,
+    });
+
+  } catch (err) {
+    console.error(
+      `[ChairGrid] emitSingleChairUpdate failed salon=${salonId} chair=${chairId}:`,
+      err.message
+    );
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 GRID SUMMARY
+//
+// Returns a compact summary of the grid — useful for quick
+// dashboard header stats without full chair detail.
+//
+// Example response:
+//   { available: 3, occupied: 2, hold: 1, bufferCleanup: 1,
+//     customerDelayed: 0, disabled: 0, total: 7 }
+//////////////////////////////////////////////////////////////
+
+export const getChairGridSummary = async (salonId) => {
+  const grid = await getChairGridSnapshot(salonId);
+
+  const summary = {
+    available:       0,
+    hold:            0,   // FIX-1: payment pending
+    reserved:        0,   // FIX-1: confirmed future booking
+    occupied:        0,
+    bufferCleanup:   0,
+    customerDelayed: 0,
+    disabled:        0,
+    total:           grid.length,
+  };
+
+  for (const chair of grid) {
+    switch (chair.state) {
+      case CHAIR_STATE.AVAILABLE:        summary.available++;        break;
+      case CHAIR_STATE.HOLD:             summary.hold++;             break;
+      case CHAIR_STATE.RESERVED:         summary.reserved++;         break;
+      case CHAIR_STATE.OCCUPIED:         summary.occupied++;         break;
+      case CHAIR_STATE.BUFFER_CLEANUP:   summary.bufferCleanup++;    break;
+      case CHAIR_STATE.CUSTOMER_DELAYED: summary.customerDelayed++;  break;
+      case CHAIR_STATE.DISABLED:         summary.disabled++;         break;
+    }
+  }
+
+  return summary;
+};

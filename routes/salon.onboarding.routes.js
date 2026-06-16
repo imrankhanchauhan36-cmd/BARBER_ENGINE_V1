@@ -1,0 +1,139 @@
+///////////////////////////////////////////////////////////
+// SALON ONBOARDING ROUTES — FINAL ENTERPRISE VERSION
+///////////////////////////////////////////////////////////
+
+import express from "express";
+
+import {
+  saveBasicInfo,
+  saveLocation,
+  saveServices, // ✅ ADD THIS
+  saveChairs, // ✅ ADD THIS
+  saveTimings, // ✅ ADD THIS
+  saveStaff, // ✅ ADD THIS
+  savePhotos, //✅ ADD THIS
+  getReview,     // ✅ ADD
+  submitSalon,   // ✅ ADD
+} from "../controllers/salon.onboarding.controller.js";
+
+import { protect } from "../middlewares/auth.middleware.js";
+import { requireRole } from "../middlewares/role.middleware.js";
+
+///////////////////////////////////////////////////////////
+
+const salonOnboardingRouter = express.Router();
+
+///////////////////////////////////////////////////////////
+// GLOBAL SECURITY — APPLIES TO ALL ROUTES BELOW
+// Ensures:
+// ✔ User authenticated (JWT + Redis session)
+// ✔ Only OWNER role allowed
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.use(protect);
+salonOnboardingRouter.use(requireRole("OWNER"));
+
+///////////////////////////////////////////////////////////
+// STEP 1 — BASIC INFO
+// Endpoint: PATCH /api/salon/onboarding/basic-info
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/basic-info",
+  saveBasicInfo
+);
+
+///////////////////////////////////////////////////////////
+// STEP 2 — LOCATION
+// Endpoint: PATCH /api/salon/onboarding/location
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/location",
+  saveLocation
+);
+
+///////////////////////////////////////////////////////////
+// STEP 3 — SERVICES
+// Endpoint: PATCH /api/salon/onboarding/services
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/services",
+  saveServices
+);
+
+///////////////////////////////////////////////////////////
+// STEP 4 — CHAIRS
+// Endpoint: PATCH /api/salon/onboarding/chairs
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/chairs",
+  saveChairs
+);
+
+///////////////////////////////////////////////////////////
+// STEP 5 — TIMINGS
+// Endpoint: PATCH /api/salon/onboarding/timings
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/timings",
+  saveTimings
+);
+
+///////////////////////////////////////////////////////////
+// STEP 6 — STAFF
+// Endpoint: PATCH /api/salon/onboarding/staff
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/staff",
+  saveStaff
+);
+
+///////////////////////////////////////////////////////////
+// STEP 7 — PHOTOS
+// Endpoint: PATCH /api/salon/onboarding/photos
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/photos",
+  savePhotos
+);
+
+///////////////////////////////////////////////////////////
+// STEP 8 — REVIEW
+// Endpoint: GET /api/salon/onboarding/review
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.get(
+  "/review",
+  getReview
+);
+
+///////////////////////////////////////////////////////////
+// STEP 8 — SUBMIT
+// Endpoint: POST /api/salon/onboarding/submit
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.post(
+  "/submit",
+  submitSalon
+);
+
+///////////////////////////////////////////////////////////
+// FUTURE ENTERPRISE STEPS (READY FOR SCALE)
+// Uncomment when implemented
+///////////////////////////////////////////////////////////
+
+// salonOnboardingRouter.patch("/manager", saveManager);
+// salonOnboardingRouter.patch("/staff", saveStaff);
+// salonOnboardingRouter.patch("/timings", saveTimings);
+// salonOnboardingRouter.patch("/business", saveBusiness);
+// salonOnboardingRouter.patch("/verification", saveVerification);
+
+///////////////////////////////////////////////////////////
+
+export default salonOnboardingRouter;

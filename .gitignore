@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Data files (large CSV/JSON)
+data/
+scripts/data/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+
+# Build
+dist/
+build/

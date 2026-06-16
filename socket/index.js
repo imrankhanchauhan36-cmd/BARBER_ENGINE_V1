@@ -1,0 +1,377 @@
+/**
+ * ============================================================
+ * 📡 SOCKET.IO INFRASTRUCTURE
+ * ============================================================
+ *
+ * ARCHITECTURE OVERVIEW
+ * ─────────────────────
+ * This file exports a single `initSocket(server)` function.
+ * Call it in server.js after creating the HTTP server:
+ *
+ *   import { initSocket } from "./socket.js";
+ *   const io = initSocket(server);
+ *   app.set("io", io);          ← makes io available in controllers
+ *
+ * ROOMS
+ * ─────
+ *   salon:{salonId}   — owner dashboard, chair grid, booking list
+ *   user:{userId}     — customer app, booking status updates
+ *   admin             — platform-level monitoring (optional)
+ *
+ * AUTH
+ * ────
+ *   Every socket connection must present a valid JWT in either:
+ *     handshake.auth.token       (preferred — sent by socket client)
+ *     handshake.headers.authorization  (Bearer fallback)
+ *
+ *   Invalid JWT → socket immediately disconnected (401).
+ *   Valid JWT   → socket.data.userId, socket.data.role, socket.data.salonId
+ *                 are populated and used to auto-join the correct rooms.
+ *
+ * RECONNECT RECOVERY
+ * ──────────────────
+ *   On reconnect the client sends "sync:request" with the last known
+ *   booking status. The server replies with the current truth from DB.
+ *   This covers Indian network instability (2G drops, backgrounded app).
+ *
+ * EVENTS EMITTED BY SERVER → CLIENT
+ * ───────────────────────────────────
+ *   booking:hold           — new HOLD placed on chair
+ *   booking:confirmed      — payment done, booking confirmed
+ *   booking:checkedIn      — customer checked in
+ *   booking:serviceStarted — service timer started
+ *   booking:completed      — service done, chair freed, wallet credited
+ *   booking:cancelled      — booking cancelled, chair freed
+ *   booking:noShow         — no-show marked, chair freed
+ *   booking:expired        — HOLD expired, chair freed
+ *   sync:response          — reply to sync:request (reconnect recovery)
+ *   error:auth             — authentication failure (client should re-login)
+ *
+ * EVENTS RECEIVED BY SERVER ← CLIENT
+ * ────────────────────────────────────
+ *   sync:request { bookingId, lastKnownStatus }
+ *                          — fetch fresh booking state after reconnect
+ *   ping                   — client keepalive (server replies "pong")
+ *
+ * ============================================================
+ */
+
+import { Server }  from "socket.io";
+import jwt         from "jsonwebtoken";
+import mongoose    from "mongoose";
+import Booking from "../models/Booking.js";
+
+//////////////////////////////////////////////////////////////
+// 🔥 CONFIG
+//////////////////////////////////////////////////////////////
+
+const JWT_SECRET          = process.env.JWT_SECRET;
+const CLIENT_ORIGIN       = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+
+// How long a socket can stay connected without being verified (ms)
+const AUTH_TIMEOUT_MS     = 10_000;
+
+// Rate-limit: max sync:request events per socket per window
+const SYNC_RATE_LIMIT     = 10;
+const SYNC_RATE_WINDOW_MS = 60_000;
+
+//////////////////////////////////////////////////////////////
+// 🧠 INTERNAL HELPERS
+//////////////////////////////////////////////////////////////
+
+/**
+ * Extract JWT string from socket handshake.
+ * Supports both auth.token and Authorization header.
+ */
+const extractToken = (socket) => {
+  if (socket.handshake.auth?.token) {
+    return socket.handshake.auth.token;
+  }
+  const authHeader = socket.handshake.headers?.authorization || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+  return null;
+};
+
+/**
+ * Verify JWT and return decoded payload.
+ * Returns null on any failure — never throws.
+ */
+const verifyToken = (token) => {
+  const secret = process.env.JWT_SECRET;
+  if (!token || !secret) {
+    console.warn("[Socket] Missing token or secret");
+    return null;
+  }
+  try {
+    return jwt.verify(token, secret);
+  } catch (err) {
+    console.warn("[Socket] JWT verification failed:", err.message);
+    return null;
+  }
+};
+
+/**
+ * Per-socket sync rate limiter.
+ * Stored on socket.data to avoid a global Map.
+ */
+const checkSyncRateLimit = (socket) => {
+  const now = Date.now();
+
+  if (!socket.data.syncRateLimit) {
+    socket.data.syncRateLimit = { count: 0, windowStart: now };
+  }
+
+  const rl = socket.data.syncRateLimit;
+
+  if (now - rl.windowStart > SYNC_RATE_WINDOW_MS) {
+    // Reset window
+    rl.count       = 0;
+    rl.windowStart = now;
+  }
+
+  rl.count += 1;
+  return rl.count <= SYNC_RATE_LIMIT;
+};
+
+//////////////////////////////////////////////////////////////
+// 🔐 AUTH MIDDLEWARE
+//////////////////////////////////////////////////////////////
+
+/**
+ * Runs BEFORE the connection is accepted.
+ * Populates socket.data with verified identity.
+ * Rejects unauthenticated connections immediately.
+ */
+const authMiddleware = (socket, next) => {
+  const token   = extractToken(socket);
+  const payload = verifyToken(token);
+
+  if (!payload) {
+    // Reject connection — client will receive a connect_error event
+    return next(new Error("AUTH_FAILED"));
+  }
+
+  // Populate verified identity — available throughout the session
+  socket.data.userId   = payload._id   || payload.id || payload.userId;
+  socket.data.role     = payload.role  || "USER";  // USER | OWNER | ADMIN
+  socket.data.salonId  = payload.salonId || null;  // set for OWNER tokens
+  socket.data.verified = true;
+
+  next();
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 MAIN EXPORT
+//////////////////////////////////////////////////////////////
+
+/**
+ * Initialise Socket.IO, attach auth middleware, wire all events.
+ * Returns the io instance so server.js can pass it to Express.
+ *
+ * @param {import("http").Server} httpServer
+ * @returns {import("socket.io").Server}
+ */
+export const initSocket = (httpServer) => {
+
+  const io = new Server(httpServer, {
+    cors: {
+      origin:      "*",
+      methods:     ["GET", "POST"],
+      credentials: false,
+    },
+
+    // Prefer WebSocket, fall back to long-polling for poor networks
+    transports: ["websocket", "polling"],
+
+    // Ping/pong — detects dead connections faster on unstable networks
+    pingTimeout:  20_000,
+    pingInterval: 10_000,
+
+    // Max event payload (bytes) — prevents oversized messages
+    maxHttpBufferSize: 1e5,
+    allowEIO3: true, // 100 KB
+  });
+
+  //////////////////////////////////////////////////////////////
+  // 🔐 ATTACH AUTH MIDDLEWARE
+  //////////////////////////////////////////////////////////////
+
+  io.use(authMiddleware);
+
+  //////////////////////////////////////////////////////////////
+  // 🔌 CONNECTION HANDLER
+  //////////////////////////////////////////////////////////////
+
+  io.on("connection", (socket) => {
+    const { userId, role, salonId } = socket.data;
+
+    //////////////////////////////////////////////////////////
+    // 🏠 AUTO-JOIN ROOMS BASED ON ROLE
+    //////////////////////////////////////////////////////////
+
+    // Every authenticated user joins their personal room
+    socket.join(`user:${userId}`);
+
+    if (role === "OWNER" && salonId) {
+      // Salon owner joins their salon's operational room
+      socket.join(`salon:${salonId}`);
+    }
+
+    if (role === "ADMIN") {
+      socket.join("admin");
+    }
+
+    console.info(
+      `[Socket] connected  | id=${socket.id} | userId=${userId} | role=${role}` +
+      (salonId ? ` | salon=${salonId}` : "")
+    );
+
+    //////////////////////////////////////////////////////////
+    // 🔄 RECONNECT RECOVERY — sync:request
+    //
+    // Client sends this after reconnecting to get the current
+    // truth for a specific booking it was watching.
+    // Handles: app backgrounded, network dropped, 2G flicker.
+    //////////////////////////////////////////////////////////
+
+    socket.on("sync:request", async ({ bookingId, lastKnownStatus } = {}) => {
+
+      // Rate limit — prevent DB spam on rapid reconnects
+      if (!checkSyncRateLimit(socket)) {
+        socket.emit("sync:response", {
+          success: false,
+          error:   "Rate limit exceeded. Please wait before syncing again.",
+        });
+        return;
+      }
+
+      // Validate bookingId format before hitting DB
+      if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+        socket.emit("sync:response", {
+          success: false,
+          error:   "Invalid booking ID",
+        });
+        return;
+      }
+
+      try {
+        const booking = await Booking.findById(bookingId)
+          .select("status startTime endTime chairRef salonRef userRef lockUntil serviceStartedAt")
+          .lean();
+
+        if (!booking) {
+          socket.emit("sync:response", {
+            success: false,
+            error:   "Booking not found",
+          });
+          return;
+        }
+
+        // Security: only the booking's user or the booking's salon owner
+        // can request a sync for this booking
+        const isOwner = role === "OWNER" && salonId &&
+                        booking.salonRef.toString() === salonId.toString();
+        const isUser  = booking.userRef.toString() === userId.toString();
+
+        if (!isOwner && !isUser && role !== "ADMIN") {
+          socket.emit("sync:response", {
+            success: false,
+            error:   "Unauthorized",
+          });
+          return;
+        }
+
+        const statusChanged = booking.status !== lastKnownStatus;
+
+        socket.emit("sync:response", {
+          success: true,
+          bookingId,
+          currentStatus:   booking.status,
+          lastKnownStatus,
+          statusChanged,
+          booking: {
+            status:           booking.status,
+            startTime:        booking.startTime,
+            endTime:          booking.endTime,
+            chairId:          booking.chairRef,
+            lockUntil:        booking.lockUntil,
+            serviceStartedAt: booking.serviceStartedAt,
+          },
+        });
+
+      } catch (err) {
+        console.error("[Socket] sync:request error:", err.message);
+        socket.emit("sync:response", {
+          success: false,
+          error:   "Sync failed. Please try again.",
+        });
+      }
+    });
+
+    //////////////////////////////////////////////////////////
+    // 🏓 KEEPALIVE PING
+    // Client sends "ping" periodically on poor networks to
+    // detect whether the connection is truly alive.
+    //////////////////////////////////////////////////////////
+
+    socket.on("ping", () => {
+      socket.emit("pong", { ts: Date.now() });
+    });
+
+    //////////////////////////////////////////////////////////
+    // 🔌 DISCONNECT
+    //////////////////////////////////////////////////////////
+
+    socket.on("disconnect", (reason) => {
+      console.info(
+        `[Socket] disconnected | id=${socket.id} | userId=${userId} | reason=${reason}`
+      );
+    });
+
+    //////////////////////////////////////////////////////////
+    // ⚠️ ERROR
+    //////////////////////////////////////////////////////////
+
+    socket.on("error", (err) => {
+      console.error(`[Socket] error | id=${socket.id} | userId=${userId}`, err.message);
+    });
+  });
+
+  //////////////////////////////////////////////////////////////
+  // ⚠️ AUTH FAILURE HANDLER
+  // connect_error fires on the CLIENT when authMiddleware calls
+  // next(new Error("AUTH_FAILED")).
+  // On the server side we just log it — no action needed.
+  //////////////////////////////////////////////////////////////
+
+  io.engine.on("connection_error", (err) => {
+    if (err.message !== "AUTH_FAILED") {
+      console.error("[Socket] engine connection_error:", err.message);
+    }
+  });
+
+  console.info("[Socket] Socket.IO server initialised ✅");
+  return io;
+};
+
+//////////////////////////////////////////////////////////////
+// 🧰 UTILITY — emit a booking event from outside a request context
+//
+// Use this from cron jobs / background workers that don't have
+// access to req.app. Import io directly instead of going via req.
+//
+// Example (in a cron job):
+//   import { emitToRoom } from "./socket.js";
+//   emitToRoom(io, `salon:${salonId}`, "booking:expired", payload);
+//////////////////////////////////////////////////////////////
+
+export const emitToRoom = (io, room, event, payload) => {
+  try {
+    if (!io) return;
+    io.to(room).emit(event, payload);
+  } catch (err) {
+    console.warn(`[Socket] emitToRoom failed [${event}] → ${room}:`, err.message);
+  }
+};

@@ -1,0 +1,340 @@
+import mongoose from "mongoose";
+import Salon from "../models/Salon.js";
+import Service from "../models/Service.js";
+import Chair from "../models/Chair.js";
+import SalonMedia from "../models/SalonMedia.js";
+
+///////////////////////////////////////////////////////////
+// GET SALONS — v3 FINAL LOCK ✅ 10/10
+//
+// FIXES APPLIED (v2):
+//   FIX 1: business.isDeleted → isDeleted
+//   FIX 2: cityRef → location.territory.cityRef
+//   FIX 3: category → basicInfo.category
+//   FIX 4: salonType → basicInfo.tier
+//   FIX 5: facilityFlags.ac → basicInfo.amenities.hasAC
+//   FIX 6: avgRating filter disabled (virtual cannot be queried)
+//          TODO: implement averageRating filter via aggregation
+//
+// IMPROVEMENTS (v3):
+//   NOTE 1: specialization now supports multi-value (comma separated)
+//           Example: ?specialization=BRIDAL,GROOMING
+//   NOTE 2: maxDistance now supports radius param (km)
+//           Default: 10km | Options: 5, 10, 25, 50
+//
+// NEW FILTERS:
+//   specialization — multi-value: BRIDAL,GROOMING,LUXURY etc
+//   capability     — HOME_SERVICE
+//   isFeatured     — true/false
+//   radius         — 5 / 10 / 25 / 50 (km)
+//
+///////////////////////////////////////////////////////////
+export const getSalons = async (req, res) => {
+  try {
+    const {
+      lat,
+      lng,
+      cityRef,
+      category,       // MEN_ONLY / WOMEN_ONLY / UNISEX
+      tier,           // STANDARD / PREMIUM / LUXURY
+      ac,             // true/false
+      specialization, // single or comma-separated: BRIDAL,GROOMING
+      capability,     // HOME_SERVICE
+      isFeatured,     // true/false
+      radius = 10,    // km — default 10, max 50
+      page   = 1,
+      limit  = 20,
+    } = req.query;
+
+    //////////////////////////////////////////////////////
+    // SAFE PAGINATION
+    //////////////////////////////////////////////////////
+    const safePage     = Math.max(Number(page)   || 1,  1);
+    const safeLimit    = Math.min(Number(limit)  || 20, 50);
+    const safeRadiusKm = Math.min(Math.max(Number(radius) || 10, 1), 50);
+    const maxDistanceM = safeRadiusKm * 1000; // convert km → meters
+    const skip         = (safePage - 1) * safeLimit;
+
+    //////////////////////////////////////////////////////
+    // BASE FILTER
+    //////////////////////////////////////////////////////
+    const filter = {
+      "approval.status": "APPROVED",
+      isDeleted:         { $ne: true }, // FIX 1
+    };
+
+    // FIX 2: cityRef path corrected
+    if (cityRef) filter["location.territory.cityRef"] = cityRef;
+
+    // FIX 3: category path corrected
+    if (category) filter["basicInfo.category"] = category;
+
+    // FIX 4: salonType → tier
+    if (tier) filter["basicInfo.tier"] = tier;
+
+    // FIX 5: amenities path corrected
+    if (ac === "true") filter["basicInfo.amenities.hasAC"] = true;
+
+    // NOTE 1: specialization — supports multi-value (comma separated)
+    // Example: ?specialization=BRIDAL,GROOMING
+    if (specialization) {
+      const specs = specialization.split(",").map(s => s.trim()).filter(Boolean);
+      filter["specializations"] = specs.length === 1
+        ? specs[0]
+        : { $in: specs };
+    }
+
+    // Capability filter
+    if (capability) filter["capabilities"] = capability;
+
+    // isFeatured filter
+    if (isFeatured === "true") filter["isFeatured"] = true;
+
+    // FIX 6: minRating DISABLED
+    // TODO: averageRating aggregation implement karo
+    // Compute: { $divide: ["$rating.total", "$rating.count"] }
+    // Then $match: { computedAvg: { $gte: minRating } }
+
+    //////////////////////////////////////////////////////
+    // GEO SEARCH
+    //////////////////////////////////////////////////////
+    let salons = null;
+    let total  = 0;
+
+    if (lat && lng) {
+      const latitude  = Number(lat);
+      const longitude = Number(lng);
+
+      if (
+        !isNaN(latitude)  && !isNaN(longitude) &&
+        latitude  >= -90  && latitude  <= 90   &&
+        longitude >= -180 && longitude <= 180
+      ) {
+        salons = await Salon.aggregate([
+          {
+            $geoNear: {
+              near:               { type: "Point", coordinates: [longitude, latitude] },
+              distanceField:      "distance",
+              distanceMultiplier: 0.001,        // meters → km
+              maxDistance:        maxDistanceM, // NOTE 2: dynamic radius
+              spherical:          true,
+              query:              filter,
+            },
+          },
+          { $sort: { distance: 1 } },
+          {
+            $facet: {
+              data: [
+                { $skip: skip },
+                { $limit: safeLimit },
+                {
+                  $lookup: {
+                    from: "salonmedia",
+                    let:  { sid: "$_id" },
+                    pipeline: [
+                      { $match: { $expr: { $eq: ["$salonId", "$$sid"] }, isDeleted: false } },
+                      { $sort:  { order: 1 } },
+                      { $limit: 1 },
+                      { $project: { url: 1, _id: 0 } },
+                    ],
+                    as: "coverPhoto",
+                  },
+                },
+                { $addFields: { coverUrl: { $arrayElemAt: ["$coverPhoto.url", 0] } } },
+                {
+                  $project: {
+                    "basicInfo.shopName":         1,
+                    "basicInfo.category":         1,
+                    "basicInfo.tier":             1,
+                    "basicInfo.amenities":        1,
+                    "specializations":            1,
+                    "capabilities":               1,
+                    "isFeatured":                 1,
+                    "media.logo":                 1,
+                    "media.coverImage":           1,
+                    "location.address":           1,
+                    "location.geo":               1,
+                    "location.territory.cityRef": 1,
+                    "approval.status":            1,
+                    "timings":                    1,
+                    "rating":                     1,
+                    "business.isShopOpen":        1,
+                    "business.isForceClosed":     1,
+                    "coverUrl":                   1,
+                    distance:                     1,
+                  },
+                },
+              ],
+              totalCount: [{ $count: "count" }],
+            },
+          },
+        ]);
+
+        const result = salons[0] || {};
+        salons = result.data                   || [];
+        total  = result.totalCount?.[0]?.count || 0;
+      }
+    }
+
+    //////////////////////////////////////////////////////
+    // FALLBACK (NON-GEO)
+    //////////////////////////////////////////////////////
+    if (!salons || salons.length === 0) {
+      total  = await Salon.countDocuments(filter);
+      salons = await Salon.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .select(
+          "basicInfo.shopName basicInfo.category basicInfo.tier basicInfo.amenities " +
+          "specializations capabilities isFeatured media.logo media.coverImage " +
+          "location.address location.geo location.territory " +
+          "timings rating approval.status business.isShopOpen business.isForceClosed"
+        )
+        .lean();
+    }
+
+    // Cover photo for fallback
+    const salonIds = salons.map(s => s._id);
+    const covers   = await SalonMedia.find({ salonId: { $in: salonIds }, isDeleted: false })
+      .sort({ order: 1 })
+      .select("salonId url")
+      .lean();
+
+    const coverMap = {};
+    for (const c of covers) {
+      const key = c.salonId.toString();
+      if (!coverMap[key]) coverMap[key] = c.url;
+    }
+
+    salons = salons.map(s => ({
+      ...s,
+      coverUrl: s.media?.coverImage?.url || coverMap[s._id.toString()] || null,
+    }));
+
+    //////////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////////
+    return res.json({
+      success:    true,
+      page:       safePage,
+      radiusKm:   safeRadiusKm,
+      total,
+      count:      salons.length,
+      data:       salons,
+    });
+
+  } catch (err) {
+    console.error("DISCOVERY LIST ERROR:", { message: err.message, stack: err.stack });
+    return res.status(500).json({ success: false });
+  }
+};
+
+///////////////////////////////////////////////////////////
+// GET SALON DETAIL — v2
+///////////////////////////////////////////////////////////
+export const getSalonById = async (req, res) => {
+  try {
+    const salon = await Salon.findOne({
+      _id:               req.params.salonId,
+      "approval.status": "APPROVED",
+      isDeleted:         { $ne: true },
+    })
+      .select(
+        "basicInfo location timings rating business " +
+        "specializations capabilities isFeatured media searchTags"
+      )
+      .lean();
+
+    if (!salon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    const [chairs, media] = await Promise.all([
+      Chair.find({ salonId: salon._id, isDeleted: false, isActive: true })
+        .select("_id name position type")
+        .sort({ position: 1 })
+        .lean(),
+      SalonMedia.find({ salonId: salon._id, isDeleted: false })
+        .select("_id url type order")
+        .sort({ order: 1 })
+        .lean(),
+    ]);
+
+    // Compute averageRating (virtual cannot serialize via lean)
+    const averageRating = salon.rating?.count
+      ? Number((salon.rating.total / salon.rating.count).toFixed(1))
+      : 0;
+
+    return res.json({
+      success: true,
+      data:    { ...salon, chairs, media, averageRating },
+    });
+
+  } catch (err) {
+    console.error("DISCOVERY DETAIL ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+};
+
+///////////////////////////////////////////////////////////
+// GET SALON SERVICES — v2
+//
+// Supports:
+//   ?applicableFor=MEN   → MEN tab
+//   ?applicableFor=WOMEN → WOMEN tab
+//   ?category=HAIRCUT    → category filter
+///////////////////////////////////////////////////////////
+export const getSalonServices = async (req, res) => {
+  try {
+    const { salonId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(salonId)) {
+      return res.status(400).json({ success: false, message: "Invalid salon ID" });
+    }
+
+    const salon = await Salon.findOne({
+      _id:               salonId,
+      "approval.status": "APPROVED",
+      isDeleted:         { $ne: true },
+    })
+      .select("_id")
+      .lean();
+
+    if (!salon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    const { applicableFor, category } = req.query;
+
+    const serviceFilter = {
+      salonId,
+      isActive:  true,
+      isDeleted: false,
+    };
+
+    // Home tab filter — MEN shows MEN + BOTH, WOMEN shows WOMEN + BOTH
+    if (applicableFor && ["MEN", "WOMEN"].includes(applicableFor)) {
+      serviceFilter.applicableFor = { $in: [applicableFor, "BOTH"] };
+    }
+
+    if (category) serviceFilter.category = category;
+
+    const services = await Service.find(serviceFilter)
+      .select("_id name price duration category applicableFor thumbnailImage imageUrl images isFeatured description benefits suitableFor brandsUsed steps beforeAfterImages resultsDurationText buffer bufferMin bufferMax")
+      .sort({ category: 1, name: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success:  true,
+      salonId,
+      count:    services.length,
+      services,
+      ...(services.length === 0 && { message: "No services available for this salon" }),
+    });
+
+  } catch (err) {
+    console.error("getSalonServices error:", err);
+    return res.status(500).json({ success: false, message: "Failed to fetch services" });
+  }
+};
