@@ -1,0 +1,266 @@
+import dotenv from "dotenv";
+dotenv.config();
+
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import fs from "fs";
+
+import Country from "../models/Country.js";
+import State from "../models/State.js";
+import User from "../models/User.js";
+import connectDB from "../config/db.js";
+
+const JSON_PATH = "./seeds/data/states.json";
+
+/////////////////////////////////////////////////////
+// 🔐 DEFAULT PASSWORD
+/////////////////////////////////////////////////////
+const DEFAULT_PASSWORD =
+  process.env.SEED_ADMIN_PASSWORD || "Admin@12345";
+
+/////////////////////////////////////////////////////
+// 📞 PHONE GENERATOR
+/////////////////////////////////////////////////////
+function generateDeterministicPhone(stateCode) {
+  const numericCode = stateCode
+    .split("")
+    .map((char) => char.charCodeAt(0))
+    .join("");
+
+  return (numericCode + "0000000000").slice(0, 10);
+}
+
+/////////////////////////////////////////////////////
+// 🔗 SLUG
+/////////////////////////////////////////////////////
+function generateSlug(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "");
+}
+
+/////////////////////////////////////////////////////
+// 📧 EMAIL
+/////////////////////////////////////////////////////
+function generateStateAdminEmail(code) {
+  return `state-admin-${code.toLowerCase()}@yourapp.internal`;
+}
+
+/////////////////////////////////////////////////////
+// 📍 GEO FIX
+/////////////////////////////////////////////////////
+function getStateGeo(stateData) {
+  if (
+    stateData.coordinates &&
+    Array.isArray(stateData.coordinates) &&
+    stateData.coordinates.length === 2
+  ) {
+    return {
+      type: "Point",
+      coordinates: stateData.coordinates,
+    };
+  }
+
+  return {
+    type: "Point",
+    coordinates: [78.9629, 20.5937], // fallback
+  };
+}
+
+/////////////////////////////////////////////////////
+// 🚀 MAIN
+/////////////////////////////////////////////////////
+async function seedStates() {
+  try {
+    console.log("🔌 Connecting DB...");
+    await connectDB();
+
+    //////////////////////////////////////////////////////
+    // COUNTRY
+    //////////////////////////////////////////////////////
+    const india = await Country.findOne({
+      code: "IN",
+      isDeleted: false,
+    });
+
+    if (!india) throw new Error("India country not found.");
+
+    //////////////////////////////////////////////////////
+    // SUPER ADMIN
+    //////////////////////////////////////////////////////
+    const indiaAdmin = await User.findOne({
+      role: "ADMIN",
+      adminLevel: "INDIA",
+      isDeleted: false,
+    });
+
+    if (!indiaAdmin)
+      throw new Error("India Super Admin not found.");
+
+    //////////////////////////////////////////////////////
+    // JSON
+    //////////////////////////////////////////////////////
+    const rawData = fs.readFileSync(JSON_PATH, "utf-8");
+    const statesData = JSON.parse(rawData);
+
+    //////////////////////////////////////////////////////
+    // LOOP
+    //////////////////////////////////////////////////////
+    for (const stateData of statesData) {
+
+      const slug = generateSlug(stateData.name);
+      const geo = getStateGeo(stateData);
+
+      //////////////////////////////////////////////////////
+      // STATE UPSERT
+      //////////////////////////////////////////////////////
+      const state = await State.findOneAndUpdate(
+        { code: stateData.code.toUpperCase(), countryRef: india._id },
+        {
+          $set: {
+            name: stateData.name.toUpperCase(),
+            code: stateData.code.toUpperCase(),
+            slug,
+            type: stateData.type,
+            countryRef: india._id,
+            geo,
+            geoNameCode: stateData.geoNameCode || null, // ✅ ADD THIS
+            launchStatus: stateData.launchStatus ?? "PRE_LAUNCH",
+            serviceable: false,
+            priority: 0,
+            isActive: stateData.isActive ?? true,
+            isDeleted: false,
+            updatedBy: indiaAdmin._id,
+          },
+          $setOnInsert: {
+            createdBy: indiaAdmin._id,
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`✔ State: ${state.code}`);
+
+      //////////////////////////////////////////////////////
+      // STATE ADMIN
+      //////////////////////////////////////////////////////
+      const existingStateAdmin = await User.findOne({
+        role: "ADMIN",
+        adminLevel: "STATE",
+        stateRef: state._id,
+        isDeleted: false,
+      });
+
+      if (!existingStateAdmin) {
+
+        //////////////////////////////////////////////////////
+        // CREATE ADMIN
+        //////////////////////////////////////////////////////
+        const hashedPassword = await bcrypt.hash(
+          DEFAULT_PASSWORD,
+          12
+        );
+
+        const systemPhone = generateDeterministicPhone(state.code);
+        const email = generateStateAdminEmail(state.code);
+
+        const phoneExists = await User.findOne({
+          phone: systemPhone,
+          isDeleted: false,
+        });
+
+        if (phoneExists)
+          throw new Error(`Phone collision for ${state.name}`);
+
+        const emailExists = await User.findOne({
+          email,
+          isDeleted: false,
+        });
+
+        if (emailExists)
+          throw new Error(`Email collision for ${state.name}`);
+
+        const admin = await User.create({
+          name: `${state.name} STATE ADMIN`,
+          email,
+          phone: systemPhone,
+          password: hashedPassword,
+
+          role: "ADMIN",
+          adminLevel: "STATE",
+
+          countryRef: india._id,
+          stateRef: state._id,
+
+          permissions: ["STATE_FULL_ACCESS"],
+          mustChangePassword: true,
+          createdBy: indiaAdmin._id,
+
+          isEmailVerified: true,
+          isPhoneVerified: true,
+
+          isActive: true,
+          isDeleted: false,
+        });
+
+        //////////////////////////////////////////////////////
+        // 🔥 LINK ADMIN TO STATE (FIX)
+        //////////////////////////////////////////////////////
+        await State.updateOne(
+          { _id: state._id },
+          {
+            $set: {
+              primaryAdminRef: admin._id,
+            },
+          }
+        );
+
+        console.log(`✅ Admin created for ${state.code}`);
+
+      } else {
+
+        //////////////////////////////////////////////////////
+        // UPDATE ADMIN (SAFE)
+        //////////////////////////////////////////////////////
+        await User.updateOne(
+          { _id: existingStateAdmin._id },
+          {
+            $set: {
+              name: `${state.name} STATE ADMIN`,
+              isActive: true,
+              isDeleted: false,
+              permissions: ["STATE_FULL_ACCESS"],
+            },
+          }
+        );
+
+        //////////////////////////////////////////////////////
+        // 🔥 LINK EXISTING ADMIN (FIX)
+        //////////////////////////////////////////////////////
+        await State.updateOne(
+          { _id: state._id },
+          {
+            $set: {
+              primaryAdminRef: existingStateAdmin._id,
+            },
+          }
+        );
+
+        console.log(`🔄 Admin updated for ${state.code}`);
+      }
+    }
+
+    console.log("🎉 State Seeding Completed Successfully");
+    process.exit(0);
+
+  } catch (error) {
+    console.error("❌ Seeding failed:", error.message);
+    process.exit(1);
+  } finally {
+    await mongoose.disconnect();
+  }
+}
+
+seedStates();

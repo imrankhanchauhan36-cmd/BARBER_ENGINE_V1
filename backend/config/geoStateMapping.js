@@ -1,0 +1,43 @@
+export const geoStateMapping = {
+  "01": "AN",
+  "02": "AP",
+  "03": "AR",
+  "04": "AS",
+  "05": "BR",
+  "06": "CH",
+  "07": "DN",
+  "09": "DL",
+  "10": "GA",
+  "11": "GJ",
+  "12": "HR",
+  "13": "HP",
+  "14": "JK",
+  "15": "KA",
+  "16": "KL",
+  "17": "LD",
+  "18": "MP",
+  "19": "MH",
+  "20": "MN",
+  "21": "ML",
+  "22": "MZ",
+  "23": "NL",
+  "24": "OD",
+  "25": "PB",
+  "26": "RJ",
+  "27": "SK",
+  "28": "TN",
+  "29": "TR",
+  "30": "UP",
+  "31": "WB",
+  "32": "TS",
+  "33": "JH",
+  "34": "CG",
+  "35": "UK",
+  "36": "TS", // duplicate dataset fix
+  "37": "PY",
+  "38": "LA",
+  "39": "PY", // dataset variation
+  "40": "DL", // dataset variation
+  "41": "CH", // dataset variation
+  "52": "AP", // dataset variation
+};

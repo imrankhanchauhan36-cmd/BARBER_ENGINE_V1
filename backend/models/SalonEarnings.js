@@ -1,0 +1,190 @@
+import mongoose from "mongoose";
+
+//////////////////////////////////////////////////////////////
+// 🔥 INTEGER VALIDATOR
+//////////////////////////////////////////////////////////////
+
+const integerValidator = {
+  validator: Number.isInteger,
+
+  message:
+    "{VALUE} is not a valid integer amount",
+};
+
+//////////////////////////////////////////////////////////////
+// 🔥 SCHEMA
+//////////////////////////////////////////////////////////////
+
+const SalonEarningsSchema =
+  new mongoose.Schema(
+    {
+      ////////////////////////////////////////////////////////
+      // 🏪 SALON
+      ////////////////////////////////////////////////////////
+
+      salonId: {
+        type: mongoose.Schema.Types.ObjectId,
+
+        ref: "Salon",
+
+        unique: true,
+
+        required: true,
+
+        index: true,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 💰 CURRENCY
+      ////////////////////////////////////////////////////////
+
+      currency: {
+        type: String,
+
+        default: "INR",
+
+        maxlength: 10,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 💰 CURRENT WALLET BALANCE (PAISE)
+      ////////////////////////////////////////////////////////
+
+      balanceInPaise: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        validate: integerValidator,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 📊 TOTAL LIFETIME EARNINGS
+      ////////////////////////////////////////////////////////
+
+      totalEarningsInPaise: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        validate: integerValidator,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 💸 TOTAL PAYOUTS
+      ////////////////////////////////////////////////////////
+
+      totalPayoutsInPaise: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        validate: integerValidator,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 🔄 LAST TRANSACTION
+      ////////////////////////////////////////////////////////
+
+      lastTransactionAt: {
+        type: Date,
+
+        default: null,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 💸 LAST PAYOUT
+      ////////////////////////////////////////////////////////
+
+      lastPayoutAt: {
+        type: Date,
+
+        default: null,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 💰 LAST PAYOUT AMOUNT
+      ////////////////////////////////////////////////////////
+
+      lastPayoutAmountInPaise: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        validate: integerValidator,
+      },
+
+      ////////////////////////////////////////////////////////
+      // 🔢 WALLET VERSION
+      ////////////////////////////////////////////////////////
+
+      walletVersion: {
+        type: Number,
+
+        default: 1,
+
+        min: 1,
+
+        validate: integerValidator,
+      },
+    },
+    {
+      timestamps: true,
+
+      versionKey: false,
+    }
+  );
+
+//////////////////////////////////////////////////////////////
+// 🚀 INDEXES
+//////////////////////////////////////////////////////////////
+
+SalonEarningsSchema.index({
+  balanceInPaise: -1,
+});
+
+//////////////////////////////////////////////////////////////
+// 🚀 IMPORTANT RULE
+//////////////////////////////////////////////////////////////
+
+/*
+  ⚠️ CRITICAL FINANCE RULE
+
+  NEVER update wallet balances outside:
+
+  mongoose transaction sessions
+
+  ALWAYS use:
+
+  mongoose.startSession()
+
+  for:
+  - balance updates
+  - payouts
+  - refunds
+  - transaction creation
+
+  This prevents:
+  - race conditions
+  - negative balances
+  - partial finance corruption
+*/
+
+//////////////////////////////////////////////////////////////
+// 🚀 EXPORT
+//////////////////////////////////////////////////////////////
+
+export default mongoose.models
+  .SalonEarnings ||
+  mongoose.model(
+    "SalonEarnings",
+    SalonEarningsSchema
+  );
