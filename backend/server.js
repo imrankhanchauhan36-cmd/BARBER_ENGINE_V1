@@ -3,7 +3,6 @@ import cors from "cors";
 import mongoose from "mongoose";
 
 // Routes
-import adminRoutes from "./routes/admin/index.js";
 
 const app = express();
 
@@ -20,7 +19,6 @@ mongoose
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
 /* ===================== ROUTES ===================== */
-app.use("/api/admin", adminRoutes);
 
 /* ===================== HEALTH CHECK ===================== */
 app.get("/", (req, res) => {
