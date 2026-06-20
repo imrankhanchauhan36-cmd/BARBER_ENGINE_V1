@@ -1,12 +1,13 @@
-import Salon from "../models/Salon.js";
-import District from "../models/District.js";
-import State from "../models/State.js";
 import Booking from "../models/Booking.js";
 import Chair from "../models/Chair.js";
-import Staff from "../models/Staff.js";
-import Service from "../models/Service.js"; // ✅ NEW
-import Transaction from "../models/Transaction.js";
+import District from "../models/District.js";
+import Rating from "../models/Rating.js";
+import Salon from "../models/Salon.js";
 import SalonEarnings from "../models/SalonEarnings.js";
+import Service from "../models/Service.js"; // ✅ NEW
+import Staff from "../models/Staff.js";
+import State from "../models/State.js";
+import Transaction from "../models/Transaction.js";
 
 
 /**
@@ -108,17 +109,20 @@ export const getDashboardStats = async (req, res) => {
       todayBookings,
       revenueResult,
       cancelled,
+      todayCustomers,
       chairs,
       staff,
       nextBookings,
       ongoingBookings,
       services,
+      ratingResult,
+      topServicesResult,
     ] = await Promise.all([
 
       Booking.countDocuments({
         salonRef: salonId,
         status: { $in: ["CONFIRMED", "ONGOING", "COMPLETED"] },
-        createdAt: { $gte: todayStart, $lte: todayEnd },
+        startTime: { $gte: todayStart, $lte: todayEnd },
       }),
 
       Booking.aggregate([
@@ -126,16 +130,24 @@ export const getDashboardStats = async (req, res) => {
           $match: {
             salonRef: salonId,
             status: "COMPLETED",
-            createdAt: { $gte: todayStart, $lte: todayEnd },
+            startTime: { $gte: todayStart, $lte: todayEnd },
           },
         },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
+        { $group: { _id: null, total: { $sum: "$totalAmountInPaise" } } },
       ]),
 
       Booking.countDocuments({
         salonRef: salonId,
         status: "CANCELLED",
-        createdAt: { $gte: todayStart, $lte: todayEnd },
+        startTime: { $gte: todayStart, $lte: todayEnd },
+      }),
+
+      Booking.distinct("userRef", {
+        salonRef: salonId,
+        status: {
+          $in: ["CONFIRMED", "CHECKED_IN", "ONGOING", "COMPLETED"]
+        },
+        startTime: { $gte: todayStart, $lte: todayEnd },
       }),
 
       Chair.find({ salonId, isDeleted: false, isActive: true })
@@ -172,16 +184,79 @@ export const getDashboardStats = async (req, res) => {
         .select("name price duration category")
         .sort({ createdAt: 1 })
         .lean(),
+
+      Rating.aggregate([
+        {
+          $match: {
+            salonId,
+            isHidden: false,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            averageRating: { $avg: "$rating" },
+            totalReviews: { $sum: 1 },
+          },
+        },
+      ]),
+
+      Booking.aggregate([
+        {
+          $match: {
+            salonRef: salonId,
+            status: "COMPLETED",
+          },
+        },
+        {
+          $unwind: "$serviceRefs",
+        },
+        {
+          $group: {
+            _id: "$serviceRefs",
+            totalBookings: { $sum: 1 },
+            revenue:       { $sum: "$totalAmountInPaise" },
+          },
+        },
+        {
+          $sort: { totalBookings: -1 },
+        },
+        {
+          $limit: 5,
+        },
+        {
+          $lookup: {
+            from:         "services",
+            localField:   "_id",
+            foreignField: "_id",
+            as:           "service",
+          },
+        },
+        {
+          $unwind: "$service",
+        },
+        {
+          $project: {
+            _id:           "$service._id",
+            name:          "$service.name",
+            price:         "$service.price",
+            duration:      "$service.duration",
+            totalBookings: 1,
+            revenue:       { $round: [{ $divide: ["$revenue", 100] }, 0] },
+          },
+        },
+      ]),
     ]);
 
     return res.status(200).json({
       success: true,
       data: {
-        salonId:      salon._id,  // ← YEH ADD KARO
+        salonId:      salon._id,
         shopName:     salon.basicInfo?.shopName || "My Salon",
         isShopOpen:   salon.business?.isShopOpen || false,
         todayBookings,
-        todayRevenue: revenueResult[0]?.total || 0,
+        todayCustomers: todayCustomers.length,
+        todayRevenue: Math.round((revenueResult[0]?.total || 0) / 100),
         cancelled,
         chairs,
         staff,
@@ -190,7 +265,9 @@ export const getDashboardStats = async (req, res) => {
         nextBookings:   nextBookings         || [],
         ongoingBooking:  ongoingBookings?.[0] || null,
         ongoingBookings: ongoingBookings     || [],
-
+        averageRating:   Number(ratingResult?.[0]?.averageRating?.toFixed(1) || 0),
+        totalReviews:    ratingResult?.[0]?.totalReviews || 0,
+        topServices:     topServicesResult || [],
       },
     });
 
@@ -216,7 +293,7 @@ export const getLiveSchedule = async (req, res) => {
       Booking.find({
         salonRef: salonId,
         status: { $in: ["CONFIRMED", "ONGOING", "COMPLETED"] },
-        createdAt: { $gte: todayStart, $lte: todayEnd },
+        startTime: { $gte: todayStart, $lte: todayEnd }
       })
         .populate("userRef", "name phone")
         .populate("serviceRefs", "name duration price")

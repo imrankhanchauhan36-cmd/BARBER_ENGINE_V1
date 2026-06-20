@@ -1,33 +1,34 @@
-import express from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import helmet from "helmet";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import compression from "compression";
-import hpp from "hpp";
-import mongoSanitize from "express-mongo-sanitize";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import crypto from "crypto";
+import express from "express";
+import mongoSanitize from "express-mongo-sanitize";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import helmet from "helmet";
+import hpp from "hpp";
 
 import redis from "./config/redis.js";
 
 // 🛣️ Routes
-import authRoutes from "./routes/auth.routes.js";
-import adminAuthRoutes from "./routes/adminAuth.routes.js";
-import salonRoutes from "./routes/salon.routes.js";
-import salonOnboardingRouter from "./routes/salon.onboarding.routes.js";
-import bookingRoutes from "./routes/booking.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
-import masterRoutes from "./routes/master.routes.js";
-import paymentRoutes from "./routes/payment.routes.js";
-import reportRoutes from "./routes/reports.routes.js";
-import payoutRoutes from "./routes/payout.routes.js";
-import uploadRoutes from "./routes/upload.routes.js";
-import ratingRoutes from "./routes/rating.routes.js";
+import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import adminRatingRoutes from "./routes/adminRating.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import bookingRoutes from "./routes/booking.routes.js";
+import customerRoutes from "./routes/customer.routes.js";
 import discoveryRoutes from "./routes/discovery.routes.js";
-import salonMediaRoutes from "./routes/salonMedia.routes.js";
-import userRoutes from "./routes/user.routes.js";
+import masterRoutes from "./routes/master.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
+import payoutRoutes from "./routes/payout.routes.js";
+import ratingRoutes from "./routes/rating.routes.js";
+import reportRoutes from "./routes/reports.routes.js";
+import salonOnboardingRouter from "./routes/salon.onboarding.routes.js";
+import salonRoutes from "./routes/salon.routes.js";
+import salonMediaRoutes from "./routes/salonMedia.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
+import userRoutes from "./routes/user.routes.js";
 
 
 
@@ -193,6 +194,7 @@ app.use("/api/payouts", protect, onboardingBypass, payoutRoutes);
 app.use("/api/reports", protect, onboardingBypass, reportRoutes);
 app.use("/api/ratings", protect, onboardingBypass, ratingRoutes);
 app.use("/api/salon-media", protect, onboardingBypass, salonMediaRoutes);
+app.use("/api/customers",  protect, onboardingBypass, customerRoutes);
 app.use("/api/upload", uploadRoutes);
 
 ///////////////////////////////////////////////////////////

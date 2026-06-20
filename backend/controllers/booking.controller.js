@@ -1,20 +1,20 @@
-import crypto                from "crypto";
-import mongoose              from "mongoose";
-import Booking               from "../models/Booking.js";
+import crypto from "crypto";
+import mongoose from "mongoose";
+import Booking from "../models/Booking.js";
+import Salon from "../models/Salon.js";
+import SalonEarnings from "../models/SalonEarnings.js";
+import Service from "../models/Service.js";
 import Transaction, {
   TRANSACTION_STATUS,
   TRANSACTION_TYPE,
-}                            from "../models/Transaction.js";
-import SalonEarnings         from "../models/SalonEarnings.js";
-import Salon                  from "../models/Salon.js";
-import Service                from "../models/Service.js";
-import { getSmartSlots }     from "../services/slotEngine.service.js";
-import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
+} from "../models/Transaction.js";
+import { getSmartSlots } from "../services/slotEngine.service.js";
 import {
-  validateBookingTransition,
-  transitionBookingStatus,
   BOOKING_STATUS,
-}                            from "../utils/bookingState.machine.js";
+  transitionBookingStatus,
+  validateBookingTransition,
+} from "../utils/bookingState.machine.js";
+import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -1111,6 +1111,25 @@ export const completeService = async (req, res) => {
     //////////////////////////////////////////////////////////
 
     await transitionBookingStatus({ booking, nextStatus: BOOKING_STATUS.COMPLETED, session });
+
+    //////////////////////////////////////////////////////////
+    // 📈 SERVICE BOOKING COUNT
+    //////////////////////////////////////////////////////////
+
+    if (
+      Array.isArray(booking.serviceRefs) &&
+      booking.serviceRefs.length
+    ) {
+      await Service.updateMany(
+        {
+          _id: { $in: booking.serviceRefs }
+        },
+        {
+          $inc: { bookingCount: 1 }
+        },
+        { session }
+      );
+    }
 
     //////////////////////////////////////////////////////////
     // ✅ COMMIT

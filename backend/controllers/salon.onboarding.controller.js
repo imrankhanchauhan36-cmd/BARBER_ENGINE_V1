@@ -3,14 +3,14 @@
 ///////////////////////////////////////////////////////////
 
 import mongoose from "mongoose";
-import Salon from "../models/Salon.js";
-import geoService from "../services/geo.service.js";
-import { assignAdminByDistrict } from "../services/adminAssign.service.js";
-import User from "../models/User.js";
-import Service from "../models/Service.js";
 import Chair from "../models/Chair.js";
-import Staff from "../models/Staff.js";
+import Salon from "../models/Salon.js";
 import SalonMedia from "../models/SalonMedia.js";
+import Service from "../models/Service.js";
+import Staff from "../models/Staff.js";
+import User from "../models/User.js";
+import { assignAdminByDistrict } from "../services/adminAssign.service.js";
+import geoService from "../services/geo.service.js";
 
 ///////////////////////////////////////////////////////////
 // STEP 1 — SAVE BASIC INFO (UNCHANGED — PERFECT)
@@ -438,7 +438,38 @@ export const saveServices = async (req, res) => {
         applicableFor: item.applicableFor || "BOTH",
       
         thumbnailImage: item.thumbnailImage || null,
-      
+
+        description: item.description || "",
+
+        benefits: Array.isArray(item.benefits)
+          ? item.benefits
+          : [],
+        
+        suitableFor: Array.isArray(item.suitableFor)
+          ? item.suitableFor
+          : [],
+        
+        brandsUsed: Array.isArray(item.brandsUsed)
+          ? item.brandsUsed
+          : [],
+        
+        steps: Array.isArray(item.steps)
+          ? item.steps
+          : [],
+        
+        resultsDurationText:
+          item.resultsDurationText || "",
+
+        images: Array.isArray(item.images)
+          ? item.images
+          : [],
+        
+        beforeAfterImages: Array.isArray(item.beforeAfterImages)
+          ? item.beforeAfterImages
+          : [],
+        
+        introVideo: item.introVideo || null,
+        
         searchTags: Array.isArray(item.searchTags)
           ? item.searchTags
           : [],
@@ -1320,7 +1351,9 @@ export const getReview = async (req, res) => {
     //////////////////////////////////////////////////////
     const [services, staff, media, chairs] = await Promise.all([
       Service.find({ salonId: salon._id, isDeleted: false, isActive: true })
-        .select("_id name price duration")
+        .select(
+        "_id name price duration category bookingCount description benefits suitableFor brandsUsed steps resultsDurationText thumbnailImage images beforeAfterImages introVideo applicableFor isFeatured"
+        )
         .sort({ createdAt: 1 })
         .lean(),
 

@@ -197,6 +197,17 @@ const ServiceSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////////
+    // BOOKING COUNT
+    // Discovery + Ranking + Top Services
+    //////////////////////////////////////////////////////////
+    bookingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      index: true,
+    },
+
+    //////////////////////////////////////////////////////////
     // STATUS FLAGS
     // READ BY: booking controller, slot engine, service listing
     // DO NOT REMOVE OR RENAME
