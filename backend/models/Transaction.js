@@ -22,6 +22,31 @@ export const TRANSACTION_TYPE = {
 };
 
 //////////////////////////////////////////////////////////////
+// 🔥 PAYMENT PROVIDERS
+//////////////////////////////////////////////////////////////
+
+export const PAYMENT_PROVIDER = {
+  RAZORPAY: "RAZORPAY",
+  CASHFREE: "CASHFREE",
+  STRIPE:   "STRIPE",
+  MANUAL:   "MANUAL",
+};
+
+//////////////////////////////////////////////////////////////
+// 🔥 PAYMENT METHODS
+//////////////////////////////////////////////////////////////
+
+export const PAYMENT_METHOD = {
+  UPI:         "UPI",
+  CARD:        "CARD",
+  NET_BANKING: "NET_BANKING",
+  WALLET:      "WALLET",
+  CASH:        "CASH",
+  COD:         "COD",
+  UNKNOWN:     "UNKNOWN",
+};
+
+//////////////////////////////////////////////////////////////
 // 🔥 SCHEMA
 //////////////////////////////////////////////////////////////
 
@@ -29,17 +54,22 @@ const TransactionSchema = new mongoose.Schema(
   {
     //////////////////////////////////////////////////////////
     // 🔗 BOOKING
-    //
-    // unique: true already creates a B-tree index in MongoDB.
-    // Adding index: true on top creates a second identical
-    // index → the Mongoose duplicate-index warning.
-    // FIX: remove index: true — unique: true is sufficient.
     //////////////////////////////////////////////////////////
     bookingId: {
       type:     mongoose.Schema.Types.ObjectId,
       ref:      "Booking",
       required: true,
-      unique:   true,       // ← this alone creates the index
+      unique:   true,
+    },
+
+    //////////////////////////////////////////////////////////
+    // 👤 USER (customer who made the booking)
+    //////////////////////////////////////////////////////////
+    userId: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "User",
+      default: null,
+      index:   true,
     },
 
     //////////////////////////////////////////////////////////
@@ -83,6 +113,30 @@ const TransactionSchema = new mongoose.Schema(
       min:      0,
     },
 
+    // Gateway processing fee (future — Razorpay charges ~2%)
+    gatewayFee: {
+      type:    Number,
+      default: 0,
+      min:     0,
+    },
+
+    // Refund amount (partial or full)
+    refundAmount: {
+      type:    Number,
+      default: 0,
+      min:     0,
+    },
+
+    //////////////////////////////////////////////////////////
+    // 💱 CURRENCY
+    // INR for now — future: USD, AED, SAR
+    //////////////////////////////////////////////////////////
+    currency: {
+      type:      String,
+      default:   "INR",
+      maxlength: 10,
+    },
+
     //////////////////////////////////////////////////////////
     // 💳 PAYMENT STATUS
     //////////////////////////////////////////////////////////
@@ -94,30 +148,66 @@ const TransactionSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////////
-    // 🔐 GATEWAY PAYMENT ID
-    //
-    // unique + sparse already creates the index.
-    // index: true removed to avoid duplicate-index warning.
+    // 🏦 PAYMENT PROVIDER
+    // MANUAL → test/dev mode
+    // RAZORPAY → production (switch without UI change)
+    //////////////////////////////////////////////////////////
+    provider: {
+      type:    String,
+      enum:    Object.values(PAYMENT_PROVIDER),
+      default: PAYMENT_PROVIDER.MANUAL,
+      index:   true,
+    },
+
+    //////////////////////////////////////////////////////////
+    // 💳 PAYMENT METHOD
+    // Populated from Razorpay webhook in production
+    //////////////////////////////////////////////////////////
+    paymentMethod: {
+      type:    String,
+      enum:    Object.values(PAYMENT_METHOD),
+      default: PAYMENT_METHOD.UNKNOWN,
+      index:   true,
+    },
+
+    //////////////////////////////////////////////////////////
+    // 🔐 GATEWAY IDs
     //////////////////////////////////////////////////////////
     paymentId: {
       type:    String,
       default: null,
       unique:  true,
-      sparse:  true,        // ← unique+sparse creates the index
+      sparse:  true,
     },
 
-    //////////////////////////////////////////////////////////
-    // 🔒 IDEMPOTENCY KEY
-    //
-    // Same as paymentId — unique + sparse creates the index.
-    // index: true removed.
-    //////////////////////////////////////////////////////////
-   // idempotencyKey: {
-    //  type:    String,
-    //  default: null,
-    //  unique:  true,
-    //  sparse:  true,        // ← unique+sparse creates the index
-    //},
+    orderId: {
+      type:    String,
+      default: null,
+      index:   true,
+    },
+
+    // Razorpay signature (stored for audit — never expose in API)
+    gatewaySignature: {
+      type:    String,
+      default: null,
+      select:  false, // never returned in queries
+    },
+
+    // Gateway settlement reference — Razorpay/Cashfree reconciliation
+    // Links internal transaction to gateway settlement batch
+    gatewaySettlementId: {
+      type:    String,
+      default: null,
+    },
+
+    // Idempotency key — prevents duplicate webhook processing
+    // webhook retries or duplicate callbacks are safe no-ops
+    idempotencyKey: {
+      type:   String,
+      
+      unique:  true,
+      sparse:  true,
+    },
 
     //////////////////////////////////////////////////////////
     // 📊 TRANSACTION TYPE
@@ -139,7 +229,7 @@ const TransactionSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////////
-    // 📝 OPTIONAL FAILURE REASON
+    // 📝 FAILURE REASON
     //////////////////////////////////////////////////////////
     failureReason: {
       type:      String,
@@ -150,10 +240,14 @@ const TransactionSchema = new mongoose.Schema(
     //////////////////////////////////////////////////////////
     // 🔁 REFUND META
     //////////////////////////////////////////////////////////
-    refundedAt: {
-      type:    Date,
-      default: null,
-    },
+    refundedAt:  { type: Date, default: null },
+    refundReason:{ type: String, default: null, maxlength: 300 },
+
+    //////////////////////////////////////////////////////////
+    // 📅 SETTLEMENT
+    // When wallet was credited for this transaction
+    //////////////////////////////////////////////////////////
+    settledAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -163,23 +257,15 @@ const TransactionSchema = new mongoose.Schema(
 
 //////////////////////////////////////////////////////////////
 // 🚀 COMPOUND INDEXES
-//
-// Only compound (multi-field) indexes go here.
-// Single-field indexes are declared on the field itself above.
-// The explicit TransactionSchema.index({ bookingId: 1 }) that
-// was here is REMOVED — bookingId already has unique: true
-// which creates that index. Keeping both caused the Mongoose
-// duplicate-index warning.
 //////////////////////////////////////////////////////////////
 
-// Salon financial queries — most common dashboard query
-TransactionSchema.index({ salonId: 1,  createdAt: -1 });
-
-// Status reporting / reconciliation queries
-TransactionSchema.index({ status: 1,   createdAt: -1 });
-
-// Type-based queries (e.g. all REFUNDs)
-TransactionSchema.index({ type: 1,     createdAt: -1 });
+TransactionSchema.index({ salonId:       1, createdAt: -1 });
+TransactionSchema.index({ userId:        1, createdAt: -1 });
+TransactionSchema.index({ status:        1, createdAt: -1 });
+TransactionSchema.index({ type:          1, createdAt: -1 });
+TransactionSchema.index({ provider:      1, createdAt: -1 });
+TransactionSchema.index({ paymentMethod:      1, createdAt: -1 });
+TransactionSchema.index({ gatewaySettlementId: 1 });
 
 //////////////////////////////////////////////////////////////
 // 🚀 EXPORT

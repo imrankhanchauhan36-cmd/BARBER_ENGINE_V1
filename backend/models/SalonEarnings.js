@@ -1,190 +1,99 @@
 import mongoose from "mongoose";
 
-//////////////////////////////////////////////////////////////
-// 🔥 INTEGER VALIDATOR
-//////////////////////////////////////////////////////////////
-
 const integerValidator = {
   validator: Number.isInteger,
-
-  message:
-    "{VALUE} is not a valid integer amount",
+  message: "{VALUE} is not a valid integer amount",
 };
 
 //////////////////////////////////////////////////////////////
-// 🔥 SCHEMA
+// 🔥 WALLET STATUS
 //////////////////////////////////////////////////////////////
+export const WALLET_STATUS = {
+  ACTIVE:   "ACTIVE",   // normal operation
+  FROZEN:   "FROZEN",   // admin frozen — no withdrawals
+  BLOCKED:  "BLOCKED",  // compliance block
+  INACTIVE: "INACTIVE", // no transactions yet
+};
 
-const SalonEarningsSchema =
-  new mongoose.Schema(
-    {
-      ////////////////////////////////////////////////////////
-      // 🏪 SALON
-      ////////////////////////////////////////////////////////
-
-      salonId: {
-        type: mongoose.Schema.Types.ObjectId,
-
-        ref: "Salon",
-
-        unique: true,
-
-        required: true,
-
-        index: true,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 💰 CURRENCY
-      ////////////////////////////////////////////////////////
-
-      currency: {
-        type: String,
-
-        default: "INR",
-
-        maxlength: 10,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 💰 CURRENT WALLET BALANCE (PAISE)
-      ////////////////////////////////////////////////////////
-
-      balanceInPaise: {
-        type: Number,
-
-        default: 0,
-
-        min: 0,
-
-        validate: integerValidator,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 📊 TOTAL LIFETIME EARNINGS
-      ////////////////////////////////////////////////////////
-
-      totalEarningsInPaise: {
-        type: Number,
-
-        default: 0,
-
-        min: 0,
-
-        validate: integerValidator,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 💸 TOTAL PAYOUTS
-      ////////////////////////////////////////////////////////
-
-      totalPayoutsInPaise: {
-        type: Number,
-
-        default: 0,
-
-        min: 0,
-
-        validate: integerValidator,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 🔄 LAST TRANSACTION
-      ////////////////////////////////////////////////////////
-
-      lastTransactionAt: {
-        type: Date,
-
-        default: null,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 💸 LAST PAYOUT
-      ////////////////////////////////////////////////////////
-
-      lastPayoutAt: {
-        type: Date,
-
-        default: null,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 💰 LAST PAYOUT AMOUNT
-      ////////////////////////////////////////////////////////
-
-      lastPayoutAmountInPaise: {
-        type: Number,
-
-        default: 0,
-
-        min: 0,
-
-        validate: integerValidator,
-      },
-
-      ////////////////////////////////////////////////////////
-      // 🔢 WALLET VERSION
-      ////////////////////////////////////////////////////////
-
-      walletVersion: {
-        type: Number,
-
-        default: 1,
-
-        min: 1,
-
-        validate: integerValidator,
-      },
+const SalonEarningsSchema = new mongoose.Schema(
+  {
+    salonId: {
+      type:     mongoose.Schema.Types.ObjectId,
+      ref:      "Salon",
+      unique:   true,
+      required: true,
+      index:    true,
     },
-    {
-      timestamps: true,
 
-      versionKey: false,
-    }
-  );
+    currency: {
+      type:      String,
+      default:   "INR",
+      maxlength: 10,
+    },
 
-//////////////////////////////////////////////////////////////
-// 🚀 INDEXES
-//////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////
+    // 💰 MULTI-BUCKET BALANCE (all in paise)
+    ////////////////////////////////////////////////////////
 
-SalonEarningsSchema.index({
-  balanceInPaise: -1,
-});
+    availableBalanceInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
+    pendingBalanceInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
+    lockedBalanceInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
+    processingBalanceInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
 
-//////////////////////////////////////////////////////////////
-// 🚀 IMPORTANT RULE
-//////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////
+    // 📊 LIFETIME COUNTERS
+    ////////////////////////////////////////////////////////
 
-/*
-  ⚠️ CRITICAL FINANCE RULE
+    lifetimeEarningsInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
+    lifetimeWithdrawalsInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
 
-  NEVER update wallet balances outside:
+    lastTransactionAt: { type: Date, default: null },
+    lastPayoutAt:       { type: Date, default: null },
+    lastPayoutAmountInPaise: {
+      type: Number, default: 0, min: 0, validate: integerValidator,
+    },
 
-  mongoose transaction sessions
+    ////////////////////////////////////////////////////////
+    // 🔒 WALLET STATUS — Admin Control
+    ////////////////////////////////////////////////////////
+    status: {
+      type:    String,
+      enum:    Object.values(WALLET_STATUS),
+      default: WALLET_STATUS.ACTIVE,
+    },
 
-  ALWAYS use:
+    // Who froze/blocked and when
+    frozenBy:  { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    frozenAt:  { type: Date, default: null },
+    frozenNote:{ type: String, default: null, maxlength: 500 },
 
-  mongoose.startSession()
+    ////////////////////////////////////////////////////////
+    // 🔢 OPTIMISTIC LOCK
+    ////////////////////////////////////////////////////////
+    walletVersion: {
+      type: Number, default: 1, min: 1, validate: integerValidator,
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
+  }
+);
 
-  for:
-  - balance updates
-  - payouts
-  - refunds
-  - transaction creation
+SalonEarningsSchema.index({ availableBalanceInPaise: -1 });
+SalonEarningsSchema.index({ status: 1 });
 
-  This prevents:
-  - race conditions
-  - negative balances
-  - partial finance corruption
-*/
-
-//////////////////////////////////////////////////////////////
-// 🚀 EXPORT
-//////////////////////////////////////////////////////////////
-
-export default mongoose.models
-  .SalonEarnings ||
-  mongoose.model(
-    "SalonEarnings",
-    SalonEarningsSchema
-  );
+export default mongoose.models.SalonEarnings ||
+  mongoose.model("SalonEarnings", SalonEarningsSchema);

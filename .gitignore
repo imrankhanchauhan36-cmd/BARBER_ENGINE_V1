@@ -44,3 +44,5 @@ app-example
 backend/data/allCountries.txt
 backend/data/IN.txt
 backend/scripts/data/
+user-app/
+salon-app/

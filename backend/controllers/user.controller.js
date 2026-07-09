@@ -1,6 +1,6 @@
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import mongoose from "mongoose";
 import validator from "validator";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 import User from "../models/User.js";
 

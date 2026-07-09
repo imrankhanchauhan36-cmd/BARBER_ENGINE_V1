@@ -1,31 +1,43 @@
+/**
+ * BARBER ENGINE V1
+ * backend/routes/adminAuth.routes.js — FINAL
+ */
+
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { adminLogin } from "../controllers/adminAuth.controller.js";
+
+import {
+  adminLogin,
+  adminLogout,
+  adminMe,
+  adminRefresh,
+} from "../controllers/adminAuth.controller.js";
+
+import { protect } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-/**
- * 🛡️ Elite protection for admin login
- * Prevents brute-force attacks
- */
 const adminLoginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 attempts per IP
-
+  windowMs: 15 * 60 * 1000,
+  max:      20,
   message: {
     success: false,
     message: "Too many login attempts. Please try again later.",
   },
-
-  standardHeaders: true, // modern RateLimit headers
-  legacyHeaders: false,  // disables old X-RateLimit headers
+  standardHeaders: true,
+  legacyHeaders:   false,
 });
 
-/**
- * 🔐 ADMIN LOGIN
- * INDIA → phone + password + adminKey
- * STATE/CITY → phone + password
- */
-router.post("/login", adminLoginLimiter, adminLogin);
+// POST /api/admin-auth/login
+router.post("/login",   adminLoginLimiter, adminLogin);
+
+// POST /api/admin-auth/refresh  (no protect — expired token ke baad bhi kaam kare)
+router.post("/refresh", adminRefresh);
+
+// POST /api/admin-auth/logout
+router.post("/logout",  protect, adminLogout);
+
+// GET /api/admin-auth/me
+router.get("/me",       protect, adminMe);
 
 export default router;

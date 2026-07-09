@@ -3,16 +3,16 @@
 // FINAL ENTERPRISE DISTRICT SEEDER (ULTIMATE)
 ////////////////////////////////////////////////////////////
 
-import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import fs from "fs";
+import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from "url";
-import bcrypt from "bcryptjs";
 
 import Country from "../models/Country.js";
-import State from "../models/State.js";
 import District from "../models/District.js";
+import State from "../models/State.js";
 import User from "../models/User.js";
 
 ////////////////////////////////////////////////////////////
@@ -207,7 +207,7 @@ async function seedDistricts() {
               normalize(a)
             ),
 
-            hqCityName: entry.hqCityName || entry.name,
+            capital: entry.hqCityName || entry.name,
 
             ////////////////////////////////////////////////////////
 

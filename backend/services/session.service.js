@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import mongoose from "mongoose";
+import redis from "../config/redis.js";
 import RefreshToken from "../models/RefreshToken.js";
 import User from "../models/User.js";
-import redis from "../config/redis.js";
+import logger from "../utils/logger.js";
 import { generateAccessToken } from "./token.service.js";
 
 const SESSION_PREFIX = "session:";
@@ -63,7 +64,7 @@ export const createSession = async (user, req) => {
       { EX: SESSION_TTL }
     );
   } catch (err) {
-    console.warn("⚠️ Redis session write failed:", err.message);
+    logger.warn("Redis session write failed", { message: err.message });
   }
 
   return rawToken;
@@ -86,7 +87,7 @@ export const verifySession = async (rawToken) => {
       const parsed = JSON.parse(cached);
 
       const user = await User.findById(parsed.userId).select(
-        "_id role tokenVersion isActive isDeleted adminLevel stateRef cityRef"
+        "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
       );
 
       if (!user) return null;
@@ -97,7 +98,9 @@ export const verifySession = async (rawToken) => {
       return { user, tokenHash, cached: true };
     }
   } catch (err) {
-    console.warn("⚠️ Redis fast path failed, fallback to DB:", err.message);
+    logger.warn("Redis fast path failed, fallback to DB", {
+      message: err.message,
+    });
   }
 
   /* ---------------------------
@@ -126,7 +129,7 @@ export const verifySession = async (rawToken) => {
   if (compromisedFamily) return null;
 
   const user = await User.findById(tokenDoc.userRef).select(
-    "_id role tokenVersion isActive isDeleted adminLevel stateRef cityRef"
+    "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
   );
 
   if (!user) return null;
@@ -145,7 +148,7 @@ export const verifySession = async (rawToken) => {
       { EX: SESSION_TTL }
     );
   } catch (err) {
-    console.warn("⚠️ Redis cache write failed:", err.message);
+    logger.warn("Redis cache write failed", { message: err.message });
   }
 
   return { user, tokenDoc, tokenHash };
@@ -171,7 +174,7 @@ export const rotateSession = async (rawToken, req) => {
   if (existingToken.isCompromised) return null;
 
   const user = await User.findById(existingToken.userRef).select(
-    "_id role tokenVersion isActive isDeleted adminLevel stateRef cityRef"
+    "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
   );
 
   if (!user) return null;
@@ -207,11 +210,16 @@ export const rotateSession = async (rawToken, req) => {
       }
     );
 
+    logger.error("Refresh token reuse detected", {
+      userId: existingToken.userRef.toString(),
+      familyId: existingToken.familyId.toString(),
+    });
+
     try {
       await redis.del(SESSION_PREFIX + tokenHash);
       await redis.del(SESSION_PREFIX + existingToken.familyId.toString());
     } catch (err) {
-      console.warn("⚠️ Redis del failed:", err.message);
+      logger.warn("Redis del failed", { message: err.message });
     }
 
     return null;
@@ -249,8 +257,15 @@ export const rotateSession = async (rawToken, req) => {
       }),
       { EX: SESSION_TTL }
     );
+
+    // Refresh the "active session exists for this user" marker too
+    await redis.set(
+      USER_SESSION_PREFIX + user._id.toString(),
+      "active",
+      { EX: SESSION_TTL }
+    );
   } catch (err) {
-    console.warn("⚠️ Redis rotate write failed:", err.message);
+    logger.warn("Redis rotate write failed", { message: err.message });
   }
 
   const accessToken = generateAccessToken(user);
@@ -258,6 +273,7 @@ export const rotateSession = async (rawToken, req) => {
   return {
     accessToken,
     refreshToken: newRawToken,
+    user,
   };
 };
 
@@ -267,18 +283,26 @@ export const rotateSession = async (rawToken, req) => {
 export const revokeSession = async (rawToken) => {
   const tokenHash = hashToken(rawToken);
 
-  await RefreshToken.updateOne(
+  const tokenDoc = await RefreshToken.findOneAndUpdate(
     { tokenHash, revokedAt: null },
     {
       revokedAt: new Date(),
       revokedReason: "logout",
     }
-  );
+  ).select("userRef");
 
   try {
     await redis.del(SESSION_PREFIX + tokenHash);
+
+    // Only clear the user-level "active session" marker if this was
+    // the user's last/only known session marker. Since we don't track
+    // a count here, we clear it — it gets re-set on next login/refresh
+    // if the user actually still has another active session elsewhere.
+    if (tokenDoc?.userRef) {
+      await redis.del(USER_SESSION_PREFIX + tokenDoc.userRef.toString());
+    }
   } catch (err) {
-    console.warn("⚠️ Redis del failed:", err.message);
+    logger.warn("Redis del failed", { message: err.message });
   }
 };
 
@@ -299,5 +323,12 @@ export const revokeAllSessions = async (userId) => {
     { $inc: { tokenVersion: 1 } }
   );
 
-  // Redis auto invalidated via tokenVersion mismatch
+  try {
+    await redis.del(USER_SESSION_PREFIX + userId.toString());
+  } catch (err) {
+    logger.warn("Redis del failed", { message: err.message });
+  }
+
+  // Individual session: keys still expire naturally via tokenVersion
+  // mismatch on next verifySession() call, even if not explicitly deleted.
 };

@@ -9,6 +9,7 @@ import Transaction, {
   TRANSACTION_TYPE,
 } from "../models/Transaction.js";
 import { getSmartSlots } from "../services/slotEngine.service.js";
+import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
   BOOKING_STATUS,
   transitionBookingStatus,
@@ -637,6 +638,7 @@ export const confirmBooking = async (req, res) => {
       [
         {
           bookingId:  booking._id,
+          userId:     booking.userRef,    // ← ADD THIS LINE
           salonId:    booking.salonRef,
           resourceId: booking.chairRef,
           paymentId,
@@ -652,26 +654,23 @@ export const confirmBooking = async (req, res) => {
     );
 
     //////////////////////////////////////////////////////////
-    // 💰 WALLET UPSERT (atomic $inc)
+    // 💰 WALLET CREDIT (PENDING) — via WalletBalanceService
+    // Money goes to PENDING, not AVAILABLE — becomes withdrawable
+    // only when completeService() releases it. Prevents a salon
+    // from withdrawing for a service it hasn't delivered yet.
     //////////////////////////////////////////////////////////
+     await WalletBalanceService.creditPending({
+      salonId:       booking.salonRef,
+      amountInPaise: payoutAmount,
+      action:        "BOOKING_SETTLEMENT",   // ← "_PENDING" hatao
+      entityType:    "BOOKING",              // ← "Transaction" se badla
+      entityId:      booking._id,
+      idempotencyKey: `booking:credit:${booking._id}`,
+      session,
+      triggeredBy:   "SYSTEM",
+      remarks:       "Booking paid — held pending service delivery",
+    });
 
-    await SalonEarnings.findOneAndUpdate(
-      { salonId: booking.salonRef },
-      {
-        $inc: {
-          balanceInPaise:       payoutAmount,
-          totalEarningsInPaise: payoutAmount,
-          walletVersion:        1,
-        },
-        $set: {
-          lastTransactionAt: new Date(),
-        },
-        $setOnInsert: {
-          salonId: booking.salonRef,
-        },
-      },
-      { upsert: true, new: true, session }
-    );
 
     //////////////////////////////////////////////////////////
     // ✅ TRANSITION TO CONFIRMED
@@ -1101,10 +1100,30 @@ export const completeService = async (req, res) => {
       );
     }
 
+    //////////////////////////////////////////////////////////
+    // 💰 RELEASE PENDING → AVAILABLE
+    // Service is genuinely done now — this is the moment the
+    // salon earns the right to withdraw. Money sat in PENDING
+    // since payment time; releasing it only here (not at payment
+    // time) protects against paid-but-never-delivered scenarios.
+    //////////////////////////////////////////////////////////
+
+    await WalletBalanceService.releasePendingToAvailable({
+      salonId:        booking.salonRef,
+      amountInPaise:  paymentTxn.payoutAmount,
+      entityType:     "BOOKING",   // ← "Transaction" se badla
+      entityId:       paymentTxn._id,
+      idempotencyKey: `booking:release:${booking._id}`,
+      session,
+      triggeredBy:    "SYSTEM",
+      remarks:        "Service completed — funds released to available balance",
+    });
+
     // Fetch current wallet balance for the response (read-only, no update)
     const currentWallet = await SalonEarnings.findOne({
       salonId: booking.salonRef,
     }).session(session);
+
 
     //////////////////////////////////////////////////////////
     // ✅ TRANSITION TO COMPLETED (inside session)
@@ -1169,7 +1188,7 @@ export const completeService = async (req, res) => {
         bookingId:     booking._id,
         chairId:       booking.chairRef,
         status:        BOOKING_STATUS.COMPLETED,
-        walletBalance: currentWallet?.balanceInPaise ?? 0,
+        walletBalance: currentWallet?.availableBalanceInPaise ?? 0,
       },
     });
 
@@ -1177,7 +1196,7 @@ export const completeService = async (req, res) => {
       success:       true,
       bookingId:     booking._id,
       transactionId: paymentTxn._id,
-      walletBalance: currentWallet?.balanceInPaise ?? 0,
+      walletBalance: currentWallet?.availableBalanceInPaise ?? 0,
     });
 
   } catch (error) {
@@ -1642,6 +1661,16 @@ export const forceComplete = async (req, res) => {
       status:    TRANSACTION_STATUS.PAID,
     }).session(session);
     if (!paymentTxn) throw Object.assign(new Error("Payment record not found"), { status: 409 });
+    await WalletBalanceService.releasePendingToAvailable({
+      salonId:        booking.salonRef,
+      amountInPaise:  paymentTxn.payoutAmount,
+      entityType:     "BOOKING",   // ← "Transaction" se badla
+      entityId:       paymentTxn._id,
+      idempotencyKey: `booking:release:${booking._id}`,
+      session,
+      triggeredBy:    "SYSTEM",
+      remarks:        "Service force-completed — funds released to available balance",
+    });
     const now        = new Date();
     const durationMs = (actualDurationMinutes || 30) * 60 * 1000;
     booking.serviceStartedAt = new Date(now.getTime() - durationMs);
@@ -1657,13 +1686,12 @@ export const forceComplete = async (req, res) => {
       event:   "booking:completed",
       salonId: booking.salonRef.toString(),
       userId:  booking.userRef.toString(),
-      payload: { bookingId: booking._id, chairId: booking.chairRef, status: BOOKING_STATUS.COMPLETED, walletBalance: currentWallet?.balanceInPaise ?? 0 },
+      payload: { bookingId: booking._id, chairId: booking.chairRef, status: BOOKING_STATUS.COMPLETED, walletBalance: currentWallet?.availableBalanceInPaise ?? 0 },
     });
-    return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.balanceInPaise ?? 0, message: "Booking marked as completed" });
+    return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.availableBalanceInPaise ?? 0, message: "Booking marked as completed" });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
     return res.status(error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
   }
 };
-

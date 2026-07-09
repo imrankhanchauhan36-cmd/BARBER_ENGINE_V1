@@ -1,399 +1,221 @@
+/**
+ * BARBER ENGINE V1
+ * backend/models/City.js
+ * City Model — Location Module — 10/10 FROZEN
+ */
+
 import mongoose from "mongoose";
 
 //////////////////////////////////////////////////////////////
-// 🌆 CITY SCHEMA — FINAL LOCKED (ZOMATO GRADE 10/10++)
+// 🔥 ENUMS
+//////////////////////////////////////////////////////////////
+
+export const CITY_TYPE = {
+  METRO:    "METRO",
+  URBAN:    "URBAN",
+  SUBURBAN: "SUBURBAN",
+  RURAL:    "RURAL",
+};
+
+export const CITY_TIER = {
+  TIER_1: "TIER_1",
+  TIER_2: "TIER_2",
+  TIER_3: "TIER_3",
+};
+
+//////////////////////////////////////////////////////////////
+// 🔥 SCHEMA
 //////////////////////////////////////////////////////////////
 
 const CitySchema = new mongoose.Schema(
   {
     //////////////////////////////////////////////////////////
-    // 1️⃣ BASIC IDENTIFICATION
+    // 📝 BASIC INFO
     //////////////////////////////////////////////////////////
-
     name: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 2,
-      maxlength: 120,
+      type:      String,
+      required:  true,
+      trim:      true,
+      maxlength: 100,
     },
 
-    //////////////////////////////////////////////////////////
-    // 🔥 NORMALIZED NAME (CRITICAL)
-    //////////////////////////////////////////////////////////
-
+    // ✅ Normalized name — case-insensitive uniqueness
     normalizedName: {
-      type: String,
-      required: true,
-      lowercase: true,
+      type:  String,
+      trim:  true,
+      index: false,
     },
-
-    code: {
-      type: String,
-      trim: true,
-      uppercase: true,
-      minlength: 2,
-      maxlength: 50,
-      default: null,
-    },
-
-    //////////////////////////////////////////////////////////
-    // 🔗 SLUG (SEO SAFE)
-    //////////////////////////////////////////////////////////
 
     slug: {
-      type: String,
-      trim: true,
+      type:      String,
+      trim:      true,
       lowercase: true,
-      maxlength: 150,
-      immutable: true,
+      default:   null,
+    },
+
+    description: {
+      type:      String,
+      trim:      true,
+      maxlength: 500,
+      default:   null,
+    },
+
+    type: {
+      type:    String,
+      enum:    Object.values(CITY_TYPE),
+      default: CITY_TYPE.URBAN,
+      index:   true,
+    },
+
+    tier: {
+      type:    String,
+      enum:    Object.values(CITY_TIER),
+      default: CITY_TIER.TIER_3,
+      index:   true,
     },
 
     //////////////////////////////////////////////////////////
-    // 🧠 ALIASES
+    // 📮 PINCODE
     //////////////////////////////////////////////////////////
-
-    aliases: {
-      type: [String],
-      default: [],
-    },
-
-    normalizedAliases: {
-      type: [String],
-      default: [],
+    pincode: {
+      type:    String,
+      default: null,
+      trim:    true,
+      match:   [/^\d{6}$/, "Pincode must be exactly 6 digits"],
     },
 
     //////////////////////////////////////////////////////////
-    // 2️⃣ TERRITORY RELATIONS
+    // 📍 GEO COORDINATES
     //////////////////////////////////////////////////////////
+    coordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
 
-    countryRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Country",
+    //////////////////////////////////////////////////////////
+    // 🔗 REFERENCES
+    //////////////////////////////////////////////////////////
+    districtRef: {
+      type:     mongoose.Schema.Types.ObjectId,
+      ref:      "District",
       required: true,
+      index:    true,
     },
 
     stateRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "State",
+      type:     mongoose.Schema.Types.ObjectId,
+      ref:      "State",
       required: true,
-      index: true,
+      index:    true,
     },
 
-    //////////////////////////////////////////////////////////
-    // 🔥 DISTRICT (MANDATORY — FIXED)
-    //////////////////////////////////////////////////////////
-
-    districtRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "District",
-      required: true,
-      index: true,
-    },
-
-    //////////////////////////////////////////////////////////
-    // 🌐 GEO MAPPING
-    //////////////////////////////////////////////////////////
-
-    admin2Code: {
-      type: String,
+    countryRef: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "Country",
       default: null,
-      index: true,
+      index:   true,
     },
 
     //////////////////////////////////////////////////////////
-    // 3️⃣ BUSINESS CONTROL
+    // 🛵 SERVICE FLAGS
     //////////////////////////////////////////////////////////
-
-    launchStatus: {
-      type: String,
-      enum: ["PRE_LAUNCH", "ACTIVE", "PAUSED"],
-      default: "PRE_LAUNCH",
-    },
-
     isServiceable: {
-      type: Boolean,
-      default: false,
-    },
-
-    onboardingEnabled: {
-      type: Boolean,
+      type:    Boolean,
       default: true,
-    },
-
-    priority: {
-      type: Number,
-      default: 0,
-    },
-
-    activeSalonCount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    //////////////////////////////////////////////////////////////
-    // 🔥 HQ + AUTO FLAGS (CRITICAL)
-    //////////////////////////////////////////////////////////////
-
-    isDistrictHQ: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    
-    isAutoGenerated: {
-      type: Boolean,
-      default: false,
+      index:   true,
     },
 
     //////////////////////////////////////////////////////////
-    // ⭐ CITY TYPE
+    // 📈 METADATA (denormalized for performance)
+    // Updated by background jobs — never in request cycle
     //////////////////////////////////////////////////////////
-
-    cityType: {
-      type: String,
-      enum: ["METRO", "TIER1", "TIER2", "TIER3", "TOWN", "VILLAGE"],
-      default: "TIER2",
+    metadata: {
+      totalSalons:  { type: Number, default: 0, min: 0 },
+      activeSalons: { type: Number, default: 0, min: 0 },
+      totalBookings:{ type: Number, default: 0, min: 0 },
+      avgRating:    { type: Number, default: 0, min: 0, max: 5 },
+      lastUpdated:  { type: Date,   default: null },
     },
 
     //////////////////////////////////////////////////////////
-    // ⭐ CAPACITY CONTROL
+    // 🔒 STATUS
     //////////////////////////////////////////////////////////
-
-    maxSalonCapacity: {
-      type: Number,
-      default: 5000,
-      min: 1,
-    },
-
-    //////////////////////////////////////////////////////////
-    // 4️⃣ GEO (STRICT)
-    //////////////////////////////////////////////////////////
-
-    geo: {
-      type: {
-        type: String,
-        enum: ["Point"],
-        required: true,
-      },
-      coordinates: {
-        type: [Number],
-        required: true,
-        validate: {
-          validator: function (value) {
-            if (!Array.isArray(value) || value.length !== 2) return false;
-
-            const [lng, lat] = value;
-
-            return (
-              typeof lng === "number" &&
-              typeof lat === "number" &&
-              lng >= -180 &&
-              lng <= 180 &&
-              lat >= -90 &&
-              lat <= 90
-            );
-          },
-          message: "Invalid geo coordinates",
-        },
-      },
-    },
-
-    //////////////////////////////////////////////////////////
-    // 5️⃣ SYSTEM FLAGS
-    //////////////////////////////////////////////////////////
-
     isActive: {
-      type: Boolean,
+      type:    Boolean,
       default: true,
-      index: true,
+      index:   true,
     },
 
     isDeleted: {
-      type: Boolean,
+      type:    Boolean,
       default: false,
-      index: true,
+      index:   true,
     },
 
-    notes: {
-      type: String,
+    deletedAt: {
+      type:    Date,
       default: null,
-      maxlength: 500,
     },
 
+    //////////////////////////////////////////////////////////
+    // 👤 AUDIT
+    //////////////////////////////////////////////////////////
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "User",
       default: null,
     },
 
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "User",
       default: null,
     },
   },
   {
     timestamps: true,
+    versionKey: false,
   }
 );
 
 //////////////////////////////////////////////////////////////
-// 🔥 AUTO NORMALIZATION + SLUG + ALIASES
+// 🚀 INDEXES
 //////////////////////////////////////////////////////////////
 
-CitySchema.pre("validate", function (next) {
-  if (this.name) {
-    this.normalizedName = this.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
+// ✅ Case-insensitive uniqueness — sparse for existing data safety
+CitySchema.index({ districtRef: 1, normalizedName: 1 }, { unique: true, sparse: true });
+CitySchema.index({ stateRef: 1, isActive: 1 });
+CitySchema.index({ tier: 1, isActive: 1 });
+CitySchema.index({ isServiceable: 1, isActive: 1 });
+CitySchema.index({ pincode: 1 }, { sparse: true });
+CitySchema.index({ "coordinates.lat": 1, "coordinates.lng": 1 });
 
+//////////////////////////////////////////////////////////////
+// 🔧 HOOKS
+//////////////////////////////////////////////////////////////
+
+// ✅ Auto-normalize name + auto-slug
+CitySchema.pre("save", function(next) {
+  if (this.isModified("name")) {
+    this.normalizedName = this.name.toLowerCase().trim().replace(/\s+/g, " ");
     if (!this.slug) {
-      this.slug = this.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      this.slug = this.name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     }
   }
-
-  if (this.aliases && this.aliases.length > 0) {
-    this.normalizedAliases = [
-      ...new Set(
-        this.aliases.map((a) =>
-          a.toLowerCase().replace(/[^a-z0-9]/g, "")
-        )
-      ),
-    ];
-  }
-
   next();
 });
 
-
-//////////////////////////////////////////////////////////////
-// 🔒 PRE-SAVE VALIDATION (ADD THIS HERE)
-//////////////////////////////////////////////////////////////
-
-CitySchema.pre("save", function (next) {
-  if (!this.geo || !this.geo.coordinates) {
-    return next(new Error("Geo required"));
+CitySchema.pre("findOneAndUpdate", function(next) {
+  const update = this.getUpdate();
+  if (update?.$set?.name) {
+    update.$set.normalizedName = update.$set.name.toLowerCase().trim().replace(/\s+/g, " ");
+    update.$set.slug = update.$set.name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   }
-
-  if (!this.districtRef || !this.stateRef) {
-    return next(new Error("District & State required"));
-  }
-
   next();
-});
-
-//////////////////////////////////////////////////////////////
-// 🔐 UNIQUE INDEXES
-//////////////////////////////////////////////////////////////
-
-
-CitySchema.index(
-  { code: 1, stateRef: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      isDeleted: false,
-      code: { $ne: null },
-    },
-  }
-);
-
-CitySchema.index(
-  { districtRef: 1, isDistrictHQ: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      isDistrictHQ: true,
-      isDeleted: false,
-    },
-  }
-);
-
-CitySchema.index(
-  { normalizedName: 1, districtRef: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      isDeleted: false,
-    },
-  }
-);
-
-//////////////////////////////////////////////////////////////
-// ⚡ PERFORMANCE INDEXES
-//////////////////////////////////////////////////////////////
-
-CitySchema.index({
-  countryRef: 1,
-  stateRef: 1,
-  launchStatus: 1,
-  isServiceable: 1,
-  onboardingEnabled: 1,
-  isActive: 1,
-  isDeleted: 1,
-});
-
-CitySchema.index({
-  districtRef: 1,
-  isActive: 1,
-  isDeleted: 1,
-});
-
-CitySchema.index({
-  cityType: 1,
-  isActive: 1,
-  isDeleted: 1,
-});
-
-CitySchema.index({
-  stateRef: 1,
-  isServiceable: 1,
-  isActive: 1,
-  isDeleted: 1,
-});
-
-CitySchema.index({
-  priority: -1,
-  activeSalonCount: -1,
-});
-
-//////////////////////////////////////////////////////////////
-// 🔍 SEARCH INDEXES
-//////////////////////////////////////////////////////////////
-
-// 🔥 TEXT SEARCH WITH WEIGHTS
-CitySchema.index(
-  { name: "text", aliases: "text" },
-  {
-    weights: {
-      name: 5,
-      aliases: 2,
-    },
-  }
-);
-
-// 🔥 ULTRA MICRO (COMPOUND SEARCH BOOST)
-CitySchema.index({
-  stateRef: 1,
-  normalizedName: 1,
-});
-
-//////////////////////////////////////////////////////////////
-// 🌍 GEO INDEX
-//////////////////////////////////////////////////////////////
-
-CitySchema.index({
-  geo: "2dsphere",
 });
 
 //////////////////////////////////////////////////////////////
 // 🚀 EXPORT
 //////////////////////////////////////////////////////////////
 
-export default mongoose.models.City ||
-  mongoose.model("City", CitySchema);
+export default mongoose.models.City || mongoose.model("City", CitySchema);

@@ -1,13 +1,15 @@
 import jwt from "jsonwebtoken";
 import { verifySession } from "../services/session.service.js";
 import { generateAccessToken } from "../services/token.service.js";
+import logger from "../utils/logger.js";
+import { Errors } from "../utils/response.js";
 
 export const protect = async (req, res, next) => {
   try {
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🔐 PROTECT HIT:", req.method, req.originalUrl);
-    }
+    logger.debug("Protect middleware hit", {
+      method: req.method,
+      url: req.originalUrl,
+    });
 
     let token;
 
@@ -19,10 +21,7 @@ export const protect = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authorized. Token missing.",
-      });
+      return next(Errors.unauthorized("Not authorized. Token missing."));
     }
 
     //////////////////////////////////////////////////////
@@ -33,20 +32,14 @@ export const protect = async (req, res, next) => {
     let session; // <-- SINGLE session instance reused
 
     try {
-
       decoded = jwt.verify(
         token,
         process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
         { algorithms: ["HS256"] }
       );
-
     } catch (err) {
-
       if (err.name !== "TokenExpiredError") {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid token",
-        });
+        return next(Errors.unauthorized("Invalid token"));
       }
 
       //////////////////////////////////////////////////////
@@ -54,23 +47,16 @@ export const protect = async (req, res, next) => {
       //////////////////////////////////////////////////////
 
       const refreshToken =
-        req.cookies?.refreshToken ||
-        req.headers["x-refresh-token"];
+        req.cookies?.refreshToken || req.headers["x-refresh-token"];
 
       if (!refreshToken) {
-        return res.status(401).json({
-          success: false,
-          message: "Session expired",
-        });
+        return next(Errors.unauthorized("Session expired"));
       }
 
       session = await verifySession(refreshToken);
 
       if (!session || !session.user || !session.tokenHash) {
-        return res.status(401).json({
-          success: false,
-          message: "Session expired",
-        });
+        return next(Errors.unauthorized("Session expired"));
       }
 
       //////////////////////////////////////////////////////
@@ -80,6 +66,11 @@ export const protect = async (req, res, next) => {
       const newAccessToken = generateAccessToken(session.user);
 
       res.setHeader("x-access-token", newAccessToken);
+      req.newAccessToken = newAccessToken;
+
+      logger.debug("Access token re-issued after expiry", {
+        userId: session.user._id.toString(),
+      });
 
       decoded = jwt.verify(
         newAccessToken,
@@ -102,10 +93,7 @@ export const protect = async (req, res, next) => {
     }
 
     if (!decoded.id) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token payload",
-      });
+      return next(Errors.unauthorized("Invalid token payload"));
     }
 
     //////////////////////////////////////////////////////
@@ -113,25 +101,17 @@ export const protect = async (req, res, next) => {
     //////////////////////////////////////////////////////
 
     if (!session) {
-
       const refreshToken =
-        req.cookies?.refreshToken ||
-        req.headers["x-refresh-token"];
+        req.cookies?.refreshToken || req.headers["x-refresh-token"];
 
       if (!refreshToken) {
-        return res.status(401).json({
-          success: false,
-          message: "Session missing",
-        });
+        return next(Errors.unauthorized("Session missing"));
       }
 
       session = await verifySession(refreshToken);
 
       if (!session || !session.user || !session.tokenHash) {
-        return res.status(401).json({
-          success: false,
-          message: "Session expired",
-        });
+        return next(Errors.unauthorized("Session expired"));
       }
     }
 
@@ -142,10 +122,7 @@ export const protect = async (req, res, next) => {
     //////////////////////////////////////////////////////
 
     if (decoded.id !== user._id.toString()) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid session binding",
-      });
+      return next(Errors.unauthorized("Invalid session binding"));
     }
 
     //////////////////////////////////////////////////////
@@ -153,13 +130,9 @@ export const protect = async (req, res, next) => {
     //////////////////////////////////////////////////////
 
     if (
-      Number(decoded.tokenVersion ?? 0) !==
-      Number(user.tokenVersion ?? 0)
+      Number(decoded.tokenVersion ?? 0) !== Number(user.tokenVersion ?? 0)
     ) {
-      return res.status(401).json({
-        success: false,
-        message: "Session expired",
-      });
+      return next(Errors.unauthorized("Session expired"));
     }
 
     //////////////////////////////////////////////////////
@@ -167,17 +140,17 @@ export const protect = async (req, res, next) => {
     //////////////////////////////////////////////////////
 
     if (!user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Account disabled",
+      logger.warn("Blocked request from disabled account", {
+        userId: user._id.toString(),
       });
+      return next(Errors.forbidden("Account disabled"));
     }
 
     if (user.isDeleted) {
-      return res.status(403).json({
-        success: false,
-        message: "Account removed",
+      logger.warn("Blocked request from deleted account", {
+        userId: user._id.toString(),
       });
+      return next(Errors.forbidden("Account removed"));
     }
 
     //////////////////////////////////////////////////////
@@ -185,25 +158,25 @@ export const protect = async (req, res, next) => {
     //////////////////////////////////////////////////////
 
     req.user = Object.freeze({
+      id: user._id,
       _id: user._id,
       role: user.role,
       adminLevel: user.adminLevel || null,
+      tokenVersion: Number(user.tokenVersion ?? 0),
+      countryRef: user.countryRef || null,
       stateRef: user.stateRef || null,
+      districtRef: user.districtRef || null,
       cityRef: user.cityRef || null,
       isTemp: false,
     });
 
     return next();
-
   } catch (error) {
-
-    if (process.env.NODE_ENV !== "production") {
-      console.error("Protect middleware error:", error);
-    }
-
-    return res.status(401).json({
-      success: false,
-      message: "Invalid session",
+    logger.error("Protect middleware error", {
+      message: error.message,
+      stack: error.stack,
     });
+
+    return next(Errors.unauthorized("Invalid session"));
   }
 };

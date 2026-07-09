@@ -11,6 +11,7 @@ import hpp from "hpp";
 import redis from "./config/redis.js";
 
 // 🛣️ Routes
+import ownerKycRoutes from "./modules/kyc/routes/ownerKyc.routes.js"; // ← NEW — Phase 6C owner KYC submission
 import adminRoutes from "./routes/admin.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import adminRatingRoutes from "./routes/adminRating.routes.js";
@@ -191,6 +192,7 @@ app.use("/api/discovery", discoveryRoutes);
 app.use("/api", protect, onboardingBypass, bookingRoutes);
 app.use("/api/payments", protect, onboardingBypass, paymentRoutes);
 app.use("/api/payouts", protect, onboardingBypass, payoutRoutes);
+app.use("/api/salon/kyc", protect, onboardingBypass, ownerKycRoutes); // ← NEW — Phase 6C owner KYC submission
 app.use("/api/reports", protect, onboardingBypass, reportRoutes);
 app.use("/api/ratings", protect, onboardingBypass, ratingRoutes);
 app.use("/api/salon-media", protect, onboardingBypass, salonMediaRoutes);

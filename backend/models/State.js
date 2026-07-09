@@ -121,8 +121,51 @@ const StateSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////
-    // ⭐ GEO (STRICT — NO FAKE DATA)
+    // 🏢 EXPANSION & CONTACT DETAILS
     //////////////////////////////////////////////////////
+    capital: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
+    zone: {
+      type: String,
+      enum: ["NORTH", "SOUTH", "EAST", "WEST", "CENTRAL", "NE", null],
+      default: null,
+    },
+
+    timezone: {
+      type: String,
+      default: "IST (UTC+5:30)",
+    },
+
+    targetAreas: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    targetSalons: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    expectedDistrictCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    manualTerritoryOverride: {
+      type: String,
+      enum: ["OPEN", "PARTIAL", "CLOSED", null],
+      default: null,
+    },
+
+    //////////////////////////////////////////////////////
+    // ⭐ GEO (STRICT — NO FAKE DATA)
     geo: {
       type: {
         type: String,
@@ -196,6 +239,11 @@ const StateSchema = new mongoose.Schema(
     isDeleted: {
       type: Boolean,
       default: false,
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

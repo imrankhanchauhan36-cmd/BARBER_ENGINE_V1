@@ -192,6 +192,28 @@ const UserSchema = new mongoose.Schema(
     },
 
     /////////////////////////////////////////////////
+    // STATUS AUDIT
+    /////////////////////////////////////////////////
+
+    statusUpdatedBy: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "User",
+      default: null,
+    },
+  
+    statusUpdatedAt: {
+      type:    Date,
+      default: null,
+    },
+  
+    statusUpdateReason: {
+      type:      String,
+      default:   null,
+      maxlength: 300,
+    },
+    
+
+    /////////////////////////////////////////////////
     // 👤 PROFILE
     /////////////////////////////////////////////////
 
@@ -302,9 +324,13 @@ UserSchema.pre("validate", function (next) {
       return next(new Error("stateRef required"));
 
     this.districtRef = null;
-    this.adminSubRole = null;
+    if (!this.adminSubRole)
+      return next(new Error("adminSubRole required"));
+
+
     return next();
   }
+
 
   // DISTRICT ADMIN
   if (this.adminLevel === "DISTRICT") {
@@ -378,9 +404,10 @@ UserSchema.index(
   }
 );
 
-// ONE STATE ADMIN
+// ONE PRIMARY STATE ADMIN (SUPPORT/backup admins are NOT limited to
+// one — same rule DISTRICT already uses below)
 UserSchema.index(
-  { adminLevel: 1, stateRef: 1 },
+  { stateRef: 1, adminSubRole: 1 },
   {
     unique: true,
     partialFilterExpression: {
@@ -390,6 +417,7 @@ UserSchema.index(
     },
   }
 );
+
 
 // ONE PRIMARY DISTRICT ADMIN
 UserSchema.index(

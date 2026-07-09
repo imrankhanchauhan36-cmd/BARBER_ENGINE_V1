@@ -22,9 +22,8 @@ const StaffSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      trim: true,
-      maxlength: 100,
-      set: (v) => v.trim().toLowerCase(), // 🔥 normalized (UI can format)
+      trim: true,         // ✅ Fix 2 — removed toLowerCase setter, preserve original casing
+      maxlength: 100,     // search uses $options: "i" in controller
     },
 
     phone: {
@@ -111,6 +110,37 @@ const StaffSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+
+    //////////////////////////////////////////////////////
+    // 📋 STATUS HISTORY — immutable audit trail
+    //////////////////////////////////////////////////////
+    statusHistory: [
+      {
+        previousStatus: { type: Boolean, default: null }, // ✅ Fix 4
+        currentStatus:  { type: Boolean },
+        isActive:       { type: Boolean },
+        changedAt:      { type: Date, default: Date.now },
+        changedBy:      { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        adminLevel:     { type: String },
+        reason:         { type: String, default: null, maxlength: 300 },
+      },
+    ],
+
+    //////////////////////////////////////////////////////
+    // 🚚 TRANSFER HISTORY — immutable audit trail
+    //////////////////////////////////////////////////////
+    transferHistory: [
+      {
+        fromSalonId:   { type: mongoose.Schema.Types.ObjectId, ref: "Salon" },
+        toSalonId:     { type: mongoose.Schema.Types.ObjectId, ref: "Salon" },
+        fromChairId:   { type: mongoose.Schema.Types.ObjectId, ref: "Chair", default: null }, // ✅ Fix 5
+        toChairId:     { type: mongoose.Schema.Types.ObjectId, ref: "Chair", default: null }, // ✅ Fix 5
+        transferredAt: { type: Date, default: Date.now },
+        transferredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        adminLevel:    { type: String },
+        reason:        { type: String, maxlength: 300 },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -122,12 +152,15 @@ const StaffSchema = new mongoose.Schema(
 // 🚀 INDEXES (PERFORMANCE + SAFETY)
 //////////////////////////////////////////////////////////////
 
-// 🔥 UNIQUE PHONE PER SALON
+// ✅ Fix 1 — UNIQUE PHONE PER SALON (isDeleted: false added)
 StaffSchema.index(
   { salonId: 1, phone: 1 },
   {
     unique: true,
-    partialFilterExpression: { phone: { $ne: null } },
+    partialFilterExpression: {
+      phone:     { $ne: null },
+      isDeleted: false,         // ✅ deleted staff ka phone reuse ho sake
+    },
   }
 );
 
@@ -146,19 +179,18 @@ StaffSchema.index({ salonId: 1, isActive: 1, isDeleted: 1 });
 // 🔥 SKILL FILTERING (MATCH SERVICE → STAFF)
 StaffSchema.index({ salonId: 1, skills: 1 });
 
-// 🔥 CHAIR LOOKUP
-StaffSchema.index({ chairId: 1 });
-
-// 🔥 OPTIONAL: ONE CHAIR = ONE STAFF (UNCOMMENT IF NEEDED)
-/*
+// ✅ Fix 3 — ONE CHAIR = ONE STAFF (uncommented + isDeleted: false)
 StaffSchema.index(
   { chairId: 1 },
   {
     unique: true,
-    partialFilterExpression: { chairId: { $ne: null } },
+    sparse: true,
+    partialFilterExpression: {
+      chairId:   { $ne: null },
+      isDeleted: false,
+    },
   }
 );
-*/
 
 // 🔥 LOAD BALANCING
 StaffSchema.index({ salonId: 1, totalBookingsToday: 1 });

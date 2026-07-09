@@ -1,14 +1,14 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import fs from "fs";
+import mongoose from "mongoose";
 
+import connectDB from "../config/db.js";
 import Country from "../models/Country.js";
 import State from "../models/State.js";
 import User from "../models/User.js";
-import connectDB from "../config/db.js";
 
 const JSON_PATH = "./seeds/data/states.json";
 
@@ -46,6 +46,29 @@ function generateSlug(name) {
 /////////////////////////////////////////////////////
 function generateStateAdminEmail(code) {
   return `state-admin-${code.toLowerCase()}@yourapp.internal`;
+}
+
+/////////////////////////////////////////////////////
+// 📞 BACKUP ADMIN PHONE GENERATOR (NEW)
+// Deliberately different from generateDeterministicPhone() so backup
+// admins never collide with primary admins on phone number. Starts
+// with "9" (valid per phone regex ^[6-9]\d{9}$) followed by the same
+// per-state numeric code used for the primary admin's phone.
+/////////////////////////////////////////////////////
+function generateBackupAdminPhone(stateCode) {
+  const numericCode = stateCode
+    .split("")
+    .map((char) => char.charCodeAt(0))
+    .join("");
+
+  return ("9" + numericCode).padEnd(10, "0").slice(0, 10);
+}
+
+/////////////////////////////////////////////////////
+// 📧 BACKUP ADMIN EMAIL (NEW)
+/////////////////////////////////////////////////////
+function generateBackupAdminEmail(code) {
+  return `state-backup-admin-${code.toLowerCase()}@yourapp.internal`;
 }
 
 /////////////////////////////////////////////////////
@@ -190,6 +213,8 @@ async function seedStates() {
 
           role: "ADMIN",
           adminLevel: "STATE",
+          adminSubRole: "PRIMARY",
+
 
           countryRef: india._id,
           stateRef: state._id,
@@ -229,6 +254,7 @@ async function seedStates() {
           {
             $set: {
               name: `${state.name} STATE ADMIN`,
+              adminSubRole: "PRIMARY",
               isActive: true,
               isDeleted: false,
               permissions: ["STATE_FULL_ACCESS"],
@@ -249,6 +275,88 @@ async function seedStates() {
         );
 
         console.log(`🔄 Admin updated for ${state.code}`);
+      }
+
+      //////////////////////////////////////////////////////
+      // BACKUP (SUPPORT) STATE ADMIN (NEW)
+      //////////////////////////////////////////////////////
+      const existingBackupAdmin = await User.findOne({
+        role: "ADMIN",
+        adminLevel: "STATE",
+        adminSubRole: "SUPPORT",
+        stateRef: state._id,
+        isDeleted: false,
+      });
+
+      if (!existingBackupAdmin) {
+
+        //////////////////////////////////////////////////////
+        // CREATE BACKUP ADMIN
+        //////////////////////////////////////////////////////
+        const backupPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+        const backupPhone = generateBackupAdminPhone(state.code);
+        const backupEmail = generateBackupAdminEmail(state.code);
+
+        const backupPhoneExists = await User.findOne({
+          phone: backupPhone,
+          isDeleted: false,
+        });
+
+        if (backupPhoneExists)
+          throw new Error(`Backup phone collision for ${state.name}`);
+
+        const backupEmailExists = await User.findOne({
+          email: backupEmail,
+          isDeleted: false,
+        });
+
+        if (backupEmailExists)
+          throw new Error(`Backup email collision for ${state.name}`);
+
+        await User.create({
+          name: `${state.name} STATE BACKUP ADMIN`,
+          email: backupEmail,
+          phone: backupPhone,
+          password: backupPassword,
+
+          role: "ADMIN",
+          adminLevel: "STATE",
+          adminSubRole: "SUPPORT",
+
+          countryRef: india._id,
+          stateRef: state._id,
+
+          permissions: ["STATE_FULL_ACCESS"],
+          mustChangePassword: true,
+          createdBy: indiaAdmin._id,
+
+          isEmailVerified: true,
+          isPhoneVerified: true,
+
+          isActive: true,
+          isDeleted: false,
+        });
+
+        console.log(`✅ Backup admin created for ${state.code}`);
+
+      } else {
+
+        //////////////////////////////////////////////////////
+        // UPDATE BACKUP ADMIN (SAFE)
+        //////////////////////////////////////////////////////
+        await User.updateOne(
+          { _id: existingBackupAdmin._id },
+          {
+            $set: {
+              name: `${state.name} STATE BACKUP ADMIN`,
+              isActive: true,
+              isDeleted: false,
+              permissions: ["STATE_FULL_ACCESS"],
+            },
+          }
+        );
+
+        console.log(`🔄 Backup admin updated for ${state.code}`);
       }
     }
 

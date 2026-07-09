@@ -95,6 +95,8 @@ const SalonSchema = new mongoose.Schema(
       since:      { type: Number, default: null, min: 1950, max: new Date().getFullYear() },
       experience: { type: String, default: null, enum: ["LESS_THAN_1", "1_TO_3", "3_TO_5", "5_PLUS", "10_PLUS", null] },
       whatsapp:   { type: String, default: null, trim: true, maxlength: 15 },
+      phone:    { type: String, default: null, trim: true, maxlength: 15 },
+
 
       // Tier — used for Premium/Luxury filters + ranking
       tier: {
@@ -226,10 +228,42 @@ const SalonSchema = new mongoose.Schema(
 
     // 12. BUSINESS
     business: {
-      commissionRate: { type: Number, default: 0, min: 0, max: 50 },
-      isShopOpen:     { type: Boolean, default: false },
-      isForceClosed:  { type: Boolean, default: false, index: true },
+      commissionRate: {
+        type:    Number,
+        default: null,
+        min:     0,
+        max:     50,
+      },
+
+      isShopOpen: {
+        type:    Boolean,
+        default: false,
+      },
+    
+      isForceClosed: {
+        type:    Boolean,
+        default: false,
+        index:   true,
+      },
+    
+      isSuspended: {
+        type:    Boolean,
+        default: false,
+        index: true,
+      },
+    
+      suspendedReason: {
+        type:      String,
+        default:   null,
+        maxlength: 300,
+      },
+    
+      suspendedAt: {
+        type:    Date,
+        default: null,
+      },
     },
+  
 
     // 13. APPROVAL
     approval: {
@@ -241,6 +275,8 @@ const SalonSchema = new mongoose.Schema(
       },
       approvedBy:      { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
       approvedAt:      { type: Date, default: null },
+      rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      rejectedAt: { type: Date, default: null },
       rejectionReason: { type: String, default: null, maxlength: 300 },
     },
 
