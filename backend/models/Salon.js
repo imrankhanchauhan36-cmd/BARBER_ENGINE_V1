@@ -4,7 +4,9 @@ import mongoose from "mongoose";
 // DEVELOPER NOTES — READ BEFORE TOUCHING THIS FILE
 //////////////////////////////////////////////////////
 //
-// FROZEN: v2 — 9.8/10 — DO NOT MODIFY WITHOUT REVIEW
+// FROZEN: v3 — indexes updated for search + fallback query
+// performance (2 new indexes added at bottom, see FIX comments).
+// Everything else unchanged from v2.
 //
 // NOTE 1 — BRAND/FRANCHISE SUPPORT (Future)
 //   brandName + branchCode abhi basic hai.
@@ -174,6 +176,7 @@ const SalonSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    
 
     // 8. LOCATION
     location: {
@@ -334,5 +337,18 @@ SalonSchema.index({ "basicInfo.tier": 1,     "approval.status": 1 });
 SalonSchema.index({ "basicInfo.category": 1, "approval.status": 1 });
 SalonSchema.index({ searchTags: 1 });
 SalonSchema.index({ isFeatured: 1, "approval.status": 1 });
+
+// FIX (v3) — fallback (non-geo) list query had no matching index.
+// Query shape: { isDeleted, "approval.status" } + sort createdAt.
+// Without this: full collection scan on every fallback request
+// (GPS off / permission denied / not-yet-resolved on cold start) —
+// a real risk at PAN-India scale.
+SalonSchema.index({ isDeleted: 1, "approval.status": 1, createdAt: -1 }, { background: true });
+
+// FIX (v3) — free-text search previously used case-insensitive regex
+// on shopName/searchTags, which CANNOT use a normal index (always a
+// full collection scan). This text index makes ?search=... queries
+// index-backed via MongoDB's $text operator.
+SalonSchema.index({ "basicInfo.shopName": "text", searchTags: "text" }, { background: true });
 
 export default mongoose.models.Salon || mongoose.model("Salon", SalonSchema);

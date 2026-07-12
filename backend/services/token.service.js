@@ -12,6 +12,6 @@ export const generateAccessToken = (user, salonId = null) => {
       salonId: salonId ? salonId.toString() : null,
     },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "15m" }
   );
 };

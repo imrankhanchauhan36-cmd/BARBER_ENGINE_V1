@@ -45,6 +45,10 @@ export const createSession = async (user, req) => {
     absoluteExpiresAt,
     ipAddress,
     userAgent: req.headers["user-agent"],
+    deviceId: req.headers["x-device-id"] || null,
+    platform: req.headers["x-platform"] || null,
+    appVersion: req.headers["x-app-version"] || null,
+    buildNumber: req.headers["x-build-number"] || null,
   });
 
   /* Redis session cache */
@@ -168,7 +172,42 @@ export const rotateSession = async (rawToken, req) => {
     .lean();
 
   if (!existingToken) return null;
-  if (existingToken.revokedAt) return null;
+
+  // ── STALE / ALREADY-USED TOKEN PRESENTED ──────────────────
+  // This token was already rotated (or explicitly revoked) before.
+  // Whether this is a delayed replay of a stolen token, or a client
+  // bug retrying an old value, the safe response is identical: treat
+  // it as reuse and kill the ENTIRE token family immediately. This
+  // used to silently `return null` here without escalating — meaning
+  // sequential reuse (not just same-millisecond race reuse) never
+  // triggered family revocation. Fixed: both paths now compromise
+  // the whole family.
+  if (existingToken.revokedAt) {
+    await RefreshToken.updateMany(
+      { familyId: existingToken.familyId },
+      {
+        $set: {
+          revokedAt: now,
+          isCompromised: true,
+          revokedReason: "reuse_detected_stale",
+        },
+      }
+    );
+
+    logger.error("Refresh token reuse detected (stale token replay)", {
+      userId: existingToken.userRef.toString(),
+      familyId: existingToken.familyId.toString(),
+    });
+
+    try {
+      await redis.del(SESSION_PREFIX + tokenHash);
+    } catch (err) {
+      logger.warn("Redis del failed", { message: err.message });
+    }
+
+    return null;
+  }
+
   if (existingToken.expiresAt < now) return null;
   if (existingToken.absoluteExpiresAt < now) return null;
   if (existingToken.isCompromised) return null;
@@ -182,7 +221,7 @@ export const rotateSession = async (rawToken, req) => {
   if (Number(user.tokenVersion) !== Number(existingToken.tokenVersion))
     return null;
 
-  /* ATOMIC ROTATION */
+  /* ATOMIC ROTATION (handles same-millisecond concurrent reuse) */
   const updateResult = await RefreshToken.updateOne(
     {
       _id: existingToken._id,
@@ -198,7 +237,7 @@ export const rotateSession = async (rawToken, req) => {
   );
 
   if (updateResult.modifiedCount === 0) {
-    /* REUSE DETECTED */
+    /* REUSE DETECTED — concurrent race lost */
     await RefreshToken.updateMany(
       { familyId: existingToken.familyId },
       {
@@ -244,6 +283,10 @@ export const rotateSession = async (rawToken, req) => {
       req.connection?.remoteAddress ||
       req.ip,
     userAgent: req.headers["user-agent"],
+    deviceId: req.headers["x-device-id"] || null,
+    platform: req.headers["x-platform"] || null,
+    appVersion: req.headers["x-app-version"] || null,
+    buildNumber: req.headers["x-build-number"] || null,
   });
 
   try {
@@ -270,6 +313,8 @@ export const rotateSession = async (rawToken, req) => {
 
   const accessToken = generateAccessToken(user);
 
+  logger.info("[analytics] refresh_success", { userId: user._id.toString() });
+
   return {
     accessToken,
     refreshToken: newRawToken,
@@ -291,6 +336,10 @@ export const revokeSession = async (rawToken) => {
     }
   ).select("userRef");
 
+  if (tokenDoc?.userRef) {
+    logger.info("[analytics] logout", { userId: tokenDoc.userRef.toString() });
+  }
+
   try {
     await redis.del(SESSION_PREFIX + tokenHash);
 
@@ -310,6 +359,8 @@ export const revokeSession = async (rawToken) => {
    LOGOUT ALL DEVICES
 ======================================================= */
 export const revokeAllSessions = async (userId) => {
+  logger.info("[analytics] logout_all", { userId: userId.toString() });
+
   await RefreshToken.updateMany(
     { userRef: userId, revokedAt: null },
     {

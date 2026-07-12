@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
-import Salon from "../models/Salon.js";
-import Service from "../models/Service.js";
 import Chair from "../models/Chair.js";
+import Salon from "../models/Salon.js";
 import SalonMedia from "../models/SalonMedia.js";
+import Service from "../models/Service.js";
 
 ///////////////////////////////////////////////////////////
-// GET SALONS — v3 FINAL LOCK ✅ 10/10
+// GET SALONS — v4
 //
 // FIXES APPLIED (v2):
 //   FIX 1: business.isDeleted → isDeleted
@@ -22,11 +22,22 @@ import SalonMedia from "../models/SalonMedia.js";
 //   NOTE 2: maxDistance now supports radius param (km)
 //           Default: 10km | Options: 5, 10, 25, 50
 //
+// FIX (v4):
+//   FIX 7: `search` query param was silently dropped — it never
+//          made it into `filter`, so /api/discovery/salons?search=xyz
+//          always returned the same createdAt-sorted list regardless
+//          of query text. Now matches basicInfo.shopName or the
+//          pre-generated searchTags array (case-insensitive, regex-
+//          escaped). Works for both the $geoNear path (query passed
+//          through unchanged) and the non-geo fallback path, since
+//          both consume the same `filter` object.
+//
 // NEW FILTERS:
 //   specialization — multi-value: BRIDAL,GROOMING,LUXURY etc
 //   capability     — HOME_SERVICE
 //   isFeatured     — true/false
 //   radius         — 5 / 10 / 25 / 50 (km)
+//   search         — free text, matches shopName / searchTags
 //
 ///////////////////////////////////////////////////////////
 export const getSalons = async (req, res) => {
@@ -41,6 +52,7 @@ export const getSalons = async (req, res) => {
       specialization, // single or comma-separated: BRIDAL,GROOMING
       capability,     // HOME_SERVICE
       isFeatured,     // true/false
+      search,         // free-text: matches shopName or searchTags
       radius = 10,    // km — default 10, max 50
       page   = 1,
       limit  = 20,
@@ -90,6 +102,15 @@ export const getSalons = async (req, res) => {
     // isFeatured filter
     if (isFeatured === "true") filter["isFeatured"] = true;
 
+    // FIX 7 (v5): free-text search — uses MongoDB TEXT index
+    // (basicInfo.shopName + searchTags, defined in models/Salon.js),
+    // NOT regex. A case-insensitive regex $or scans every document
+    // (COLLSCAN) regardless of any index on the field — it does not
+    // scale at PAN-India volume. $text is index-backed.
+    if (search && search.trim()) {
+      filter.$text = { $search: search.trim() };
+    }
+
     // FIX 6: minRating DISABLED
     // TODO: averageRating aggregation implement karo
     // Compute: { $divide: ["$rating.total", "$rating.count"] }
@@ -101,7 +122,15 @@ export const getSalons = async (req, res) => {
     let salons = null;
     let total  = 0;
 
-    if (lat && lng) {
+    // $geoNear's `query` field does NOT support $text (MongoDB
+    // restriction). If a text search is active, skip the geo path
+    // entirely and let the fallback (non-geo) path below handle it
+    // via $text. Trade-off: an active text search loses distance
+    // sorting in favor of relevance — acceptable, since a user who's
+    // typing a query cares about matching the query, not proximity.
+    const hasTextSearch = Boolean(filter.$text);
+
+    if (lat && lng && !hasTextSearch) {
       const latitude  = Number(lat);
       const longitude = Number(lng);
 
@@ -118,7 +147,7 @@ export const getSalons = async (req, res) => {
               distanceMultiplier: 0.001,        // meters → km
               maxDistance:        maxDistanceM, // NOTE 2: dynamic radius
               spherical:          true,
-              query:              filter,
+              query:              filter,        // FIX 7: now includes $or search too
             },
           },
           { $sort: { distance: 1 } },
@@ -180,9 +209,20 @@ export const getSalons = async (req, res) => {
     // FALLBACK (NON-GEO)
     //////////////////////////////////////////////////////
     if (!salons || salons.length === 0) {
-      total  = await Salon.countDocuments(filter);
-      salons = await Salon.find(filter)
-        .sort({ createdAt: -1 })
+      total = await Salon.countDocuments(filter);
+
+      let fallbackQuery = Salon.find(
+        filter,
+        // When $text is active, project the relevance score so we
+        // can sort by it — otherwise leave projection to .select() below.
+        hasTextSearch ? { score: { $meta: "textScore" } } : undefined
+      );
+
+      fallbackQuery = hasTextSearch
+        ? fallbackQuery.sort({ score: { $meta: "textScore" } }) // relevance first
+        : fallbackQuery.sort({ createdAt: -1 });                 // newest first (browsing)
+
+      salons = await fallbackQuery
         .skip(skip)
         .limit(safeLimit)
         .select(

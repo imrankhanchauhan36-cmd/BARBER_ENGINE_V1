@@ -78,6 +78,28 @@ const RefreshTokenSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    deviceId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+
+    platform: {
+      type: String,
+      default: null,
+    },
+
+
+    appVersion: {
+      type: String,
+      default: null,
+    },
+
+    buildNumber: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -1,7 +1,15 @@
-import User from "../models/User.js";
 import Salon from "../models/Salon.js";
 import { createSession } from "../services/session.service.js";
+import { sendOtpSms } from "../services/sms.service.js";
 import { generateAccessToken } from "../services/token.service.js";
+import logger from "../utils/logger.js";
+import {
+  createOrFindUser,
+  generateOtp,
+  isValidOtpFormat,
+  storeOtpHash,
+  verifyOtpAttempt,
+} from "../utils/otp.helpers.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
 
@@ -34,15 +42,33 @@ const normalizePhone = (phone) => {
   return cleaned;
 };
 
+//////////////////////////////////////////////////////
+// STANDARD ERROR RESPONSE HELPER
+// Success responses stay FLAT (accessToken/userId directly on
+// the body) because LoginScreen.js / AuthContext.js already
+// consume them that way — nesting under `data` now would break
+// the already-working login flow without a coordinated frontend
+// change. Error responses get a structured `error.code` for future
+// use, while keeping a top-level `message` for backward-compat
+// with existing `res?.message` reads in the frontend.
+//////////////////////////////////////////////////////
+
+const sendError = (res, status, code, message) =>
+  res.status(status).json({
+    success: false,
+    message,
+    error: { code, message },
+  });
 
 //////////////////////////////////////////////////////
-// OTP CONFIG
+// ANALYTICS EVENT HOOK
+// Structured log events for now — swap for a real analytics SDK
+// (Firebase/Mixpanel/etc) later without touching call sites.
 //////////////////////////////////////////////////////
 
-const OTP_ATTEMPT_LIMIT = 5;
-const OTP_WINDOW_SECONDS = 300;
-
-const getOtpKey = (phone, role) => `otp:attempts:${role}:${phone}`;
+const trackEvent = (event, props = {}) => {
+  logger.info(`[analytics] ${event}`, props);
+};
 
 //////////////////////////////////////////////////////
 // PARTNER — SEND OTP
@@ -51,29 +77,46 @@ const getOtpKey = (phone, role) => `otp:attempts:${role}:${phone}`;
 export const sendOtp = async (req, res) => {
   try {
     const normalizedPhone = normalizePhone(req.body.phone);
-
     if (!normalizedPhone) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid phone number format",
-      });
+      return sendError(res, 400, "INVALID_PHONE", "Invalid phone number format");
     }
 
-    // TODO: Integrate real SMS provider (Twilio / MSG91)
-    // await smsService.send(normalizedPhone, generatedOtp);
+    const redis = req.redis;
+    if (!redis) {
+      logger.error("Redis unavailable during sendOtp (OWNER)", { phone: normalizedPhone });
+      return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
+    }
+
+    const otp = generateOtp();
+    await storeOtpHash(redis, normalizedPhone, "OWNER", otp);
+    const smsResult = await sendOtpSms(normalizedPhone, otp);
+
+    if (!smsResult.success) {
+      trackEvent("otp_send_failed", {
+        role: "OWNER",
+        phone: normalizedPhone,
+        provider: smsResult.provider,
+        error: smsResult.error,
+      });
+      return sendError(res, 502, "SMS_SEND_FAILED", "Could not send OTP. Please try again.");
+    }
+
+    trackEvent("otp_sent", {
+      role: "OWNER",
+      phone: normalizedPhone,
+      provider: smsResult.provider,
+      latencyMs: smsResult.latencyMs,
+    });
 
     return res.status(200).json({
       success: true,
-      otp: "123456", // dev only — remove in production
       message: "OTP sent successfully",
+      ...(process.env.NODE_ENV !== "production" && { otp }),
     });
 
   } catch (error) {
-    console.error("sendOtp error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    logger.error("sendOtp error", { message: error.message, stack: error.stack });
+    return sendError(res, 500, "SERVER_ERROR", "Server error");
   }
 };
 
@@ -86,76 +129,34 @@ export const verifyOtp = async (req, res) => {
     const normalizedPhone = normalizePhone(req.body.phone);
     const { otp } = req.body;
 
-    if (!normalizedPhone || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone & OTP are required",
-      });
+    if (!normalizedPhone) {
+      return sendError(res, 400, "INVALID_PHONE", "Invalid phone number format");
     }
-
-    //////////////////////////////////////////////////////
-    // REDIS — OTP ATTEMPT PROTECTION
-    //////////////////////////////////////////////////////
+    if (!isValidOtpFormat(otp)) {
+      return sendError(res, 400, "INVALID_OTP_FORMAT", "OTP must be a 6-digit code");
+    }
 
     const redis = req.redis;
-
     if (!redis) {
-      console.warn("⚠️ Redis not available");
+      logger.error("Redis unavailable during verifyOtp (OWNER)", { phone: normalizedPhone });
+      return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const otpKey = getOtpKey(normalizedPhone, "OWNER");
-
-    const attempts = await redis.get(otpKey);
-
-    if (attempts && Number(attempts) >= OTP_ATTEMPT_LIMIT) {
-      return res.status(429).json({
-        success: false,
-        message: "Too many OTP attempts. Try again later.",
-      });
+    const attempt = await verifyOtpAttempt(redis, normalizedPhone, "OWNER", otp);
+    if (!attempt.ok) {
+      const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
+      trackEvent("otp_verify_failed", { role: "OWNER", phone: normalizedPhone, code: attempt.code });
+      return sendError(res, status, attempt.code, attempt.message);
     }
-
-    //////////////////////////////////////////////////////
-    // OTP CHECK
-    //////////////////////////////////////////////////////
-
-    if (otp !== "123456") {
-      await redis.multi()
-        .incr(otpKey)
-        .expire(otpKey, OTP_WINDOW_SECONDS)
-        .exec();
-
-      return res.status(401).json({
-        success: false,
-        message: "Invalid OTP",
-      });
-    }
-
-    await redis.del(otpKey);
 
     //////////////////////////////////////////////////////
     // PARTNER USER — FIND OR CREATE
     //////////////////////////////////////////////////////
 
-    let user = await User.findOne({
-      phone: normalizedPhone,
-      role: "OWNER",
-    }).select("+tokenVersion");
-
-    if (!user) {
-      user = new User({
-        phone: normalizedPhone,
-        role: "OWNER",
-        name: "Salon Owner",
-      });
-
-      await user.save({ validateBeforeSave: false });
-    }
+    const user = await createOrFindUser(normalizedPhone, "OWNER", "Salon Owner");
 
     if (user.status === "SUSPENDED") {
-      return res.status(403).json({
-        success: false,
-        message: "Account suspended",
-      });
+      return sendError(res, 403, "ACCOUNT_SUSPENDED", "Account suspended");
     }
 
     //////////////////////////////////////////////////////
@@ -195,10 +196,12 @@ export const verifyOtp = async (req, res) => {
       else if (status === "REJECTED") route = "REJECTED";
     }
 
+    trackEvent("login_success", { role: "OWNER", userId: user._id.toString() });
+
     return res.status(200).json({
       success: true,
       accessToken,
-      refreshToken,  //
+      refreshToken,
       userId: user._id,
       role: user.role,
       salonId,
@@ -211,12 +214,8 @@ export const verifyOtp = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("verifyOtp error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error during verification",
-    });
+    logger.error("verifyOtp error", { message: error.message, stack: error.stack });
+    return sendError(res, 500, "SERVER_ERROR", "Internal server error during verification");
   }
 };
 
@@ -227,29 +226,46 @@ export const verifyOtp = async (req, res) => {
 export const sendUserOtp = async (req, res) => {
   try {
     const normalizedPhone = normalizePhone(req.body.phone);
-
     if (!normalizedPhone) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid phone number format",
-      });
+      return sendError(res, 400, "INVALID_PHONE", "Invalid phone number format");
     }
 
-    // TODO: Integrate real SMS provider (Twilio / MSG91)
-    // await smsService.send(normalizedPhone, generatedOtp);
+    const redis = req.redis;
+    if (!redis) {
+      logger.error("Redis unavailable during sendUserOtp", { phone: normalizedPhone });
+      return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
+    }
+
+    const otp = generateOtp();
+    await storeOtpHash(redis, normalizedPhone, "USER", otp);
+    const smsResult = await sendOtpSms(normalizedPhone, otp);
+
+    if (!smsResult.success) {
+      trackEvent("otp_send_failed", {
+        role: "USER",
+        phone: normalizedPhone,
+        provider: smsResult.provider,
+        error: smsResult.error,
+      });
+      return sendError(res, 502, "SMS_SEND_FAILED", "Could not send OTP. Please try again.");
+    }
+
+    trackEvent("otp_sent", {
+      role: "USER",
+      phone: normalizedPhone,
+      provider: smsResult.provider,
+      latencyMs: smsResult.latencyMs,
+    });
 
     return res.status(200).json({
       success: true,
-      otp: "123456", // dev only — remove in production
       message: "OTP sent successfully",
+      ...(process.env.NODE_ENV !== "production" && { otp }),
     });
 
   } catch (error) {
-    console.error("sendUserOtp error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    logger.error("sendUserOtp error", { message: error.message, stack: error.stack });
+    return sendError(res, 500, "SERVER_ERROR", "Server error");
   }
 };
 
@@ -262,76 +278,34 @@ export const verifyUserOtp = async (req, res) => {
     const normalizedPhone = normalizePhone(req.body.phone);
     const { otp } = req.body;
 
-    if (!normalizedPhone || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone & OTP are required",
-      });
+    if (!normalizedPhone) {
+      return sendError(res, 400, "INVALID_PHONE", "Invalid phone number format");
     }
-
-    //////////////////////////////////////////////////////
-    // REDIS — OTP ATTEMPT PROTECTION
-    //////////////////////////////////////////////////////
+    if (!isValidOtpFormat(otp)) {
+      return sendError(res, 400, "INVALID_OTP_FORMAT", "OTP must be a 6-digit code");
+    }
 
     const redis = req.redis;
-
     if (!redis) {
-      console.warn("⚠️ Redis not available");
+      logger.error("Redis unavailable during verifyUserOtp", { phone: normalizedPhone });
+      return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const otpKey = getOtpKey(normalizedPhone, "USER");
-
-    const attempts = await redis.get(otpKey);
-
-    if (attempts && Number(attempts) >= OTP_ATTEMPT_LIMIT) {
-      return res.status(429).json({
-        success: false,
-        message: "Too many OTP attempts. Try again later.",
-      });
+    const attempt = await verifyOtpAttempt(redis, normalizedPhone, "USER", otp);
+    if (!attempt.ok) {
+      const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
+      trackEvent("otp_verify_failed", { role: "USER", phone: normalizedPhone, code: attempt.code });
+      return sendError(res, status, attempt.code, attempt.message);
     }
-
-    //////////////////////////////////////////////////////
-    // OTP CHECK
-    //////////////////////////////////////////////////////
-
-    if (otp !== "123456") {
-      await redis.multi()
-        .incr(otpKey)
-        .expire(otpKey, OTP_WINDOW_SECONDS)
-        .exec();
-
-      return res.status(401).json({
-        success: false,
-        message: "Invalid OTP",
-      });
-    }
-
-    await redis.del(otpKey);
 
     //////////////////////////////////////////////////////
     // USER — FIND OR CREATE
     //////////////////////////////////////////////////////
 
-    let user = await User.findOne({
-      phone: normalizedPhone,
-      role: "USER",
-    }).select("+tokenVersion");
-
-    if (!user) {
-      user = new User({
-        phone: normalizedPhone,
-        role: "USER",
-        name: "Customer",
-      });
-
-      await user.save({ validateBeforeSave: false });
-    }
+    const user = await createOrFindUser(normalizedPhone, "USER", "Customer");
 
     if (user.status === "SUSPENDED") {
-      return res.status(403).json({
-        success: false,
-        message: "Account suspended",
-      });
+      return sendError(res, 403, "ACCOUNT_SUSPENDED", "Account suspended");
     }
 
     //////////////////////////////////////////////////////
@@ -343,6 +317,8 @@ export const verifyUserOtp = async (req, res) => {
 
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, getCookieOptions());
 
+    trackEvent("login_success", { role: "USER", userId: user._id.toString() });
+
     //////////////////////////////////////////////////////
     // RESPONSE
     //////////////////////////////////////////////////////
@@ -350,6 +326,7 @@ export const verifyUserOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       accessToken,
+      refreshToken,
       userId: user._id,
       role: user.role,
       isNewUser: !user.name || user.name === "Customer",
@@ -357,11 +334,7 @@ export const verifyUserOtp = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("verifyUserOtp error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
+    logger.error("verifyUserOtp error", { message: error.message, stack: error.stack });
+    return sendError(res, 500, "SERVER_ERROR", "Internal server error");
   }
 };
