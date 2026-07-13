@@ -111,7 +111,7 @@ export const sendOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      ...(process.env.NODE_ENV !== "production" && { otp }),
+      ...((process.env.NODE_ENV !== "production" || process.env.ALLOW_FIXED_OTP === "true") && { otp }),
     });
 
   } catch (error) {
@@ -260,7 +260,7 @@ export const sendUserOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      ...(process.env.NODE_ENV !== "production" && { otp }),
+      ...((process.env.NODE_ENV !== "production" || process.env.ALLOW_FIXED_OTP === "true") && { otp }),
     });
 
   } catch (error) {

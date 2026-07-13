@@ -4,7 +4,27 @@ import User from "../models/User.js";
 const OTP_ATTEMPT_LIMIT = 5;
 const OTP_WINDOW_SECONDS = 300; // also used as OTP hash TTL
 
+// Fixed OTP used ONLY when explicitly enabled via ALLOW_FIXED_OTP=true
+// (no DLT/SMS provider set up yet, so real SMS can't be sent).
+// Makes manual testing fast — no need to check server logs for a
+// random code every time.
+//
+// SAFETY: deliberately a SEPARATE flag from NODE_ENV, not reused from
+// it. Several other things in this codebase (e.g. Razorpay signature
+// verification in booking.controller.js) are gated on
+// `NODE_ENV !== "production"` — if this were tied to NODE_ENV too,
+// enabling fixed-OTP testing on Render (where NODE_ENV=production)
+// would require flipping NODE_ENV to "development", which would
+// SILENTLY ALSO disable Razorpay payment verification in production.
+// Keeping this on its own flag means fixed OTP can be safely turned
+// on/off on Render without touching payment security at all.
+const DEV_FIXED_OTP = "123456";
+const ALLOW_FIXED_OTP = process.env.ALLOW_FIXED_OTP === "true";
+
 export const generateOtp = () => {
+  if (ALLOW_FIXED_OTP) {
+    return DEV_FIXED_OTP;
+  }
   // Cryptographically random 6-digit OTP
   return crypto.randomInt(100000, 999999).toString();
 };

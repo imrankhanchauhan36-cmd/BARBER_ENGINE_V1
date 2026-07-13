@@ -1,18 +1,17 @@
-import dotenv    from "dotenv";
-import http      from "http";
-import mongoose  from "mongoose";  // ← IMPROVEMENT-2: needed for DB close + health check
-import app       from "./app.js";
+import "dotenv/config";
+import http from "http";
+import mongoose from "mongoose"; // ← IMPROVEMENT-2: needed for DB close + health check
+import app from "./app.js";
 import connectDB from "./config/db.js";
-import redis     from "./config/redis.js";
-import { initSocket }        from "./socket/index.js";
-import { startHoldExpiryJob }      from "./jobs/holdExpiry.job.js";
+import redis from "./config/redis.js";
 import { startCustomerArrivalJob } from "./jobs/customerArrival.job.js";
+import { startHoldExpiryJob } from "./jobs/holdExpiry.job.js";
+import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
 // 🔑 STEP 1: LOAD ENVIRONMENT VARIABLES
 //////////////////////////////////////////////////////////////
 
-dotenv.config();
 
 //////////////////////////////////////////////////////////////
 // 🔑 STEP 2: CONNECT DATABASE (MongoDB)

@@ -46,18 +46,72 @@ export const sendOtpSms = async (phone, otp) => {
 
     case "msg91": {
       try {
-        // TODO: wire up real MSG91 client once credentials are available
-        // const result = await withTimeout(
-        //   msg91Client.send({ phone, otp }),
-        //   SMS_TIMEOUT_MS
-        // );
-        logger.warn('SMS_PROVIDER="msg91" configured but not implemented yet');
+        const authKey = process.env.MSG91_AUTH_KEY;
+        const templateId = process.env.MSG91_TEMPLATE_ID;
+
+        if (!authKey || !templateId) {
+          logger.error("MSG91_AUTH_KEY or MSG91_TEMPLATE_ID missing in env", { phone });
+          return {
+            success: false,
+            provider: "msg91",
+            messageId: null,
+            latencyMs: Date.now() - startedAt,
+            error: "SMS_PROVIDER_NOT_CONFIGURED",
+          };
+        }
+
+        // MSG91 expects the mobile number with country code, no "+"
+        // prefix and no leading zero — e.g. "919999999999".
+        const mobile = `91${phone}`;
+
+        // MSG91 v5 SendOTP API. We pass our own pre-generated `otp`
+        // (this app generates + stores/verifies OTPs itself via
+        // otp.helpers.js / Redis) so MSG91 is used purely as an SMS
+        // delivery channel, not as the OTP generator/verifier.
+        const url =
+          `https://control.msg91.com/api/v5/otp` +
+          `?template_id=${encodeURIComponent(templateId)}` +
+          `&mobile=${encodeURIComponent(mobile)}` +
+          `&otp=${encodeURIComponent(otp)}`;
+
+        const response = await withTimeout(
+          fetch(url, {
+            method: "POST",
+            headers: {
+              authkey: authKey,
+              "Content-Type": "application/JSON",
+            },
+          }),
+          SMS_TIMEOUT_MS
+        );
+
+        const data = await response.json().catch(() => null);
+
+        // MSG91 v5 success responses have `type: "success"`.
+        // Anything else (including a non-2xx HTTP status) is treated
+        // as a failed send — the exact error message from MSG91 is
+        // logged so failures are diagnosable without guessing.
+        if (response.ok && data?.type === "success") {
+          return {
+            success: true,
+            provider: "msg91",
+            messageId: data?.request_id || null,
+            latencyMs: Date.now() - startedAt,
+            error: null,
+          };
+        }
+
+        logger.error("MSG91 send failed", {
+          phone,
+          httpStatus: response.status,
+          responseBody: data,
+        });
         return {
           success: false,
           provider: "msg91",
           messageId: null,
           latencyMs: Date.now() - startedAt,
-          error: "SMS_PROVIDER_NOT_IMPLEMENTED",
+          error: data?.message || "SMS_SEND_FAILED",
         };
       } catch (err) {
         logger.error("MSG91 send failed", { message: err.message, phone });
