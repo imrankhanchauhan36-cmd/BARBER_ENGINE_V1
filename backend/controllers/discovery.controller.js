@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
+import Category from "../models/Category.js";
 import Chair from "../models/Chair.js";
 import Salon from "../models/Salon.js";
 import SalonMedia from "../models/SalonMedia.js";
 import Service from "../models/Service.js";
+import logger from "../utils/logger.js";
 
 ///////////////////////////////////////////////////////////
 // GET SALONS — v4
@@ -47,6 +49,7 @@ export const getSalons = async (req, res) => {
       lng,
       cityRef,
       category,       // MEN_ONLY / WOMEN_ONLY / UNISEX
+      serviceCategory,
       tier,           // STANDARD / PREMIUM / LUXURY
       ac,             // true/false
       specialization, // single or comma-separated: BRIDAL,GROOMING
@@ -111,6 +114,44 @@ export const getSalons = async (req, res) => {
       filter.$text = { $search: search.trim() };
     }
 
+    // ── SERVICE CATEGORY FILTER — Category Discovery Engine ──────
+    // Category → Service → Salon chain. Loose match (not a hard FK)
+    // against Service.category and Service.name, since salon owners
+    // enter category as a free string with real-world inconsistency
+    // (e.g. some "facial" services tagged FACIAL, some tagged OTHER).
+    if (serviceCategory && serviceCategory.trim()) {
+      const categoryDoc = await Category.findOne({
+        slug: serviceCategory.trim().toLowerCase(),
+        isActive: true,
+        isDeleted: false,
+      }).select("_id displayName").lean();
+
+      if (!categoryDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Unknown category: ${serviceCategory}`,
+        });
+      }
+
+      const escaped = categoryDoc.displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const categoryPattern = new RegExp(escaped, "i");
+
+      const matchingServices = await Service.find({
+        isActive: true,
+        isDeleted: false,
+        $or: [
+          { category: categoryPattern },
+          { name: categoryPattern },
+        ],
+      }).select("salonId").lean();
+
+      const salonIds = [...new Set(matchingServices.map(s => s.salonId.toString()))];
+      // No matching services yet → deliberately empty result, not an
+      // error. filter._id: { $in: [] } yields zero salons through
+      // both the $geoNear and fallback paths below.
+      filter._id = { $in: salonIds };
+    }
+  
     // FIX 6: minRating DISABLED
     // TODO: averageRating aggregation implement karo
     // Compute: { $divide: ["$rating.total", "$rating.count"] }
@@ -376,5 +417,84 @@ export const getSalonServices = async (req, res) => {
   } catch (err) {
     console.error("getSalonServices error:", err);
     return res.status(500).json({ success: false, message: "Failed to fetch services" });
+  }
+};
+
+
+///////////////////////////////////////////////////////////
+// GET CATEGORIES — Category Discovery Engine v1
+//
+// GET /api/discovery/categories
+// GET /api/discovery/categories?applicableFor=MEN
+// GET /api/discovery/categories?applicableFor=WOMEN
+// GET /api/discovery/categories?applicableFor=UNISEX
+//
+// Public, unauthenticated. Returns only isActive + non-deleted
+// categories, sorted by displayOrder. Exact query shape the
+// isDeleted_1_isActive_1_displayOrder_1 compound index on Category
+// was built for.
+//
+// ?applicableFor matches Home Screen's existing Men/Women/Unisex tab
+// switcher:
+//   MEN / WOMEN → only categories whose applicableFor array includes
+//                 that value (e.g. "Beard" excluded when WOMEN).
+//   UNISEX      → NO filter applied — returns all active categories.
+//                 Business rule: a Unisex-tab user is browsing a
+//                 salon type that serves both genders, so they see
+//                 the full category list rather than a subset.
+//   omitted     → same as UNISEX (no filter).
+//   anything else → 400, explicit rejection rather than silently
+//                 ignoring an unrecognized value.
+//
+// "Coming soon" categories (Grooming Packages, Bridal at launch) are
+// seeded isActive:false, so they're automatically excluded — no
+// special-casing needed. They appear the moment an admin flips
+// isActive:true, with zero code changes.
+///////////////////////////////////////////////////////////
+export const getCategories = async (req, res) => {
+  try {
+    const { applicableFor } = req.query;
+
+    const VALID_VALUES = ["MEN", "WOMEN", "UNISEX"];
+    if (applicableFor && !VALID_VALUES.includes(applicableFor)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid applicableFor value. Expected one of: ${VALID_VALUES.join(", ")}`,
+      });
+    }
+
+    const filter = {
+      isDeleted: false,
+      isActive: true,
+    };
+
+    // UNISEX (or omitted) intentionally applies no applicableFor
+    // filter — see business rule in the header comment.
+    if (applicableFor === "MEN" || applicableFor === "WOMEN") {
+      filter.applicableFor = applicableFor;
+    }
+
+    const categories = await Category.find(filter)
+      .select(
+        "code slug displayName description iconUrl thumbnailUrl imageUrl " +
+        "applicableFor estimatedDuration startingPrice featured displayOrder"
+      )
+      .sort({ displayOrder: 1 })
+      .lean();
+
+    return res.json({
+      success: true,
+      count: categories.length,
+      meta: {
+        applicableFor: applicableFor || "UNISEX",
+      },
+      data: categories,
+    });
+  } catch (err) {
+    logger.error("DISCOVERY CATEGORIES ERROR", { message: err.message, stack: err.stack });
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load categories",
+    });
   }
 };

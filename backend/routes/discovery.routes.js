@@ -1,8 +1,9 @@
 import express from "express";
 
 import {
-  getSalons,
+  getCategories,
   getSalonById,
+  getSalons,
   getSalonServices,
 } from "../controllers/discovery.controller.js";
 
@@ -36,6 +37,24 @@ router.get(
 router.get(
   "/salons/:salonId/services",
   getSalonServices
+);
+
+
+// GET /api/v1/discovery/salons/:salonId/services
+router.get(
+  "/salons/:salonId/services",
+  getSalonServices
+);
+
++//////////////////////////////////////////////////////////////
++// 📂 SERVICE CATEGORIES — Category Discovery Engine
++//////////////////////////////////////////////////////////////
++
++// GET /api/discovery/categories
++// GET /api/discovery/categories?applicableFor=MEN
+router.get(
+  "/categories",
+  getCategories
 );
 
 export default router;
