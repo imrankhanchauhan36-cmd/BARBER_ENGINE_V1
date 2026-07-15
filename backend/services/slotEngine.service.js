@@ -1,5 +1,7 @@
-import Salon                  from "../models/Salon.js";
-import { getChairTimelines }  from "./chairTimeline.service.js";
+import redis, { isRedisReady } from "../config/redis.js";
+import Salon from "../models/Salon.js";
+import Service from "../models/Service.js";
+import { getChairTimelines } from "./chairTimeline.service.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -254,5 +256,130 @@ export const getSmartSlots = async ({
   } catch (error) {
     console.error(`[SlotEngine] Error for salon=${salonId} date=${date}:`, error.message);
     return [];
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 NEXT SLOT LABEL — Home Screen "Next Slot" card
+//
+// Returns the earliest available slot label (e.g. "01:15 PM") for
+// a salon, using its SMALLEST active service (duration+buffer) —
+// not a fixed 30-min assumption. Cached in Redis (120s TTL) since
+// this runs per-salon on every Home Screen load (max 6 salons via
+// HomeAvailableNow — cost-control, NOT the full 20-salon list).
+//
+// Cache invalidation: event-based, NOT time-only.
+//   - Booking confirm/complete/cancel  → invalidateNextSlotCache()
+//     (deletes ONE exact-date key)
+//   - Salon config change (timings,
+//     holiday, service duration/buffer,
+//     staff hours, chair count)        → invalidateAllNextSlotCache()
+//     (SCAN + delete ALL date keys for that salon)
+// TTL (120s) is a safety net for any missed invalidation, not the
+// primary freshness mechanism.
+//////////////////////////////////////////////////////////////
+
+const NEXT_SLOT_CACHE_TTL = 120; // seconds
+
+const nextSlotCacheKey = (salonId, date) => `nextSlot:${salonId}:${date}`;
+
+export const getNextSlotLabel = async (salonId, date) => {
+  const cacheKey = nextSlotCacheKey(salonId, date);
+
+  // STEP A: Redis check
+  if (isRedisReady()) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) {
+        return cached === "" ? null : cached; // "" = cached "no slots"
+      }
+    } catch (err) {
+      console.warn(`[NextSlotLabel] Redis read failed for ${cacheKey}:`, err.message);
+    }
+  }
+
+  // STEP B: find salon's active services, pick the MOST-BOOKED one —
+  // this is the business-meaningful default ("what customers actually
+  // book here"), not just "whatever finishes fastest". Falls back to
+  // smallest duration+buffer when no service has any bookings yet
+  // (e.g. a brand-new salon), so Day-1 salons still get a sane label.
+  const activeServices = await Service.find({
+    salonId,
+    isActive:  true,
+    isDeleted: false,
+    })
+      .select("duration buffer bookingCount")
+      .lean();
+  
+  if (!activeServices.length) {
+    if (isRedisReady()) {
+      try {
+        await redis.set(cacheKey, "", { EX: NEXT_SLOT_CACHE_TTL });
+        } catch (_) {}
+      }
+    return null;
+  }
+
+  const hasAnyBookings = activeServices.some((s) => (s.bookingCount || 0) > 0);
+
+  const chosenService = hasAnyBookings
+    ? activeServices.reduce((max, s) =>
+        (s.bookingCount || 0) > (max.bookingCount || 0) ? s : max
+      )
+    : activeServices.reduce((min, s) =>
+        (s.duration + s.buffer) < (min.duration + min.buffer) ? s : min
+      );
+
+  // STEP C: reuse existing getSmartSlots() — no new slot logic
+  const slots = await getSmartSlots({
+    salonId,
+    date,
+    serviceDuration: chosenService.duration,
+    bufferTime:      chosenService.buffer,
+  });
+
+  const label = slots.length > 0 ? slots[0].label : null;
+
+  // STEP D: cache result (even null, to avoid repeated DB hits)
+  if (isRedisReady()) {
+    try {
+      await redis.set(cacheKey, label ?? "", { EX: NEXT_SLOT_CACHE_TTL });
+    } catch (err) {
+      console.warn(`[NextSlotLabel] Redis write failed for ${cacheKey}:`, err.message);
+    }
+  }
+
+  // STEP E: return
+  return label;
+};
+
+// BOOKING events (confirm/complete/cancel) — invalidate ONE exact date.
+export const invalidateNextSlotCache = async (salonId, date) => {
+  if (!isRedisReady()) return;
+  try {
+    await redis.del(nextSlotCacheKey(salonId, date));
+  } catch (err) {
+    console.warn(`[NextSlotLabel] Cache invalidation failed for salon=${salonId}:`, err.message);
+  }
+};
+
+// CONFIG events (timings, holiday, service duration/buffer, staff
+// hours, chair count) — invalidate ALL future date keys for the
+// salon. Rare admin-side event, safe to SCAN at this frequency.
+export const invalidateAllNextSlotCache = async (salonId) => {
+  if (!isRedisReady()) return;
+
+  const pattern = `nextSlot:${salonId}:*`;
+  const keysToDelete = [];
+
+  try {
+    for await (const key of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keysToDelete.push(key);
+    }
+    if (keysToDelete.length > 0) {
+      await redis.del(keysToDelete);
+    }
+  } catch (err) {
+    console.warn(`[NextSlotLabel] Bulk cache invalidation failed for salon=${salonId}:`, err.message);
   }
 };

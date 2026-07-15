@@ -8,7 +8,7 @@ import Transaction, {
   TRANSACTION_STATUS,
   TRANSACTION_TYPE,
 } from "../models/Transaction.js";
-import { getSmartSlots } from "../services/slotEngine.service.js";
+import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
   BOOKING_STATUS,
@@ -720,6 +720,15 @@ export const confirmBooking = async (req, res) => {
     session.endSession();
 
     //////////////////////////////////////////////////////////
+    // 🗑️ CACHE INVALIDATION — next-slot label stale after booking
+    //////////////////////////////////////////////////////////
+
+    await invalidateNextSlotCache(
+      booking.salonRef.toString(),
+      booking.startTime.toISOString().split("T")[0]
+      );
+    
+    //////////////////////////////////////////////////////////
     // 📡 REALTIME — slot is now confirmed (update chair grid)
     //////////////////////////////////////////////////////////
 
@@ -1158,6 +1167,15 @@ export const completeService = async (req, res) => {
     session.endSession();
 
     //////////////////////////////////////////////////////////
+    // 🗑️ CACHE INVALIDATION — next-slot label stale after completion
+    //////////////////////////////////////////////////////////
+
+    await invalidateNextSlotCache(
+      booking.salonRef.toString(),
+      booking.startTime.toISOString().split("T")[0]
+    );
+
+    //////////////////////////////////////////////////////////
     // 📬 NOTIFICATION (non-blocking, after commit)
     //////////////////////////////////////////////////////////
 
@@ -1304,6 +1322,14 @@ export const cancelBooking = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    //////////////////////////////////////////////////////////
+    // 🗑️ CACHE INVALIDATION — next-slot label stale after cancellation
+    //////////////////////////////////////////////////////////
+
+    await invalidateNextSlotCache(
+      booking.salonRef.toString(),
+      booking.startTime.toISOString().split("T")[0]
+    );
     emitBookingEvent(req, {
       event:   "booking:cancelled",
       salonId: booking.salonRef.toString(),
@@ -1682,6 +1708,10 @@ export const forceComplete = async (req, res) => {
     const currentWallet = await SalonEarnings.findOne({ salonId: booking.salonRef }).session(session);
     await session.commitTransaction();
     session.endSession();
+    await invalidateNextSlotCache(
+      booking.salonRef.toString(),
+      booking.startTime.toISOString().split("T")[0]
+    );
     emitBookingEvent(req, {
       event:   "booking:completed",
       salonId: booking.salonRef.toString(),

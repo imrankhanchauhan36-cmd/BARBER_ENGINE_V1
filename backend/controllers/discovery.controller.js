@@ -4,6 +4,8 @@ import Chair from "../models/Chair.js";
 import Salon from "../models/Salon.js";
 import SalonMedia from "../models/SalonMedia.js";
 import Service from "../models/Service.js";
+import Wishlist from "../models/Wishlist.js";
+import { getNextSlotLabel } from "../services/slotEngine.service.js";
 import logger from "../utils/logger.js";
 
 ///////////////////////////////////////////////////////////
@@ -59,6 +61,8 @@ export const getSalons = async (req, res) => {
       radius = 10,    // km — default 10, max 50
       page   = 1,
       limit  = 20,
+      includeNextSlot,  // "true" → attach business.nextAvailableSlot (Redis-backed)
+      includeWishlist,  // "true" → attach wishlist.isWishlisted (needs auth)
     } = req.query;
 
     //////////////////////////////////////////////////////
@@ -232,6 +236,7 @@ export const getSalons = async (req, res) => {
                     "business.isForceClosed":     1,
                     "coverUrl":                   1,
                     distance:                     1,
+                    
                   },
                 },
               ],
@@ -270,7 +275,7 @@ export const getSalons = async (req, res) => {
           "basicInfo.shopName basicInfo.category basicInfo.tier basicInfo.amenities " +
           "specializations capabilities isFeatured media.logo media.coverImage " +
           "location.address location.geo location.territory " +
-          "timings rating approval.status business.isShopOpen business.isForceClosed"
+          "timings rating approval.status business.isShopOpen business.isForceClosed createdAt"
         )
         .lean();
     }
@@ -292,6 +297,73 @@ export const getSalons = async (req, res) => {
       ...s,
       coverUrl: s.media?.coverImage?.url || coverMap[s._id.toString()] || null,
     }));
+
+    //////////////////////////////////////////////////////
+    // ENRICHMENT — WISHLIST (optional, explicit flag)
+    //
+    // Single bulk query for ALL salons on this page, not one query
+    // per salon. Set() gives O(1) lookup per salon in the final map.
+    // Only runs when the caller both asked for it AND is authenticated
+    // (req.userId set by optionalAuth middleware) — anonymous callers
+    // simply get isWishlisted:false on every salon, never a 401.
+    //////////////////////////////////////////////////////
+    let wishlistedSet = new Set();
+
+    if (includeWishlist === "true" && req.userId) {
+      const salonIds = salons.map(s => s._id);
+      const wishlistEntries = await Wishlist.find({
+        userId:  req.userId,
+        salonId: { $in: salonIds },
+      }).select("salonId").lean();
+
+      wishlistedSet = new Set(wishlistEntries.map(w => w.salonId.toString()));
+    }
+
+    //////////////////////////////////////////////////////
+    // ENRICHMENT — NEXT AVAILABLE SLOT (optional, explicit flag)
+    //
+
+    // Redis-backed (see slotEngine.service.js) — cheap even run in
+    // parallel across the current page's salons. Caller controls
+    // cost by choosing whether to pass this flag and how many
+    // salons are on the page (via `limit`) — backend makes no
+    // assumption about "home screen" vs "list screen".
+    //////////////////////////////////////////////////////
+    let nextSlotMap = {};
+
+    if (includeNextSlot === "true") {
+      // "YYYY-MM-DD" in IST — same format getNextSlotLabel expects
+      const todayIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+      const slotResults = await Promise.all(
+        salons.map(s => getNextSlotLabel(s._id.toString(), todayIST))
+      );
+
+      salons.forEach((s, i) => {
+        nextSlotMap[s._id.toString()] = slotResults[i];
+      });
+    }
+
+    //////////////////////////////////////////////////////
+    // MERGE ENRICHMENT INTO FINAL DTO
+    //////////////////////////////////////////////////////
+    if (includeWishlist === "true" || includeNextSlot === "true") {
+      salons = salons.map(s => {
+          const sid = s._id.toString();
+          return {
+          ...s,
+          ...(includeWishlist === "true" && {
+            wishlist: { isWishlisted: wishlistedSet.has(sid) },
+          }),
+          ...(includeNextSlot === "true" && {
+            business: {
+              ...(s.business || {}),
+              nextAvailableSlot: nextSlotMap[sid] ?? null,
+            },
+          }),
+        };
+      });
+    }
 
     //////////////////////////////////////////////////////
     // RESPONSE

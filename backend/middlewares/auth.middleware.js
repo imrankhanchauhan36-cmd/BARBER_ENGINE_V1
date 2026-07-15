@@ -180,3 +180,48 @@ export const protect = async (req, res, next) => {
     return next(Errors.unauthorized("Invalid session"));
   }
 };
+
+// OPTIONAL AUTH — for public routes that want to personalize output
+// (e.g. discovery's wishlist.isWishlisted) WITHOUT requiring login.
+//
+// Unlike protect(), this NEVER blocks the request:
+//   - No token           → req.userId stays undefined, continue
+//   - Invalid token       → req.userId stays undefined, continue
+//   - Expired token       → req.userId stays undefined, continue
+//     (no refresh-token dance here — this is a soft, read-only
+//     personalization hook, not a session boundary. A user whose
+//     access token just expired simply sees isWishlisted:false
+//     until their next real authenticated call refreshes it.)
+//   - Valid token         → req.userId = decoded.id, continue
+//
+// Deliberately does NOT verify the session/tokenVersion/account
+// status like protect() does — those checks matter for routes that
+// mutate data or expose private data. Here we're only using the
+// userId to look up which salons THIS browser already wishlisted;
+// worst case of a stale/edge-case token is a wrong isWishlisted
+// flag on a public listing, not a security issue.
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+
+    if (!authHeader?.toLowerCase()?.startsWith("bearer ")) {
+      return next(); // no token — proceed as anonymous
+    }
+
+    const token = authHeader.split(" ").pop().trim();
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
+      { algorithms: ["HS256"] }
+    );
+
+    if (decoded?.id) {
+      req.userId = decoded.id;
+    }
+  } catch (_) {
+    // any failure (expired/invalid/malformed) — just proceed anonymous
+  }
+
+  return next();
+};

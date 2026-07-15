@@ -11,6 +11,7 @@ import Staff from "../models/Staff.js";
 import User from "../models/User.js";
 import { assignAdminByDistrict } from "../services/adminAssign.service.js";
 import geoService from "../services/geo.service.js";
+import { invalidateAllNextSlotCache } from "../services/slotEngine.service.js";
 
 ///////////////////////////////////////////////////////////
 // STEP 1 — SAVE BASIC INFO (UNCHANGED — PERFECT)
@@ -869,6 +870,13 @@ export const saveTimings = async (req, res) => {
     }
 
     await salon.save();
+
+    //////////////////////////////////////////////////////
+    // 🗑️ CACHE INVALIDATION — timings changed, ALL future
+    // dates' next-slot cache for this salon is now stale
+    //////////////////////////////////////////////////////
+    await invalidateAllNextSlotCache(salon._id.toString());
+
 
     //////////////////////////////////////////////////////
     // ✅ RESPONSE
