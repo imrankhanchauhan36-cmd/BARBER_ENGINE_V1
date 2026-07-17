@@ -5,9 +5,12 @@ import {
   getSalonById,
   getSalons,
   getSalonServices,
+  getTrendingServices,
 } from "../controllers/discovery.controller.js";
 import { optionalAuth } from "../middlewares/auth.middleware.js";
+
 const router = express.Router();
+
 //////////////////////////////////////////////////////////////
 // 🌍 PUBLIC DISCOVERY ROUTES
 //////////////////////////////////////////////////////////////
@@ -42,22 +45,26 @@ router.get(
   getSalonServices
 );
 
+//////////////////////////////////////////////////////////////
+// 📂 SERVICE CATEGORIES — Category Discovery Engine
+//////////////////////////////////////////////////////////////
 
-// GET /api/v1/discovery/salons/:salonId/services
-router.get(
-  "/salons/:salonId/services",
-  getSalonServices
-);
-
-+//////////////////////////////////////////////////////////////
-+// 📂 SERVICE CATEGORIES — Category Discovery Engine
-+//////////////////////////////////////////////////////////////
-+
-+// GET /api/discovery/categories
-+// GET /api/discovery/categories?applicableFor=MEN
+// GET /api/discovery/categories
+// GET /api/discovery/categories?applicableFor=MEN
 router.get(
   "/categories",
   getCategories
+);
+
+//////////////////////////////////////////////////////////////
+// 🔥 TRENDING SERVICES — organic cross-salon demand feed
+//////////////////////////////////////////////////////////////
+
+// GET /api/discovery/trending-services
+// GET /api/discovery/trending-services?applicableFor=MEN
+router.get(
+  "/trending-services",
+  getTrendingServices
 );
 
 export default router;

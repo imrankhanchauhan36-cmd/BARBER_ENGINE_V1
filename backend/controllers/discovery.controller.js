@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { SERVICE_CATEGORIES } from "../constants/service.constants.js";
 import Category from "../models/Category.js";
 import Chair from "../models/Chair.js";
 import Salon from "../models/Salon.js";
@@ -63,6 +64,7 @@ export const getSalons = async (req, res) => {
       limit  = 20,
       includeNextSlot,  // "true" → attach business.nextAvailableSlot (Redis-backed)
       includeWishlist,  // "true" → attach wishlist.isWishlisted (needs auth)
+      includeServiceMedia, // "true" → attach media.previewImages (top 4 service thumbnails)
     } = req.query;
 
     //////////////////////////////////////////////////////
@@ -322,7 +324,6 @@ export const getSalons = async (req, res) => {
     //////////////////////////////////////////////////////
     // ENRICHMENT — NEXT AVAILABLE SLOT (optional, explicit flag)
     //
-
     // Redis-backed (see slotEngine.service.js) — cheap even run in
     // parallel across the current page's salons. Caller controls
     // cost by choosing whether to pass this flag and how many
@@ -330,24 +331,68 @@ export const getSalons = async (req, res) => {
     // assumption about "home screen" vs "list screen".
     //////////////////////////////////////////////////////
     let nextSlotMap = {};
-
     if (includeNextSlot === "true") {
       // "YYYY-MM-DD" in IST — same format getNextSlotLabel expects
       const todayIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-
       const slotResults = await Promise.all(
         salons.map(s => getNextSlotLabel(s._id.toString(), todayIST))
       );
-
       salons.forEach((s, i) => {
         nextSlotMap[s._id.toString()] = slotResults[i];
       });
     }
 
     //////////////////////////////////////////////////////
+    // ENRICHMENT — SERVICE MEDIA PREVIEW (optional, explicit flag)
+    // ZM-003.5 — Smart Service Media Preview Engine
+    //
+    // Top 4 service thumbnails per salon, for the frontend's auto
+    // carousel (Available Now / Premium / Recommended / Home Nearby).
+    // Sort order (frozen — see ZM-003.5 design doc):
+    //   isFeatured DESC → bookingCount DESC → createdAt ASC
+    // displayOrder is deliberately NOT part of this yet — see ZM-014
+    // backlog (manual admin reordering). Adding an all-zero field now
+    // would be dead weight with zero effect on sort order (YAGNI).
+    //
+    // Single query for ALL salons on this page (not one per salon) —
+    // same bulk-then-map pattern as the wishlist enrichment above.
+    //////////////////////////////////////////////////////
+    const MAX_PREVIEW_IMAGES = 4;
+    let serviceMediaMap = {};
+    if (includeServiceMedia === "true") {
+      const salonIds = salons.map(s => s._id);
+      const allServices = await Service.find({
+        salonId:        { $in: salonIds },
+        isActive:       true,
+        isDeleted:       false,
+        thumbnailImage: { $ne: null },
+      })
+        .select("salonId thumbnailImage isFeatured bookingCount createdAt name price duration")
+        .sort({ isFeatured: -1, bookingCount: -1, createdAt: 1 })
+        .lean();
+
+      for (const svc of allServices) {
+        const sid = svc.salonId.toString();
+        if (!serviceMediaMap[sid]) serviceMediaMap[sid] = [];
+        if (serviceMediaMap[sid].length >= MAX_PREVIEW_IMAGES) continue;
+        serviceMediaMap[sid].push({
+          url:          svc.thumbnailImage,
+          type:         "SERVICE",
+          serviceId:    svc._id,
+          displayOrder: serviceMediaMap[sid].length + 1,
+          // Frontend carousel badge — Zomato-style overlay
+          // (service name · price, duration shown separately).
+          name:         svc.name,
+          price:        svc.price,
+          duration:     svc.duration,
+        });
+      }
+    }
+
+    //////////////////////////////////////////////////////
     // MERGE ENRICHMENT INTO FINAL DTO
     //////////////////////////////////////////////////////
-    if (includeWishlist === "true" || includeNextSlot === "true") {
+    if (includeWishlist === "true" || includeNextSlot === "true" || includeServiceMedia === "true") {
       salons = salons.map(s => {
           const sid = s._id.toString();
           return {
@@ -359,6 +404,18 @@ export const getSalons = async (req, res) => {
             business: {
               ...(s.business || {}),
               nextAvailableSlot: nextSlotMap[sid] ?? null,
+            },
+          }),
+          ...(includeServiceMedia === "true" && {
+            media: {
+              ...(s.media || {}),
+              coverImage: {
+                url:      s.coverUrl ?? s.media?.coverImage?.url ?? null,
+                blurHash: null,
+                width:    null,
+                height:   null,
+              },
+              previewImages: serviceMediaMap[sid] || [],
             },
           }),
         };
@@ -568,5 +625,162 @@ export const getCategories = async (req, res) => {
       success: false,
       message: "Unable to load categories",
     });
+  }
+};
+
+
+///////////////////////////////////////////////////////////
+// GET TRENDING SERVICES — v3 (validated + DTO-aligned + production-hardened)
+//
+// Cross-salon organic trending feed for Home Screen.
+// Trending ≠ Featured: this is pure organic demand signal
+// (bookingCount), NOT admin-curated (isFeatured). A separate
+// getFeaturedServices endpoint will exist later for that.
+//
+// Only services whose parent salon is APPROVED, not deleted, AND
+// currently open (business.isShopOpen && !isForceClosed) are
+// eligible — a pending/rejected/deleted/closed salon's service must
+// never surface here regardless of its bookingCount.
+//
+// SORT: bookingCount DESC (null-safe) → salon rating DESC → createdAt DESC
+///////////////////////////////////////////////////////////
+export const getTrendingServices = async (req, res) => {
+  try {
+    const {
+      applicableFor,   // MEN / WOMEN — optional Home tab filter
+      category,        // optional service category filter
+      page  = 1,
+      limit = 10,
+    } = req.query;
+
+    const safePage  = Math.max(Number(page)  || 1,  1);
+    const safeLimit = Math.min(Number(limit) || 10, 50);
+    const skip      = (safePage - 1) * safeLimit;
+
+    // Reject unrecognized values explicitly rather than silently
+    // running a DB query that will just return zero matches — same
+    // philosophy as getCategories()'s applicableFor validation.
+    const VALID_APPLICABLE_FOR = ["MEN", "WOMEN"];
+    if (applicableFor && !VALID_APPLICABLE_FOR.includes(applicableFor)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid applicableFor value. Expected one of: ${VALID_APPLICABLE_FOR.join(", ")}`,
+      });
+    }
+
+    if (category && !SERVICE_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid category. Expected one of: ${SERVICE_CATEGORIES.join(", ")}`,
+      });
+    }
+
+    const serviceFilter = {
+      isActive:  true,
+      isDeleted: false,
+    };
+
+    if (applicableFor) {
+      serviceFilter.applicableFor = { $in: [applicableFor, "BOTH"] };
+    }
+
+    if (category) serviceFilter.category = category;
+
+    const result = await Service.aggregate([
+      { $match: serviceFilter },
+      {
+        $lookup: {
+          from: "salons",
+          let:  { sid: "$salonId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$_id", "$$sid"] },
+                "approval.status":     "APPROVED",
+                isDeleted:             { $ne: true },
+                "business.isShopOpen": true,
+                $or: [
+                  { "business.isForceClosed": false },
+                  { "business.isForceClosed": { $exists: false } },
+                ],
+              },
+            },
+            {
+              $project: {
+                "basicInfo.shopName": 1,
+                "basicInfo.tier":     1,
+                "rating":             1,
+              },
+            },
+          ],
+          as: "salon",
+        },
+      },
+      // Inner-join effect — drops services whose salon didn't match
+      // the approval/isDeleted/open conditions above (unwind removes
+      // the doc entirely if "salon" array is empty).
+      { $unwind: "$salon" },
+      {
+        $addFields: {
+          // Null-safe bookingCount — a missing/undefined value would
+          // otherwise sort unpredictably against numeric values.
+          bookingCountSafe: { $ifNull: ["$bookingCount", 0] },
+          salonRatingAvg: {
+            $cond: [
+              { $gt: ["$salon.rating.count", 0] },
+              { $divide: ["$salon.rating.total", "$salon.rating.count"] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { bookingCountSafe: -1, salonRatingAvg: -1, createdAt: -1 } },
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: safeLimit },
+            {
+              $project: {
+                serviceId:       "$_id",
+                _id:             0,
+                name:            1,
+                price:           1,
+                duration:        1,
+                category:        1,
+                imageUrl:        "$thumbnailImage",
+                bookingCount:    "$bookingCountSafe",
+                salonId:         1,
+                salonName:       "$salon.basicInfo.shopName",
+                salonTier:       "$salon.basicInfo.tier",
+                rating: {
+                  averageRating: { $round: ["$salonRatingAvg", 1] },
+                  reviewCount:   { $ifNull: ["$salon.rating.count", 0] },
+                },
+              },
+            },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    const { data = [], totalCount = [] } = result[0] || {};
+    const total = totalCount[0]?.count || 0;
+
+    return res.status(200).json({
+      success:  true,
+      count:    data.length,
+      total,
+      page:     safePage,
+      limit:    safeLimit,
+      hasMore:  safePage * safeLimit < total,
+      services: data,
+      ...(data.length === 0 && { message: "No trending services available" }),
+    });
+
+  } catch (err) {
+    console.error("getTrendingServices error:", err);
+    return res.status(500).json({ success: false, message: "Failed to fetch trending services" });
   }
 };

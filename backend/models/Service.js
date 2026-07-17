@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import { SERVICE_CATEGORIES } from "../constants/service.constants.js";
+
 
 //////////////////////////////////////////////////////
 // DEVELOPER NOTES — READ BEFORE TOUCHING THIS FILE
@@ -75,35 +77,13 @@ const ServiceSchema = new mongoose.Schema(
     // OLD: ["haircut","beard","facial","spa","color","other"]
     // NEW: 21 marketplace-grade categories
     // See NOTE 1
-    //////////////////////////////////////////////////////////
     category: {
       type:    String,
-      enum: [
-        "HAIRCUT",
-        "BEARD",
-        "HAIR_COLOR",
-        "HAIR_SPA",
-        "FACIAL",
-        "CLEANUP",
-        "MAKEUP",
-        "BRIDAL",
-        "PRE_BRIDAL",
-        "NAIL_ART",
-        "MANICURE",
-        "PEDICURE",
-        "WAXING",
-        "THREADING",
-        "MASSAGE",
-        "SKIN_TREATMENT",
-        "HAIR_TREATMENT",
-        "KERATIN",
-        "SMOOTHENING",
-        "REBONDING",
-        "OTHER",
-      ],
+      enum:    SERVICE_CATEGORIES,
       default: "OTHER",
       index:   true,
     },
+  
 
     //////////////////////////////////////////////////////////
     // APPLICABLE FOR — NEW ✅
