@@ -1,5 +1,11 @@
 import mongoose from "mongoose";
-import { SERVICE_CATEGORIES } from "../constants/service.constants.js";
+import {
+  MAX_CANDIDATE_SALONS,
+  RECOMMENDATION_ELIGIBLE_BOOKING_STATUSES,
+  SERVICE_CATEGORIES,
+  TOP_CATEGORIES_COUNT,
+} from "../constants/service.constants.js";
+import Booking from "../models/Booking.js";
 import Category from "../models/Category.js";
 import Chair from "../models/Chair.js";
 import Salon from "../models/Salon.js";
@@ -782,5 +788,248 @@ export const getTrendingServices = async (req, res) => {
   } catch (err) {
     console.error("getTrendingServices error:", err);
     return res.status(500).json({ success: false, message: "Failed to fetch trending services" });
+  }
+};
+
+///////////////////////////////////////////////////////////
+// GET RECOMMENDED SERVICES — v1
+//
+// Single API for both guest and logged-in users:
+//   - Logged-in with booking history → personalized (top categories
+//     from completed/active bookings, matched across nearby salons)
+//   - Logged-in with no history, OR guest → falls back to the same
+//     organic trending logic as getTrendingServices (never a hard
+//     failure — recommendation QUALITY degrades, the API never does)
+//
+// Location (lat/lng) is OPTIONAL. If provided and valid, candidates
+// are restricted to nearby APPROVED+OPEN salons (geoNear-sorted,
+// capped at MAX_CANDIDATE_SALONS). If omitted/invalid, falls back to
+// city-wide / PAN-India trending — same principle as location being
+// "nice to have" everywhere else in this codebase.
+//
+// recommendationReason is attached to every service so the frontend
+// can render a badge ("Based on your previous bookings" / "Trending
+// near you") without needing separate endpoints per reason.
+///////////////////////////////////////////////////////////
+export const getRecommendedServices = async (req, res) => {
+  try {
+    const {
+      lat,
+      lng,
+      radius = 10,     // km — same default/cap convention as getSalons
+      category,
+      page  = 1,
+      limit = 10,
+    } = req.query;
+
+    const safePage  = Math.max(Number(page)  || 1,  1);
+    const safeLimit = Math.min(Number(limit) || 10, 50);
+    const skip      = (safePage - 1) * safeLimit;
+    const safeRadiusKm = Math.min(Math.max(Number(radius) || 10, 1), 50);
+
+    if (category && !SERVICE_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid category. Expected one of: ${SERVICE_CATEGORIES.join(", ")}`,
+      });
+    }
+
+    // ── STEP A: Nearby candidate salons (optional — degrades gracefully) ──
+    let candidateSalonIds = null; // null = no geo restriction (PAN-India)
+    let distanceMap = {};         // salonId (string) -> distance in km
+
+    const latitude  = Number(lat);
+    const longitude = Number(lng);
+    const hasValidLocation =
+      lat != null && lng != null &&
+      !isNaN(latitude) && !isNaN(longitude) &&
+      latitude  >= -90  && latitude  <= 90 &&
+      longitude >= -180 && longitude <= 180;
+
+    if (hasValidLocation) {
+      const nearbySalons = await Salon.aggregate([
+        {
+          $geoNear: {
+            near:               { type: "Point", coordinates: [longitude, latitude] },
+            distanceField:      "distance",
+            distanceMultiplier: 0.001, // meters → km
+            maxDistance:        safeRadiusKm * 1000,
+            spherical:          true,
+            query: {
+              "approval.status":     "APPROVED",
+              isDeleted:             { $ne: true },
+              "business.isShopOpen": true,
+              $or: [
+                { "business.isForceClosed": false },
+                { "business.isForceClosed": { $exists: false } },
+              ],
+            },
+          },
+        },
+        { $sort: { distance: 1 } },
+        { $limit: MAX_CANDIDATE_SALONS },
+        { $project: { _id: 1, distance: 1 } },
+      ]);
+
+      candidateSalonIds = nearbySalons.map((s) => s._id);
+      nearbySalons.forEach((s) => {
+        distanceMap[s._id.toString()] = s.distance;
+      });
+
+      // Geo requested but zero salons found nearby — recommendation
+      // quality degrades to PAN-India trending rather than returning
+      // an empty result, per the "never hard-fail" principle.
+      if (candidateSalonIds.length === 0) candidateSalonIds = null;
+    }
+
+    // ── STEP B: Personalization signal (logged-in users only) ──
+    let topCategories = [];
+
+    if (req.userId) {
+      const categoryAgg = await Booking.aggregate([
+        {
+          $match: {
+            userRef: new mongoose.Types.ObjectId(req.userId),
+            status:  { $in: RECOMMENDATION_ELIGIBLE_BOOKING_STATUSES },
+          },
+        },
+        { $unwind: "$serviceRefs" },
+        {
+          $lookup: {
+            from: "services",
+            localField: "serviceRefs",
+            foreignField: "_id",
+            as: "service",
+          },
+        },
+        { $unwind: "$service" },
+        { $group: { _id: "$service.category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: TOP_CATEGORIES_COUNT },
+      ]);
+
+      topCategories = categoryAgg.map((c) => c._id);
+    }
+
+    // ── STEP C: Build the Service match filter ──
+    const serviceFilter = {
+      isActive:  true,
+      isDeleted: false,
+    };
+
+    if (candidateSalonIds) serviceFilter.salonId = { $in: candidateSalonIds };
+    // Explicit category query param always wins over the
+    // personalization signal — an explicit filter is user intent.
+    if (category) {
+      serviceFilter.category = category;
+    } else if (topCategories.length > 0) {
+      serviceFilter.category = { $in: topCategories };
+    }
+    // else: no category filter at all — falls through to organic
+    // trending ordering below (cold-start / guest path).
+
+    const usingPersonalization = !category && topCategories.length > 0;
+
+    const result = await Service.aggregate([
+      { $match: serviceFilter },
+      {
+        $lookup: {
+          from: "salons",
+          let:  { sid: "$salonId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$_id", "$$sid"] },
+                "approval.status":     "APPROVED",
+                isDeleted:             { $ne: true },
+                "business.isShopOpen": true,
+                $or: [
+                  { "business.isForceClosed": false },
+                  { "business.isForceClosed": { $exists: false } },
+                ],
+              },
+            },
+            { $project: { "basicInfo.shopName": 1, "basicInfo.tier": 1, rating: 1 } },
+          ],
+          as: "salon",
+        },
+      },
+      { $unwind: "$salon" },
+      {
+        $addFields: {
+          bookingCountSafe: { $ifNull: ["$bookingCount", 0] },
+          salonRatingAvg: {
+            $cond: [
+              { $gt: ["$salon.rating.count", 0] },
+              { $divide: ["$salon.rating.total", "$salon.rating.count"] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { bookingCountSafe: -1, salonRatingAvg: -1, createdAt: -1 } },
+      {
+        $facet: {
+          data: [
+            { $skip: skip },
+            { $limit: safeLimit },
+            {
+              $project: {
+                serviceId:      "$_id",
+                _id:            0,
+                name:           1,
+                price:          1,
+                duration:       1,
+                category:       1,
+                imageUrl:       "$thumbnailImage",
+                bookingCount:   "$bookingCountSafe",
+                salonId:        1,
+                salonName:      "$salon.basicInfo.shopName",
+                salonTier:      "$salon.basicInfo.tier",
+                rating: {
+                  averageRating: { $round: ["$salonRatingAvg", 1] },
+                  reviewCount:   { $ifNull: ["$salon.rating.count", 0] },
+                },
+              },
+            },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    let { data = [], totalCount = [] } = result[0] || {};
+    const total = totalCount[0]?.count || 0;
+
+    // ── Attach distance (if geo was used) + recommendationReason ──
+    data = data.map((svc) => {
+      const sid = svc.salonId.toString();
+      const reason = usingPersonalization
+        ? { code: "BOOKING_HISTORY", label: "Based on your previous bookings" }
+        : candidateSalonIds
+          ? { code: "NEARBY", label: "Popular near you" }
+          : { code: "TRENDING", label: "Trending now" };
+
+      return {
+        ...svc,
+        ...(distanceMap[sid] != null && { distance: Number(distanceMap[sid].toFixed(2)) }),
+        recommendationReason: reason,
+      };
+    });
+
+    return res.status(200).json({
+      success:  true,
+      count:    data.length,
+      total,
+      page:     safePage,
+      limit:    safeLimit,
+      hasMore:  safePage * safeLimit < total,
+      services: data,
+      ...(data.length === 0 && { message: "No recommendations available" }),
+    });
+
+  } catch (err) {
+    console.error("getRecommendedServices error:", err);
+    return res.status(500).json({ success: false, message: "Failed to fetch recommended services" });
   }
 };

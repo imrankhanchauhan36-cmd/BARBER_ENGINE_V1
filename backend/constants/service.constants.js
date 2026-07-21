@@ -32,3 +32,19 @@ export const SERVICE_CATEGORIES = [
 ];
 
 export const SERVICE_APPLICABLE_FOR = ["MEN", "WOMEN", "BOTH"];
+
+
+// Recommended For You — candidate salon cap (geoNear result limit
+// before category-matching). Configurable per city-density tier;
+// hardcoded default for now, can be made env-driven or Salon-density
+// aware later without touching the recommendation query itself.
+export const MAX_CANDIDATE_SALONS = 200;
+
+// How many of the user's most-booked categories to use as the
+// recommendation signal (see Booking History algorithm).
+export const TOP_CATEGORIES_COUNT = 3;
+
+// Only bookings in these statuses count as "genuine interest" for
+// recommendation purposes — a CANCELLED/EXPIRED/NO_SHOW booking
+// tells us nothing about what the user actually wanted.
+export const RECOMMENDATION_ELIGIBLE_BOOKING_STATUSES = ["COMPLETED", "CONFIRMED", "CHECKED_IN", "ONGOING"];

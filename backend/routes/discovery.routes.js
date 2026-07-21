@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   getCategories,
+  getRecommendedServices,
   getSalonById,
   getSalons,
   getSalonServices,
@@ -65,6 +66,20 @@ router.get(
 router.get(
   "/trending-services",
   getTrendingServices
+);
+
+//////////////////////////////////////////////////////////////
+// ❤️ RECOMMENDED FOR YOU — personalized (logged-in) or
+//     trending-fallback (guest) cross-salon feed
+//////////////////////////////////////////////////////////////
+
+// GET /api/discovery/recommended
+// optionalAuth: req.userId set if valid token present, but route
+// stays public — guest users get trending-fallback, never a 401.
+router.get(
+  "/recommended",
+  optionalAuth,
+  getRecommendedServices
 );
 
 export default router;
