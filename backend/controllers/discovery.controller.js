@@ -130,13 +130,59 @@ export const getSalons = async (req, res) => {
       ];
     }
 
-    // FIX 7 (v5): free-text search — uses MongoDB TEXT index
-    // (basicInfo.shopName + searchTags, defined in models/Salon.js),
-    // NOT regex. A case-insensitive regex $or scans every document
-    // (COLLSCAN) regardless of any index on the field — it does not
-    // scale at PAN-India volume. $text is index-backed.
+    // FIX 8 (v6): COMBINED SALON + SERVICE SEARCH
+    //
+    // Previously `search` only matched Salon name/searchTags via
+    // $text — searching "Haircut" never surfaced a salon that simply
+    // OFFERS a haircut service unless the salon's own name/tags
+    // happened to contain the word. That's the #1 expected search
+    // behavior in a services marketplace and was missing entirely.
+    //
+    // $text cannot be combined with $or in MongoDB, so both match
+    // paths are resolved to salon _id lists up front and unioned,
+    // then applied as a plain filter._id — every other filter
+    // (cityRef, tier, isOpenNow, etc.) still applies as AND on top.
+    //
+    // TRADE-OFF (deliberate, flagged): this drops $text's relevance
+    // score, so results are no longer "best text match first" — they
+    // fall back to distance sort (if lat/lng given) or newest-first.
+    // Ranking-quality search (Phase 3/4 on the roadmap) is a separate
+    // follow-up; this fixes RECALL (finding the right salons at all),
+    // not ranking quality.
+    //
+    // BONUS: since this no longer relies on raw $text, the old
+    // "text search loses distance sorting" limitation is also gone —
+    // $geoNear now works together with search.
     if (search && search.trim()) {
-      filter.$text = { $search: search.trim() };
+      const term = search.trim();
+
+      // Path A — salon name / searchTags match (index-backed $text)
+      const nameMatches = await Salon.find(
+        { ...filter, $text: { $search: term } },
+        { _id: 1 }
+      ).lean();
+
+      // Path B — service name / category match → their parent
+      // salons. Same case-insensitive regex approach already used
+      // by the serviceCategory filter below (Service.name/category
+      // is a free string field, no text index to rely on here).
+      const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const termPattern = new RegExp(escapedTerm, "i");
+      const serviceMatches = await Service.find({
+        isActive: true,
+        isDeleted: false,
+        $or: [{ name: termPattern }, { category: termPattern }],
+      }).select("salonId").lean();
+
+      const searchMatchedIds = new Set([
+        ...nameMatches.map((s) => s._id.toString()),
+        ...serviceMatches.map((s) => s.salonId.toString()),
+      ]);
+
+      // No matches from either path → deliberately empty result via
+      // filter._id: { $in: [] }, not an error (same principle as the
+      // serviceCategory filter below).
+      filter._id = { $in: [...searchMatchedIds] };
     }
 
     // ── SERVICE CATEGORY FILTER — Category Discovery Engine ──────
@@ -174,7 +220,17 @@ export const getSalons = async (req, res) => {
       // No matching services yet → deliberately empty result, not an
       // error. filter._id: { $in: [] } yields zero salons through
       // both the $geoNear and fallback paths below.
-      filter._id = { $in: salonIds };
+      //
+      // Intersect with any existing filter._id (set by the combined
+      // search block above) rather than overwrite — if both `search`
+      // and `serviceCategory` are supplied together, a salon must
+      // satisfy BOTH, not just whichever ran last.
+      if (filter._id?.$in) {
+        const existing = new Set(filter._id.$in.map(String));
+        filter._id = { $in: salonIds.filter((id) => existing.has(id)) };
+      } else {
+        filter._id = { $in: salonIds };
+      }
     }
   
     // FIX 6: minRating DISABLED
@@ -188,15 +244,10 @@ export const getSalons = async (req, res) => {
     let salons = null;
     let total  = 0;
 
-    // $geoNear's `query` field does NOT support $text (MongoDB
-    // restriction). If a text search is active, skip the geo path
-    // entirely and let the fallback (non-geo) path below handle it
-    // via $text. Trade-off: an active text search loses distance
-    // sorting in favor of relevance — acceptable, since a user who's
-    // typing a query cares about matching the query, not proximity.
-    const hasTextSearch = Boolean(filter.$text);
-
-    if (lat && lng && !hasTextSearch) {
+    // NOTE: filter never contains $text anymore (see FIX 8 above —
+    // search is now resolved to filter._id before this point), so
+    // $geoNear works normally even when `search` is active.
+    if (lat && lng) {
       const latitude  = Number(lat);
       const longitude = Number(lng);
 
@@ -278,16 +329,10 @@ export const getSalons = async (req, res) => {
     if (!salons || salons.length === 0) {
       total = await Salon.countDocuments(filter);
 
-      let fallbackQuery = Salon.find(
-        filter,
-        // When $text is active, project the relevance score so we
-        // can sort by it — otherwise leave projection to .select() below.
-        hasTextSearch ? { score: { $meta: "textScore" } } : undefined
-      );
-
-      fallbackQuery = hasTextSearch
-        ? fallbackQuery.sort({ score: { $meta: "textScore" } }) // relevance first
-        : fallbackQuery.sort({ createdAt: -1 });                 // newest first (browsing)
+      // $text is no longer used (see FIX 8) — plain newest-first
+      // sort for the non-geo fallback path, same as the browsing
+      // (no-search) case.
+      let fallbackQuery = Salon.find(filter).sort({ createdAt: -1 });
 
       salons = await fallbackQuery
         .skip(skip)
