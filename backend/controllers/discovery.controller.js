@@ -47,6 +47,7 @@ import logger from "../utils/logger.js";
 //   specialization — multi-value: BRIDAL,GROOMING,LUXURY etc
 //   capability     — HOME_SERVICE
 //   isFeatured     — true/false
+//   isOpenNow      — true/false — business.isShopOpen && !isForceClosed
 //   radius         — 5 / 10 / 25 / 50 (km)
 //   search         — free text, matches shopName / searchTags
 //
@@ -64,6 +65,7 @@ export const getSalons = async (req, res) => {
       specialization, // single or comma-separated: BRIDAL,GROOMING
       capability,     // HOME_SERVICE
       isFeatured,     // true/false
+      isOpenNow,      // true/false — business.isShopOpen && !isForceClosed
       search,         // free-text: matches shopName or searchTags
       radius = 10,    // km — default 10, max 50
       page   = 1,
@@ -116,6 +118,17 @@ export const getSalons = async (req, res) => {
 
     // isFeatured filter
     if (isFeatured === "true") filter["isFeatured"] = true;
+
+    // Open Now filter — same isShopOpen/isForceClosed pattern already
+    // used in getTrendingServices/getRecommendedServices, applied here
+    // via the plain query filter instead of an aggregation $match.
+    if (isOpenNow === "true") {
+      filter["business.isShopOpen"] = true;
+      filter.$or = [
+        { "business.isForceClosed": false },
+        { "business.isForceClosed": { $exists: false } },
+      ];
+    }
 
     // FIX 7 (v5): free-text search — uses MongoDB TEXT index
     // (basicInfo.shopName + searchTags, defined in models/Salon.js),
