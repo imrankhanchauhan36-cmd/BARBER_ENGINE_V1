@@ -8,6 +8,14 @@ import Transaction, {
   TRANSACTION_STATUS,
   TRANSACTION_TYPE,
 } from "../models/Transaction.js";
+import User from "../models/User.js";
+import WalletTransaction, {
+  WALLET_TXN_DIRECTION,
+  WALLET_TXN_SOURCE,
+  WALLET_TXN_STATUS,
+  WALLET_TXN_TYPE,
+} from "../models/WalletTransaction.js";
+import CommissionService from "../services/CommissionService.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
@@ -403,11 +411,31 @@ export const lockSlot = async (req, res) => {
         .select("price")
         .lean()
         .session(lockSession);
-
-      const totalAmountInPaise = selectedServices.reduce(
+      const serviceAmountInPaise = selectedServices.reduce(
         (sum, s) => sum + Math.round(s.price * 100),
         0
       );
+
+      //////////////////////////////////////////////////////////
+      // 💰 COMMISSION IS CHARGED ON TOP OF THE SERVICE PRICE —
+      // NOT deducted from it. totalAmountInPaise (what the user
+      // actually pays via Razorpay) = service + commission. The
+      // full serviceAmountInPaise goes to the salon on confirm;
+      // the commission stays with the platform. Both are stored on
+      // the booking (see Booking.js) so the split survives even if
+      // the commission rate changes later.
+      //////////////////////////////////////////////////////////
+      const salonForCommission = await Salon.findById(salonId)
+        .select("business.commissionRate")
+        .session(lockSession)
+        .lean();
+
+      const { commissionInPaise } = await CommissionService.calculate({
+        amountInPaise: serviceAmountInPaise,
+        salon: salonForCommission,
+      });
+
+      const totalAmountInPaise = serviceAmountInPaise + commissionInPaise;
 
       [booking] = await Booking.create(
         [
@@ -424,6 +452,8 @@ export const lockSlot = async (req, res) => {
             lockUntil,
             holdExpiresAt,
             totalAmountInPaise,
+            serviceAmountInPaise,
+            commissionAmountInPaise: commissionInPaise,
             status:             BOOKING_STATUS.HOLD,
           },
         ],
@@ -623,12 +653,18 @@ export const confirmBooking = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////////
-    // 💰 FINANCE CALCULATIONS
+    // 💰 FINANCE SPLIT — commission was already calculated and
+    // locked in at booking-creation time (lockSlot), not
+    // re-derived here. This is deliberate: if the commission rate
+    // changes between HOLD and CONFIRM, the amount the user already
+    // agreed to pay (booking.totalAmountInPaise, shown at checkout)
+    // must not silently change. The salon gets the FULL service
+    // amount — commission is charged on top, not deducted from it.
     //////////////////////////////////////////////////////////
 
-    const amount       = booking.totalAmountInPaise;
-    const commission   = Math.round(amount * 0.1);
-    const payoutAmount = amount - commission;
+    const amount        = booking.totalAmountInPaise;
+    const commission    = booking.commissionAmountInPaise;
+    const payoutAmount  = booking.serviceAmountInPaise;
 
     //////////////////////////////////////////////////////////
     // 💳 CREATE TRANSACTION
@@ -1263,47 +1299,99 @@ export const cancelBooking = async (req, res) => {
     const minsUntil    = (startTime - now) / (1000 * 60);
     const totalPaise   = booking.totalAmountInPaise || 0;
 
-    let refundPaise    = 0;
-    let penaltyPaise   = 0;
+    // Refund % is applied identically to BOTH components (service +
+    // commission) — the user gets back the same fraction of each,
+    // not a blended figure derived from the combined total. This is
+    // what makes the 3-way split exact: user gets refundFraction of
+    // (service+commission), salon keeps (1-refundFraction) of
+    // service, platform keeps (1-refundFraction) of commission.
+    let refundFraction = 0;
     let refundPolicy   = "";
 
     if (booking.status === BOOKING_STATUS.HOLD) {
       // HOLD — no payment captured yet, no refund needed
-      refundPaise  = 0;
-      penaltyPaise = 0;
-      refundPolicy = "NO_PAYMENT";
+      refundFraction = 0;
+      refundPolicy   = "NO_PAYMENT";
     } else if (minsUntil >= 120) {
       // 2+ hours before → 100% refund
-      refundPaise  = totalPaise;
-      penaltyPaise = 0;
-      refundPolicy = "FULL_REFUND";
+      refundFraction = 1;
+      refundPolicy   = "FULL_REFUND";
     } else if (minsUntil >= 30) {
       // 30min - 2hr before → 50% refund
-      refundPaise  = Math.round(totalPaise * 0.5);
-      penaltyPaise = totalPaise - refundPaise;
-      refundPolicy = "HALF_REFUND";
+      refundFraction = 0.5;
+      refundPolicy   = "HALF_REFUND";
     } else {
       // Less than 30 min → 0% refund
-      refundPaise  = 0;
-      penaltyPaise = totalPaise;
-      refundPolicy = "NO_REFUND";
+      refundFraction = 0;
+      refundPolicy   = "NO_REFUND";
     }
+
+    // Split refund proportionally across service + commission —
+    // stored per-booking amounts (locked in at lockSlot time), not
+    // re-derived from the current commission rate.
+    const serviceRefundPaise    = Math.round((booking.serviceAmountInPaise || 0) * refundFraction);
+    const commissionRefundPaise = Math.round((booking.commissionAmountInPaise || 0) * refundFraction);
+    const refundPaise           = serviceRefundPaise + commissionRefundPaise;
+    const penaltyPaise          = totalPaise - refundPaise;
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET ADJUSTMENT — deduct refund from salon wallet
-    // Salon wallet was credited at confirmBooking time
-    // Commission (10%) was already deducted then
-    // So we only adjust the payoutAmount portion
+    // Salon wallet was credited (serviceAmountInPaise, full amount)
+    // at confirmBooking time. On refund, only the service-amount
+    // portion is deducted from the salon — commission was never the
+    // salon's money to begin with, so it's untouched here.
     //////////////////////////////////////////////////////////
-
     if (refundPaise > 0 && booking.status === BOOKING_STATUS.CONFIRMED) {
-      const commission     = Math.round(totalPaise * 0.1);
-      const payoutTotal    = totalPaise - commission;
-      const refundNet      = Math.round(refundPaise * 0.9); // deduct commission portion
-
+      // Salon only ever gets refunded FOR the service-amount portion
+      // — commission was never the salon's money, so it's never
+      // deducted from the salon's balance. serviceRefundPaise is
+      // exactly what the salon's pending balance shrinks by.
       await SalonEarnings.findOneAndUpdate(
         { salonId: booking.salonRef },
-        { $inc: { balanceInPaise: -refundNet, totalEarningsInPaise: -refundNet } },
+        { $inc: { balanceInPaise: -serviceRefundPaise, totalEarningsInPaise: -serviceRefundPaise } },
+        { session }
+      );
+
+      //////////////////////////////////////////////////////////
+      // 💰 CREDIT REFUND TO USER'S WALLET
+      // refundPaise = serviceRefundPaise + commissionRefundPaise —
+      // the user gets back their full share of both the service
+      // amount AND the commission they paid, proportional to the
+      // refund policy. The salon only loses serviceRefundPaise
+      // (deducted above); commissionRefundPaise was always the
+      // platform's money, never the salon's, so it doesn't touch
+      // SalonEarnings at all. Idempotency key ties this to the
+      // booking so a retried/duplicate cancelBooking call can never
+      // double-credit the same refund.
+      //////////////////////////////////////////////////////////
+
+      const userBefore = await User.findOne({ _id: booking.userRef, isDeleted: false })
+        .select("walletBalance")
+        .session(session);
+
+      const refundRupees = refundPaise / 100;
+      const balanceBeforeInPaise = Math.round((userBefore?.walletBalance || 0) * 100);
+
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: booking.userRef, isDeleted: false },
+        { $inc: { walletBalance: refundRupees } },
+        { new: true, session }
+      ).select("walletBalance");
+
+      await WalletTransaction.create(
+        [{
+          userId:        booking.userRef,
+          bookingId:     booking._id,
+          direction:     WALLET_TXN_DIRECTION.CREDIT,
+          type:          WALLET_TXN_TYPE.REFUND,
+          status:        WALLET_TXN_STATUS.SUCCESS,
+          source:        WALLET_TXN_SOURCE.BOOKING,
+          amountInPaise: refundPaise,
+          requestId:     `refund:${booking._id}`,
+          balanceBeforeInPaise,
+          balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
+          metadata:      { refundPolicy, bookingId: booking._id.toString() },
+        }],
         { session }
       );
     }

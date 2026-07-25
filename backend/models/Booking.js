@@ -173,6 +173,33 @@ const BookingSchema = new mongoose.Schema(
       },
     },
 
+    // Breakdown of totalAmountInPaise — needed because commission
+    // is now charged ON TOP of the service price (not deducted from
+    // it): totalAmountInPaise = serviceAmountInPaise + commissionAmountInPaise.
+    // The full serviceAmountInPaise goes to the salon on confirm;
+    // the full commissionAmountInPaise stays with the platform.
+    // Stored per-booking (rather than re-deriving from the current
+    // commission rate at cancel time) so a later rate change never
+    // alters the split for bookings made under the old rate.
+    serviceAmountInPaise: {
+      type:     Number,
+      default:  0,
+      min:      [0, "Amount cannot be negative"],
+      validate: {
+          validator: Number.isInteger,
+        message:   "serviceAmountInPaise must be a whole number (paise, not rupees)",
+      },
+    },
+    commissionAmountInPaise: {
+      type:     Number,
+      default:  0,
+      min:      [0, "Amount cannot be negative"],
+      validate: {
+        validator: Number.isInteger,
+        message:   "commissionAmountInPaise must be a whole number (paise, not rupees)",
+      },
+    },
+
     // ⚠️  DISPLAY ONLY — NEVER use this for finance logic.
     // All authoritative calculations (commission, payout, wallet)
     // MUST use totalAmountInPaise above.
