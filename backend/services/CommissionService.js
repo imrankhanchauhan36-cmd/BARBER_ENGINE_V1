@@ -87,7 +87,15 @@ const CommissionService = {
    */
   getRatePercent: async (salon) => {
     const override = salon?.business?.commissionRate;
-    if (isValidPercent(override)) {
+    // NOTE: 0 is treated as "not set" here, not as "salon has 0%
+    // commission" — Salon.business.commissionRate defaults to 0 in
+    // the schema for every salon, so treating 0 as a real override
+    // would make every salon that has never explicitly configured a
+    // rate silently pay 0% commission. A genuine 0%-commission
+    // promotional salon would need an explicit flag (e.g.
+    // hasCommissionOverride) to be distinguishable from "unset" —
+    // not implemented yet since no salon currently needs 0%.
+    if (isValidPercent(override) && override > 0) {
       return override;
     }
     return getGlobalDefaultRate();

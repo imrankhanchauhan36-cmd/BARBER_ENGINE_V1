@@ -503,8 +503,14 @@ export const lockSlot = async (req, res) => {
       success:   true,
       bookingId: booking._id,
       lockUntil,
+      // Amount breakdown — frontend must display and charge exactly
+      // this (not recalculate its own total), since this is what
+      // confirmBooking's Razorpay order will actually charge.
+      serviceAmountInPaise:    booking.serviceAmountInPaise,
+      commissionAmountInPaise: booking.commissionAmountInPaise,
+      totalAmountInPaise:      booking.totalAmountInPaise,
     });
-
+  
   } catch (error) {
     console.error("lockSlot error:", error);
     return res.status(500).json({
@@ -608,8 +614,6 @@ export const confirmBooking = async (req, res) => {
           ],
         },
         {
-          // Buffer-aware overlap — same logic as lockSlot().
-          // booking.endTime + booking.bufferTime = effective occupied until.
           startTime: {
             $lt: new Date(
               booking.endTime.getTime() +
@@ -655,11 +659,7 @@ export const confirmBooking = async (req, res) => {
     //////////////////////////////////////////////////////////
     // 💰 FINANCE SPLIT — commission was already calculated and
     // locked in at booking-creation time (lockSlot), not
-    // re-derived here. This is deliberate: if the commission rate
-    // changes between HOLD and CONFIRM, the amount the user already
-    // agreed to pay (booking.totalAmountInPaise, shown at checkout)
-    // must not silently change. The salon gets the FULL service
-    // amount — commission is charged on top, not deducted from it.
+    // re-derived here.
     //////////////////////////////////////////////////////////
 
     const amount        = booking.totalAmountInPaise;
@@ -674,7 +674,7 @@ export const confirmBooking = async (req, res) => {
       [
         {
           bookingId:  booking._id,
-          userId:     booking.userRef,    // ← ADD THIS LINE
+          userId:     booking.userRef,
           salonId:    booking.salonRef,
           resourceId: booking.chairRef,
           paymentId,
@@ -691,15 +691,12 @@ export const confirmBooking = async (req, res) => {
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET CREDIT (PENDING) — via WalletBalanceService
-    // Money goes to PENDING, not AVAILABLE — becomes withdrawable
-    // only when completeService() releases it. Prevents a salon
-    // from withdrawing for a service it hasn't delivered yet.
     //////////////////////////////////////////////////////////
-     await WalletBalanceService.creditPending({
+    await WalletBalanceService.creditPending({
       salonId:       booking.salonRef,
       amountInPaise: payoutAmount,
-      action:        "BOOKING_SETTLEMENT",   // ← "_PENDING" hatao
-      entityType:    "BOOKING",              // ← "Transaction" se badla
+      action:        "BOOKING_SETTLEMENT",
+      entityType:    "BOOKING",
       entityId:      booking._id,
       idempotencyKey: `booking:credit:${booking._id}`,
       session,
@@ -707,40 +704,23 @@ export const confirmBooking = async (req, res) => {
       remarks:       "Booking paid — held pending service delivery",
     });
 
-
     //////////////////////////////////////////////////////////
     // ✅ TRANSITION TO CONFIRMED
     //////////////////////////////////////////////////////////
 
     const otp       = Math.floor(1000 + Math.random() * 9000);
-    const otpHashed = hashOtp(otp); // stored as hash — never plaintext in DB
+    const otpHashed = hashOtp(otp);
 
     await transitionBookingStatus({ booking, nextStatus: BOOKING_STATUS.CONFIRMED, session });
-
     booking.paymentStatus      = "PAID";
-    booking.checkInOtp         = otpHashed; // hashed — raw otp returned to user only
+    booking.checkInOtp         = otpHashed;
     booking.lockUntil          = null;
-    booking.checkInOtpEncrypted = encryptOtp(otp); // AES encrypted — for booking history
+    booking.checkInOtpEncrypted = encryptOtp(otp);
 
-    // OTP is valid for 2 hours after booking start time.
-    // Gives the customer a generous window even if they arrive
-    // close to the end of the grace period.
-    // Cleared to null on successful check-in (checkInBooking).
     booking.checkInOtpExpiresAt = new Date(
       booking.startTime.getTime() + 2 * 60 * 60 * 1000
     );
 
-    // 🚗 ARRIVAL ENGINE — set grace window deadline
-    //
-    // arrivalGraceUntil = startTime + maxArrivalWaitMinutes (default 15)
-    //
-    // The customerArrival.job.js worker queries this field every 60s:
-    //   { status: CONFIRMED, arrivalGraceUntil: { $lt: now }, customerDelayedAt: null }
-    //
-    // If this field is null when the job runs, the booking is invisible
-    // to the arrival engine — the customer can never be flagged as delayed.
-    // Setting it here (inside the session) guarantees it is always present
-    // on every CONFIRMED booking, atomically with the status transition.
     booking.arrivalGraceUntil = new Date(
       booking.startTime.getTime() +
       booking.maxArrivalWaitMinutes * 60 * 1000
@@ -756,16 +736,15 @@ export const confirmBooking = async (req, res) => {
     session.endSession();
 
     //////////////////////////////////////////////////////////
-    // 🗑️ CACHE INVALIDATION — next-slot label stale after booking
+    // 🗑️ CACHE INVALIDATION
     //////////////////////////////////////////////////////////
-
     await invalidateNextSlotCache(
       booking.salonRef.toString(),
       booking.startTime.toISOString().split("T")[0]
-      );
-    
+    );
+
     //////////////////////////////////////////////////////////
-    // 📡 REALTIME — slot is now confirmed (update chair grid)
+    // 📡 REALTIME
     //////////////////////////////////////////////////////////
 
     emitBookingEvent(req, {
@@ -784,18 +763,22 @@ export const confirmBooking = async (req, res) => {
     return res.status(200).json({
       success:    true,
       bookingId:  booking._id,
-      checkInOtp: otp,        // raw 4-digit OTP — shown to user once, never stored raw
+      checkInOtp: otp,
       message:    "Booking confirmed successfully",
+      serviceAmountInPaise:    booking.serviceAmountInPaise,
+      commissionAmountInPaise: booking.commissionAmountInPaise,
+      totalAmountInPaise:      booking.totalAmountInPaise,
     });
 
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
 
+
     console.error("confirmBooking error:", error);
     return res.status(error.status || 500).json({
       success: false,
-      message: error.message || "Failed to confirm booking",
+      message: error.message || "Booking confirmation failed",
     });
   }
 };
