@@ -30,6 +30,7 @@ import salonRoutes from "./routes/salon.routes.js";
 import salonMediaRoutes from "./routes/salonMedia.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import walletRoutes from "./routes/wallet.routes.js";
 import wishlistRoutes from "./routes/wishlist.routes.js";
 
 
@@ -191,6 +192,7 @@ app.use("/api/notifications", notificationRoutes);
 ///////////////////////////////////////////////////////////
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
+app.use("/api/v1/wallet", walletRoutes);
 app.use("/api", protect, onboardingBypass, bookingRoutes);
 app.use("/api/payments", protect, onboardingBypass, paymentRoutes);
 app.use("/api/payouts", protect, onboardingBypass, payoutRoutes);
