@@ -531,29 +531,35 @@ export const confirmBooking = async (req, res) => {
   try {
     const {
       bookingId,
-      paymentId,         // razorpay_payment_id
-      orderId,           // razorpay_order_id
-      razorpaySignature, // razorpay_signature
+      paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET"
+      paymentId,         // razorpay_payment_id — required only for RAZORPAY
+      orderId,           // razorpay_order_id — required only for RAZORPAY
+      razorpaySignature, // razorpay_signature — required only for RAZORPAY
     } = req.body;
 
-    //////////////////////////////////////////////////////////
-    // 💳 PAYMENT ID FORMAT GUARD
-    //////////////////////////////////////////////////////////
+    const isWalletPayment = paymentMethod === "WALLET";
 
-    if (!paymentId || paymentId.length < MIN_PAYMENT_ID_LENGTH) {
-      throw Object.assign(
-        new Error("Invalid payment ID — must be at least 10 characters"),
-        { status: 400 }
-      );
+    //////////////////////////////////////////////////////////
+    // 💳 PAYMENT ID FORMAT GUARD (RAZORPAY only — wallet payments
+    // have no Razorpay payment ID at all)
+    //////////////////////////////////////////////////////////
+  
+    if (!isWalletPayment) {
+      if (!paymentId || paymentId.length < MIN_PAYMENT_ID_LENGTH) {
+        throw Object.assign(
+          new Error("Invalid payment ID — must be at least 10 characters"),
+          { status: 400 }
+        );
+      }
+
+      //////////////////////////////////////////////////////////
+      // 🔐 RAZORPAY SIGNATURE VERIFICATION (server-side)
+      //////////////////////////////////////////////////////////
+
+      verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature });
     }
 
-    //////////////////////////////////////////////////////////
-    // 🔐 RAZORPAY SIGNATURE VERIFICATION (server-side)
-    //////////////////////////////////////////////////////////
-
-    verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature });
-
-    //////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////
     // 🔍 FETCH BOOKING (inside session)
     //////////////////////////////////////////////////////////
 
@@ -648,14 +654,26 @@ export const confirmBooking = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////////
-    // 🔐 PAYMENT IDEMPOTENCY CHECK
+    // 💰 WALLET PAYMENT — synthetic paymentId (no real Razorpay
+    // payment exists for a wallet-funded booking). Deterministic
+    // per-booking so a retried confirmBooking call for the same
+    // booking hits the same idempotency check below rather than
+    // generating a new "payment" each time.
     //////////////////////////////////////////////////////////
 
-    const existingTxn = await Transaction.findOne({ paymentId }).session(session);
+    const effectivePaymentId = isWalletPayment
+      ? `wallet_${booking._id}`
+      : paymentId;
+
+    //////////////////////////////////////////////////////////
+    // 🔐 PAYMENT IDEMPOTENCY CHECK
+    //////////////////////////////////////////////////////////
+  
+    const existingTxn = await Transaction.findOne({ paymentId: effectivePaymentId }).session(session);
     if (existingTxn) {
       throw Object.assign(new Error("Duplicate payment detected"), { status: 409 });
     }
-
+  
     //////////////////////////////////////////////////////////
     // 💰 FINANCE SPLIT — commission was already calculated and
     // locked in at booking-creation time (lockSlot), not
@@ -665,6 +683,68 @@ export const confirmBooking = async (req, res) => {
     const amount        = booking.totalAmountInPaise;
     const commission    = booking.commissionAmountInPaise;
     const payoutAmount  = booking.serviceAmountInPaise;
+
+    //////////////////////////////////////////////////////////
+    // 💰 WALLET DEBIT — only for paymentMethod: "WALLET". Atomic
+    // conditional $inc (filter requires sufficient balance) so two
+    // concurrent confirm attempts for the same user can never both
+    // succeed and drive the balance negative — same pattern as
+    // WalletBalanceService.applyLedgerEntry for salon wallets.
+    //////////////////////////////////////////////////////////
+
+    if (isWalletPayment) {
+      const amountRupees = amount / 100;
+      const userBefore = await User.findOne({ _id: booking.userRef, isDeleted: false })
+        .select("walletBalance")
+        .session(session);
+      if (!userBefore) {
+        throw Object.assign(new Error("User not found"), { status: 404 });
+      }
+      const balanceBeforeInPaise = Math.round((userBefore.walletBalance || 0) * 100);
+
+      if (balanceBeforeInPaise < amount) {
+        throw Object.assign(
+          new Error("Insufficient wallet balance"),
+          { status: 400 }
+        );
+      }
+
+      const updatedUser = await User.findOneAndUpdate(
+        {
+          _id: booking.userRef,
+          isDeleted: false,
+          walletBalance: { $gte: amountRupees }, // re-check atomically at write time
+        },
+        { $inc: { walletBalance: -amountRupees } },
+        { new: true, session }
+      ).select("walletBalance");
+
+      if (!updatedUser) {
+        // Balance changed between the read above and this write
+        // (concurrent debit) — fail safe rather than overdraw.
+        throw Object.assign(
+          new Error("Insufficient wallet balance"),
+          { status: 400 }
+        );
+      }
+
+      await WalletTransaction.create(
+        [{
+          userId:        booking.userRef,
+          bookingId:     booking._id,
+          direction:     WALLET_TXN_DIRECTION.DEBIT,
+          type:          WALLET_TXN_TYPE.BOOKING_PAYMENT,
+          status:        WALLET_TXN_STATUS.SUCCESS,
+          source:        WALLET_TXN_SOURCE.BOOKING,
+          amountInPaise: amount,
+          requestId:     `booking_payment:${booking._id}`,
+          balanceBeforeInPaise,
+          balanceAfterInPaise: Math.round(updatedUser.walletBalance * 100),
+          metadata:      { bookingId: booking._id.toString() },
+        }],
+        { session }
+      );
+    }
 
     //////////////////////////////////////////////////////////
     // 💳 CREATE TRANSACTION
@@ -677,8 +757,8 @@ export const confirmBooking = async (req, res) => {
           userId:     booking.userRef,
           salonId:    booking.salonRef,
           resourceId: booking.chairRef,
-          paymentId,
-          orderId,
+          paymentId:  effectivePaymentId,
+          orderId:    orderId || null,
           amount,
           commission,
           payoutAmount,
@@ -688,6 +768,7 @@ export const confirmBooking = async (req, res) => {
       ],
       { session }
     );
+    
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET CREDIT (PENDING) — via WalletBalanceService

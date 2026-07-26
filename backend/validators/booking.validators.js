@@ -76,38 +76,63 @@ export const bookingSchemas = {
   //////////////////////////////////////////////////////////
   // 2. CONFIRM BOOKING
   // POST /v1/bookings/user/confirm
-  //
-  // ISSUE-1 FIX: controller destructures 4 fields —
-  // bookingId, paymentId, orderId, razorpaySignature.
-  // Previous validator only had 2 → Postman requests failed.
-  //
-  // Example body:
+  // paymentMethod: "RAZORPAY" (default) or "WALLET".
+  //   RAZORPAY → paymentId, orderId, razorpaySignature all required.
+  //   WALLET   → none of those three are sent at all (no Razorpay
+  //              payment exists for a wallet-funded booking); the
+  //              controller generates its own synthetic paymentId.
+  // Example body (Razorpay):
   // {
   //   "bookingId":         "64a1b2c3d4e5f6a7b8c9d0e1",
+  //   "paymentMethod":     "RAZORPAY",
   //   "paymentId":         "pay_OFh27vVXrGEz3k",
   //   "orderId":           "order_OFh27vVXrGEz3k",
   //   "razorpaySignature": "abc123...hex"
   // }
+  // Example body (Wallet):
+  // {
+  //   "bookingId":     "64a1b2c3d4e5f6a7b8c9d0e1",
+  //   "paymentMethod": "WALLET"
+  // }
   //////////////////////////////////////////////////////////
-  confirm: Joi.object({
+    confirm: Joi.object({
     bookingId: objectId
       .required()
       .messages({ "any.required": "bookingId is required" }),
 
+    paymentMethod: Joi.string()
+      .valid("RAZORPAY", "WALLET")
+      .default("RAZORPAY"),
+
+    // Required only when paymentMethod is RAZORPAY (or omitted,
+    // since it defaults to RAZORPAY) — Joi's `is`/`then` reads the
+    // sibling field via context, evaluated after defaults apply.
     paymentId: Joi.string()
       .min(10)
-      .required()
+      .when("paymentMethod", {
+        is: "WALLET",
+        then: Joi.forbidden(),
+        otherwise: Joi.required(),
+      })
       .messages({
         "any.required":  "paymentId (razorpay_payment_id) is required",
         "string.min":    "paymentId must be at least 10 characters",
       }),
 
     orderId: Joi.string()
-      .required()
+      .when("paymentMethod", {
+        is: "WALLET",
+        then: Joi.forbidden(),
+        otherwise: Joi.required(),
+      })
       .messages({ "any.required": "orderId (razorpay_order_id) is required" }),
 
     razorpaySignature: Joi.string()
-      .required()
+      .when("paymentMethod", {
+        is: "WALLET",
+        then: Joi.forbidden(),
+        otherwise: Joi.required(),
+      })
       .messages({ "any.required": "razorpaySignature (razorpay_signature) is required" }),
 
   }).unknown(false),
