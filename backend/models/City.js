@@ -84,6 +84,24 @@ const CitySchema = new mongoose.Schema(
       match:   [/^\d{6}$/, "Pincode must be exactly 6 digits"],
     },
 
+    // City-center coordinates — used as a fallback "browse nearby"
+    // starting point when a user manually picks a city instead of
+    // sharing GPS location (see ChooseCityModal on the frontend).
+    // Optional/nullable: not every seeded city needs to be pin-
+    // pointed, only the ones actually offered in that picker.
+    latitude: {
+      type: Number,
+      default: null,
+      min: -90,
+      max: 90,
+    },
+    longitude: {
+      type: Number,
+      default: null,
+      min: -180,
+      max: 180,
+    },
+
     //////////////////////////////////////////////////////////
     // 📍 GEO COORDINATES
     //////////////////////////////////////////////////////////
