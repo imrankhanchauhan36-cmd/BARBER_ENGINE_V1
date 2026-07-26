@@ -5,6 +5,7 @@ import Salon from "../models/Salon.js";
 import SalonEarnings from "../models/SalonEarnings.js";
 import Service from "../models/Service.js";
 import Transaction, {
+  PAYMENT_METHOD,
   TRANSACTION_STATUS,
   TRANSACTION_TYPE,
 } from "../models/Transaction.js";
@@ -764,11 +765,12 @@ export const confirmBooking = async (req, res) => {
           payoutAmount,
           status:     TRANSACTION_STATUS.PAID,
           type:       TRANSACTION_TYPE.BOOKING,
+          paymentMethod: isWalletPayment ? PAYMENT_METHOD.WALLET : PAYMENT_METHOD.UPI,
         },
       ],
       { session }
     );
-    
+
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET CREDIT (PENDING) — via WalletBalanceService
@@ -1674,10 +1676,15 @@ export const getUpcomingBookings = async (req, res) => {
     const bookings = await Booking.find({
       userRef:   userId,
       isDeleted: false,
+      // HOLD deliberately excluded — a HOLD booking has no payment
+      // yet (Razorpay or wallet). Showing it as "upcoming" makes an
+      // unpaid, un-confirmed slot look like a real booking to the
+      // user. HOLD bookings auto-expire via the HoldExpiryJob if the
+      // user never completes payment — they should be invisible
+      // here until confirmBooking() actually transitions them.
       status: {
         $in: [
           BOOKING_STATUS.CONFIRMED,
-          BOOKING_STATUS.HOLD,
           BOOKING_STATUS.CHECKED_IN,
         ],
       },
@@ -1875,5 +1882,86 @@ export const forceComplete = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     return res.status(error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 PAYMENT HISTORY — all booking payments, regardless of method
+// GET /v1/bookings/user/payment-history?page=1&limit=20
+//
+// Unlike getWalletTransactions (wallet-only ledger), this shows
+// every booking Transaction — Razorpay AND wallet-funded — as the
+// unified "how much have I paid for bookings" history. Separate
+// screen from Wallet History since a Razorpay payment never touches
+// the wallet at all.
+//////////////////////////////////////////////////////////////
+
+// Deterministic customer-facing ID from a Mongo ObjectId — same
+// algorithm as the frontend's toFriendlyId (kept in sync manually;
+// if this ever needs to change, update both). Sent from the backend
+// now so the frontend can search/display it directly instead of
+// re-deriving it, and so a future move to a stored sequence number
+// doesn't require a frontend change.
+const toFriendlyId = (objectId, prefix) => {
+  if (!objectId) return null;
+  const idStr = objectId.toString();
+  const timestampHex = idStr.substring(0, 8);
+  const createdAt = new Date(parseInt(timestampHex, 16) * 1000);
+  const yymm = `${String(createdAt.getFullYear()).slice(2)}${String(createdAt.getMonth() + 1).padStart(2, "0")}`;
+  const suffix = idStr.slice(-4).toUpperCase();
+  return `${prefix}${yymm}${suffix}`;
+};
+
+export const getPaymentHistory = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const page  = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const skip  = (page - 1) * limit;
+
+    const filter = { userId };
+
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({ path: "salonId", select: "basicInfo.shopName" })
+        .populate({ path: "bookingId", select: "serviceRefs startTime status", populate: { path: "serviceRefs", select: "name" } })
+        .lean(),
+      Transaction.countDocuments(filter),
+    ]);
+
+    const data = transactions.map((t) => ({
+      _id:            t._id,
+      friendlyTxnId:  toFriendlyId(t._id, "TXN"),
+      bookingId:      t.bookingId?._id || null,
+      friendlyBookingId: t.bookingId?._id ? toFriendlyId(t.bookingId._id, "BK") : null,
+      amount:         t.amount,
+      commission:     t.commission,
+      payoutAmount:   t.payoutAmount,
+      status:         t.status,
+      type:           t.type,
+      paymentId:      t.paymentId,
+      paymentMethod:  t.paymentMethod || PAYMENT_METHOD.UNKNOWN,
+      salonName:      t.salonId?.basicInfo?.shopName || null,
+      serviceNames:   (t.bookingId?.serviceRefs || []).map((s) => s.name).filter(Boolean),
+      bookingStartTime: t.bookingId?.startTime || null,
+      bookingStatus:  t.bookingId?.status || null,
+      createdAt:      t.createdAt,
+    }));
+
+    return res.json({
+      success: true,
+      data,
+      pagination: { total, page, limit },
+    });
+  } catch (error) {
+    console.error("getPaymentHistory error:", error);
+    return res.status(500).json({ success: false, message: "Failed to fetch payment history" });
   }
 };

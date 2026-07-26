@@ -1,32 +1,33 @@
 import express from "express";
 
 import {
-  lockSlot,
-  confirmBooking,
-  checkInBooking,
   cancelBooking,
+  checkInBooking,
   completeService,
-  startService,
-  markNoShow,
-  forceComplete,        // ← YE ADD KARO
-  getMyBookings,
-  getUpcomingBookings,   // FIX-2: was missing
-  getCompletedBookings,  // FIX-2: was missing
+  confirmBooking,
+  forceComplete,
+  getCompletedBookings, // ← YE ADD KARO
+  getMyBookings, // FIX-2: was missing
+  getPaymentHistory, // FIX-2: was missing
   getSalonBookings,
+  getUpcomingBookings,
+  lockSlot,
+  markNoShow,
+  startService,
 } from "../controllers/booking.controller.js";
 
-import { protect }             from "../middlewares/auth.middleware.js";
-import { requireRole }         from "../middlewares/role.middleware.js";
-import { validate }            from "../middlewares/validate.middleware.js";
-import { bookingSchemas }      from "../validators/booking.validators.js";
+import { protect } from "../middlewares/auth.middleware.js";
+import { checkBookingState } from "../middlewares/bookingState.middleware.js";
+import { idempotency } from "../middlewares/idempotency.middleware.js";
 import {
-  lockRateLimiter,
-  confirmRateLimiter,
   bookingRateLimiter,
-}                              from "../middlewares/rateLimit.middleware.js";
-import { idempotency }         from "../middlewares/idempotency.middleware.js";
-import { checkBookingState }   from "../middlewares/bookingState.middleware.js";
-import { getSmartSlots }       from "../services/slotEngine.service.js";
+  confirmRateLimiter,
+  lockRateLimiter,
+} from "../middlewares/rateLimit.middleware.js";
+import { requireRole } from "../middlewares/role.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import { getSmartSlots } from "../services/slotEngine.service.js";
+import { bookingSchemas } from "../validators/booking.validators.js";
 
 const router = express.Router();
 
@@ -90,6 +91,7 @@ userRouter.get("/", getMyBookings);
 // ── Upcoming bookings (CONFIRMED / HOLD / CHECKED_IN) ────────
 // FIX-2: route was missing — controller already implemented
 userRouter.get("/upcoming", getUpcomingBookings);
+userRouter.get("/payment-history", getPaymentHistory);
 
 // ── Completed bookings (paginated) ───────────────────────────
 // FIX-2: route was missing — controller already implemented
