@@ -1,5 +1,6 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import mongoose from "mongoose";
+import Booking from "../models/Booking.js";
 import User from "../models/User.js";
 import WalletTransaction, {
     WALLET_TXN_DIRECTION,
@@ -266,7 +267,6 @@ export const getWalletTransactions = async (req, res) => {
     const skip  = (page - 1) * limit;
 
     const filter = { userId, status: WALLET_TXN_STATUS.SUCCESS };
-
     const [entries, total] = await Promise.all([
       WalletTransaction.find(filter)
         .sort({ createdAt: -1, _id: -1 })
@@ -277,9 +277,42 @@ export const getWalletTransactions = async (req, res) => {
       WalletTransaction.countDocuments(filter),
     ]);
 
+    //////////////////////////////////////////////////////////////
+    // ENRICH — TOPUP/BOOKING_PAYMENT/REFUND entries have a bookingId;
+    // pull salon name + service names + booking date/time for those
+    // in one bulk query (not N+1) so the list/detail screens never
+    // need a second round-trip per transaction.
+    //////////////////////////////////////////////////////////////
+    const bookingIds = entries
+      .filter((e) => e.bookingId)
+      .map((e) => e.bookingId);
+    let bookingMap = {};
+    if (bookingIds.length > 0) {
+      const bookings = await Booking.find({ _id: { $in: bookingIds } })
+        .select("salonRef serviceRefs startTime cancellationPolicy")
+        .populate({ path: "salonRef", select: "basicInfo.shopName" })
+        .populate({ path: "serviceRefs", select: "name" })
+        .lean();
+
+      bookingMap = bookings.reduce((map, b) => {
+        map[b._id.toString()] = {
+          salonName: b.salonRef?.basicInfo?.shopName || null,
+          serviceNames: (b.serviceRefs || []).map((s) => s.name).filter(Boolean),
+          bookingStartTime: b.startTime || null,
+          cancellationPolicy: b.cancellationPolicy || null,
+        };
+        return map;
+      }, {});
+    }
+
+    const enrichedEntries = entries.map((e) => ({
+      ...e,
+      booking: e.bookingId ? (bookingMap[e.bookingId.toString()] || null) : null,
+    }));
+
     return res.json({
       success: true,
-      data: entries,
+      data: enrichedEntries,
       pagination: { total, page, limit },
     });
   } catch (error) {
@@ -317,6 +350,9 @@ export const getWalletBalance = async (req, res) => {
     return res.status(500).json({ success: false, message: "Could not load wallet balance" });
   }
 };
+
+
+
 
 //////////////////////////////////////////////////////////////
 // DEV-ONLY MOCK VERIFY — bypasses real Razorpay checkout
