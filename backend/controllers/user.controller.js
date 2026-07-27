@@ -9,7 +9,7 @@ import User from "../models/User.js";
 //////////////////////////////////////////////////////
 
 const SAFE_USER_FIELDS =
-  "name phone email profilePhoto walletBalance rewardPoints isPhoneVerified isEmailVerified accountStatus createdAt updatedAt";
+  "name phone email dateOfBirth gender profilePhoto walletBalance rewardPoints isPhoneVerified isEmailVerified accountStatus createdAt updatedAt";
 
 const BLOCKED_STATUSES = ["SUSPENDED", "BLOCKED"];
 
@@ -130,6 +130,8 @@ export const updateMe = async (req, res) => {
 
     let name;
     let email;
+    let dateOfBirth;
+    let gender;
 
     if (typeof req.body.name === "string") {
       name = req.body.name.trim();
@@ -139,7 +141,19 @@ export const updateMe = async (req, res) => {
       email = req.body.email.toLowerCase().trim();
     }
 
-    if (!name && !email) {
+    if (typeof req.body.email === "string") {
+      email = req.body.email.toLowerCase().trim();
+    }
+
+    if (req.body.dateOfBirth !== undefined) {
+      dateOfBirth = req.body.dateOfBirth; // validated below — null clears it, invalid rejected
+    }
+
+    if (typeof req.body.gender === "string") {
+      gender = req.body.gender.toUpperCase().trim();
+    }
+
+    if (!name && !email && dateOfBirth === undefined && !gender) {
       return res.status(400).json({
         success: false,
         message: "Nothing to update",
@@ -147,6 +161,40 @@ export const updateMe = async (req, res) => {
     }
 
     const updates = {};
+    //////////////////////////////////////////////////////
+    // DATE OF BIRTH VALIDATION
+    //////////////////////////////////////////////////////
+    if (dateOfBirth !== undefined) {
+      if (dateOfBirth === null) {
+        updates.dateOfBirth = null;
+      } else {
+        const parsed = new Date(dateOfBirth);
+        const isValidDate = !isNaN(parsed.getTime());
+        const isNotFuture = parsed <= new Date();
+        const isReasonableAge = parsed >= new Date("1900-01-01");
+
+        if (!isValidDate || !isNotFuture || !isReasonableAge) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid date of birth",
+          });
+        }
+        updates.dateOfBirth = parsed;
+      }
+    }
+    //////////////////////////////////////////////////////
+    // GENDER VALIDATION
+    //////////////////////////////////////////////////////
+    if (gender) {
+      const validGenders = ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"];
+      if (!validGenders.includes(gender)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid gender value",
+        });
+      }
+      updates.gender = gender;
+    }
 
     //////////////////////////////////////////////////////
     // NAME VALIDATION — FIX 2
@@ -269,26 +317,15 @@ export const uploadProfilePhoto = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid session" });
     }
 
-    if (!req.file?.path) {
+    // memoryStorage() (see routes/user.routes.js) never sets
+    // req.file.path — only req.file.buffer. The real signal that an
+    // upload happened is req.cloudinaryUrl, set by the middleware
+    // right before this controller runs after the Cloudinary upload
+    // completes.
+    if (!req.file || !req.cloudinaryUrl) {
       return res.status(400).json({ success: false, message: "No image uploaded" });
     }
 
-    const updatedUser = await User.findOneAndUpdate(
-      { _id: req.user._id, isDeleted: false },
-      { $set: { profilePhoto: req.cloudinaryUrl } },
-      { new: true }
-    ).select(SAFE_USER_FIELDS).lean();
-
-    if (!updatedUser) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    return res.status(200).json({
-      success:      true,
-      profilePhoto: updatedUser.profilePhoto,
-      user:         updatedUser,
-      message:      "Profile photo updated successfully",
-    });
 
   } catch (error) {
     console.error("uploadProfilePhoto error:", error);

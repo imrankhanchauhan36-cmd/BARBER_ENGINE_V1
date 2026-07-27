@@ -36,6 +36,22 @@ const UserSchema = new mongoose.Schema(
     },
 
     /////////////////////////////////////////////////
+    // 👤 PERSONAL DETAILS — optional, used for birthday
+    // offers, personalized recommendations, and demographic
+    // insights. Not required at signup.
+    /////////////////////////////////////////////////
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+    gender: {
+      type: String,
+      enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"],
+      default: null,
+    },
+  
+
+    /////////////////////////////////////////////////
     // 🔒 AUTH FIELDS
     /////////////////////////////////////////////////
 
