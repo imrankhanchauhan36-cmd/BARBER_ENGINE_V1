@@ -17,6 +17,7 @@ import WalletTransaction, {
   WALLET_TXN_TYPE,
 } from "../models/WalletTransaction.js";
 import CommissionService from "../services/CommissionService.js";
+import NotificationService from "../services/NotificationService.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
@@ -843,6 +844,25 @@ export const confirmBooking = async (req, res) => {
       },
     });
 
+    //////////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after commit)
+    //////////////////////////////////////////////////////////
+
+    const bookingTimeStr = booking.startTime.toLocaleTimeString("en-IN", {
+      hour: "2-digit", minute: "2-digit",
+    });
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Booking Confirmed",
+      message:       `Your appointment is confirmed for today at ${bookingTimeStr}.`,
+      type:          "BOOKING",
+      priority:      "HIGH",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
+    });
+
     return res.status(200).json({
       success:    true,
       bookingId:  booking._id,
@@ -1029,6 +1049,18 @@ export const checkInBooking = async (req, res) => {
       },
     });
 
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Checked In",
+      message:       "You're checked in. The salon will start your service shortly.",
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
+    });
+
     return res.status(200).json({
       success:   true,
       bookingId: booking._id,
@@ -1106,6 +1138,18 @@ export const startService = async (req, res) => {
         status:           BOOKING_STATUS.ONGOING,
         serviceStartedAt: booking.serviceStartedAt,
       },
+    });
+
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Service Started",
+      message:       "Your service has started. Sit back and relax!",
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
     });
 
     return res.status(200).json({
@@ -1281,20 +1325,27 @@ export const completeService = async (req, res) => {
     // 📬 NOTIFICATION (non-blocking, after commit)
     //////////////////////////////////////////////////////////
 
-    try {
-      const { createNotification } = await import("./notification.controller.js");
-      await createNotification({
-        recipientId:   booking.salonRef,
-        recipientType: "SALON",
-        title:         "Service Completed ✅",
-        message:       `Service completed. Chair is now free.`,
-        type:          "SERVICE",
-        priority:      "HIGH",
-        meta:          { bookingId: booking._id },
-      });
-    } catch (notifError) {
-      console.warn("Notification failed (non-critical):", notifError.message);
-    }
+    await NotificationService.send({
+      recipientId:   booking.salonRef,
+      recipientType: "SALON",
+      title:         "Service Completed ✅",
+      message:       `Service completed. Chair is now free.`,
+      type:          "BOOKING",
+      priority:      "HIGH",
+      meta:          { bookingId: booking._id },
+    });
+
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Service Completed",
+      message:       "Your service is complete. Thank you for booking with us!",
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
+    });
 
     //////////////////////////////////////////////////////////
     // 📡 REALTIME — chair freed (after commit)
@@ -1497,6 +1548,21 @@ export const cancelBooking = async (req, res) => {
       },
     });
 
+    const refundMsg = refundPaise > 0
+      ? ` ₹${Math.round(refundPaise / 100)} has been refunded to your wallet.`
+      : "";
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Booking Cancelled",
+      message:       `Your booking has been cancelled.${refundMsg}`,
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id, refundAmountInPaise: refundPaise },
+    });
+
     return res.status(200).json({
       success:            true,
       bookingId:          booking._id,
@@ -1581,6 +1647,18 @@ export const markNoShow = async (req, res) => {
         endTime:   booking.endTime,
         status:    BOOKING_STATUS.NO_SHOW,
       },
+    });
+
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Marked as No-Show",
+      message:       "You were marked as a no-show for your booking. Contact the salon if this is a mistake.",
+      type:          "BOOKING",
+      priority:      "HIGH",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
     });
 
     return res.status(200).json({
@@ -1876,6 +1954,17 @@ export const forceComplete = async (req, res) => {
       salonId: booking.salonRef.toString(),
       userId:  booking.userRef.toString(),
       payload: { bookingId: booking._id, chairId: booking.chairRef, status: BOOKING_STATUS.COMPLETED, walletBalance: currentWallet?.availableBalanceInPaise ?? 0 },
+    });
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Service Completed",
+      message:       "Your service is complete. Thank you for booking with us!",
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id },
     });
     return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.availableBalanceInPaise ?? 0, message: "Booking marked as completed" });
   } catch (error) {

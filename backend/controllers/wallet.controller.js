@@ -1,6 +1,7 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
+import NotificationService from "../services/NotificationService.js";
 import User from "../models/User.js";
 import WalletTransaction, {
     WALLET_TXN_DIRECTION,
@@ -232,6 +233,18 @@ export const verifyTopup = async (req, res) => {
       }
     });
 
+    await NotificationService.send({
+      recipientId:   userId,
+      recipientType: "USER",
+      title:         "Wallet Credited",
+      message:       `₹${Math.round(amountRupees)} has been added to your wallet.`,
+      type:          "PAYMENT",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_WALLET",
+      actionUrl:     "/wallet",
+      meta:          { walletTransactionId: txn._id, amountInPaise: txn.amountInPaise },
+    });
+
     return res.json({
       success: true,
       message: "Wallet credited successfully",
@@ -427,6 +440,18 @@ export const mockVerifyTopup = async (req, res) => {
       if (transitionResult.matchedCount === 0) {
         throw new Error("Transaction already processed concurrently");
       }
+    });
+
+    await NotificationService.send({
+      recipientId:   userId,
+      recipientType: "USER",
+      title:         "Wallet Credited",
+      message:       `₹${Math.round(amountRupees)} has been added to your wallet.`,
+      type:          "PAYMENT",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_WALLET",
+      actionUrl:     "/wallet",
+      meta:          { walletTransactionId: txn._id, amountInPaise: txn.amountInPaise },
     });
 
     return res.json({

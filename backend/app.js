@@ -22,6 +22,8 @@ import customerRoutes from "./routes/customer.routes.js";
 import discoveryRoutes from "./routes/discovery.routes.js";
 import masterRoutes from "./routes/master.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import notificationPreferencesRoutes from "./routes/notificationPreferences.routes.js";
+import userNotificationRoutes from "./routes/userNotification.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import payoutRoutes from "./routes/payout.routes.js";
 import ratingRoutes from "./routes/rating.routes.js";
@@ -186,6 +188,8 @@ app.use("/api/salon", salonRoutes);
 //NOTIFICATION ROUTES
 ////////////////////////////////////////////////////////
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/user/notifications/preferences", notificationPreferencesRoutes);
+app.use("/api/user/notifications", userNotificationRoutes);
 
 
 ///////////////////////////////////////////////////////////
