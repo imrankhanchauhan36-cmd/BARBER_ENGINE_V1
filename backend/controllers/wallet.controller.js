@@ -15,6 +15,7 @@ import {
     fetchRazorpayPayment,
     verifyRazorpaySignature,
 } from "../services/Razorpay.service.js";
+import { toFriendlyId } from "../utils/friendlyId.js";
 import logger from "../utils/logger.js";
 
 //////////////////////////////////////////////////////////////
@@ -321,6 +322,8 @@ export const getWalletTransactions = async (req, res) => {
     const enrichedEntries = entries.map((e) => ({
       ...e,
       booking: e.bookingId ? (bookingMap[e.bookingId.toString()] || null) : null,
+      friendlyTxnId: toFriendlyId(e._id, "WTX"),
+      friendlyBookingId: e.bookingId ? toFriendlyId(e.bookingId, "BK") : null,
     }));
 
     return res.json({

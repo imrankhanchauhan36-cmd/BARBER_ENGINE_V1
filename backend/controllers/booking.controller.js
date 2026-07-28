@@ -25,6 +25,7 @@ import {
   transitionBookingStatus,
   validateBookingTransition,
 } from "../utils/bookingState.machine.js";
+import { toFriendlyId } from "../utils/friendlyId.js";
 import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
 
 //////////////////////////////////////////////////////////////
@@ -849,7 +850,7 @@ export const confirmBooking = async (req, res) => {
     //////////////////////////////////////////////////////////
 
     const bookingTimeStr = booking.startTime.toLocaleTimeString("en-IN", {
-      hour: "2-digit", minute: "2-digit",
+      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
     });
     await NotificationService.send({
       recipientId:   booking.userRef,
@@ -860,7 +861,7 @@ export const confirmBooking = async (req, res) => {
       priority:      "HIGH",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     return res.status(200).json({
@@ -970,7 +971,7 @@ export const checkInBooking = async (req, res) => {
 
     if (diffMinutes < -30) {
       const opensAt    = new Date(booking.startTime.getTime() - 30 * 60 * 1000);
-      const opensAtStr = opensAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const opensAtStr = opensAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
       return res.status(403).json({
         success: false,
         message: `Too early! Check-in opens at ${opensAtStr}`,
@@ -979,7 +980,7 @@ export const checkInBooking = async (req, res) => {
 
     if (diffMinutes > 30) {
       const bookingTimeStr = booking.startTime.toLocaleTimeString("en-IN", {
-        hour: "2-digit", minute: "2-digit",
+        hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
       });
       return res.status(403).json({
         success: false,
@@ -1058,7 +1059,7 @@ export const checkInBooking = async (req, res) => {
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     return res.status(200).json({
@@ -1149,7 +1150,7 @@ export const startService = async (req, res) => {
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     return res.status(200).json({
@@ -1332,7 +1333,7 @@ export const completeService = async (req, res) => {
       message:       `Service completed. Chair is now free.`,
       type:          "BOOKING",
       priority:      "HIGH",
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     await NotificationService.send({
@@ -1344,7 +1345,7 @@ export const completeService = async (req, res) => {
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     //////////////////////////////////////////////////////////
@@ -1560,7 +1561,7 @@ export const cancelBooking = async (req, res) => {
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id, refundAmountInPaise: refundPaise },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK"), refundAmountInPaise: refundPaise },
     });
 
     return res.status(200).json({
@@ -1658,7 +1659,7 @@ export const markNoShow = async (req, res) => {
       priority:      "HIGH",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
 
     return res.status(200).json({
@@ -1713,6 +1714,7 @@ export const getMyBookings = async (req, res) => {
       ...b,
       checkInOtp: b.checkInOtpEncrypted ? decryptOtp(b.checkInOtpEncrypted) : null,
       checkInOtpEncrypted: undefined,
+      friendlyBookingId: toFriendlyId(b._id, "BK"),
     }));
 
     return res.status(200).json({
@@ -1777,6 +1779,7 @@ export const getUpcomingBookings = async (req, res) => {
       ...b,
       checkInOtp: b.checkInOtpEncrypted ? decryptOtp(b.checkInOtpEncrypted) : null,
       checkInOtpEncrypted: undefined,
+      friendlyBookingId: toFriendlyId(b._id, "BK"),
     }));
 
     return res.status(200).json({
@@ -1825,9 +1828,14 @@ export const getCompletedBookings = async (req, res) => {
       Booking.countDocuments(filter),
     ]);
 
+    const bookingsWithFriendlyId = bookings.map(b => ({
+      ...b,
+      friendlyBookingId: toFriendlyId(b._id, "BK"),
+    }));
+
     return res.status(200).json({
       success: true,
-      bookings,
+      bookings: bookingsWithFriendlyId,
       pagination: {
         page,
         limit,
@@ -1964,7 +1972,7 @@ export const forceComplete = async (req, res) => {
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
-      meta:          { bookingId: booking._id },
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
     });
     return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.availableBalanceInPaise ?? 0, message: "Booking marked as completed" });
   } catch (error) {
@@ -1984,22 +1992,6 @@ export const forceComplete = async (req, res) => {
 // screen from Wallet History since a Razorpay payment never touches
 // the wallet at all.
 //////////////////////////////////////////////////////////////
-
-// Deterministic customer-facing ID from a Mongo ObjectId — same
-// algorithm as the frontend's toFriendlyId (kept in sync manually;
-// if this ever needs to change, update both). Sent from the backend
-// now so the frontend can search/display it directly instead of
-// re-deriving it, and so a future move to a stored sequence number
-// doesn't require a frontend change.
-const toFriendlyId = (objectId, prefix) => {
-  if (!objectId) return null;
-  const idStr = objectId.toString();
-  const timestampHex = idStr.substring(0, 8);
-  const createdAt = new Date(parseInt(timestampHex, 16) * 1000);
-  const yymm = `${String(createdAt.getFullYear()).slice(2)}${String(createdAt.getMonth() + 1).padStart(2, "0")}`;
-  const suffix = idStr.slice(-4).toUpperCase();
-  return `${prefix}${yymm}${suffix}`;
-};
 
 export const getPaymentHistory = async (req, res) => {
   try {
