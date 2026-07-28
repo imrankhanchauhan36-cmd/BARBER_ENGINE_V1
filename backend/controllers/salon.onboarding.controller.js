@@ -306,6 +306,27 @@ export const saveLocation = async (req, res) => {
 };
 
 ///////////////////////////////////////////////////////////
+// SEARCH TAGS — auto-generated from name + category +
+// applicableFor (see Service model NOTE 3). Never accept
+// owner-entered tags — spam risk.
+///////////////////////////////////////////////////////////
+
+const generateSearchTags = (name, category, applicableFor) => {
+  const tags = new Set();
+
+  const nameWords = name.toLowerCase().trim().split(/\s+/).filter((w) => w.length > 1);
+  nameWords.forEach((w) => tags.add(w));
+  if (nameWords.length > 1) tags.add(name.toLowerCase().trim());
+
+  if (category) tags.add(category.toLowerCase().replace(/_/g, " "));
+
+  if (applicableFor === "MEN")   tags.add("men");
+  if (applicableFor === "WOMEN") tags.add("women");
+
+  return Array.from(tags);
+};
+
+///////////////////////////////////////////////////////////
 // 🔥 STEP 3 — SAVE SERVICES (TRANSACTION SAFE)
 ///////////////////////////////////////////////////////////
 
@@ -404,9 +425,30 @@ export const saveServices = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////
-    // 🛠 PREPARE SERVICES DATA
+    // 🔍 FETCH EXISTING SERVICES — needed to diff against
+    // the incoming array instead of destroying everything.
     //////////////////////////////////////////////////////
-    const serviceDocs = services.map((item) => {
+    const existingServices = await Service.find(
+      { salonId: salon._id, isDeleted: false }
+    ).session(session);
+
+    const existingById = new Map(
+      existingServices.map((s) => [s._id.toString(), s])
+    );
+
+    //////////////////////////////////////////////////////
+    // 🛠 VALIDATE + SPLIT INCOMING SERVICES
+    // Item has a matching existing _id  → update in place
+    // Item has no (or unrecognized) _id → insert as new
+    // PRESERVES _id + bookingCount for every edited service
+    // — Booking.serviceRefs and discovery ranking depend on
+    // the _id never changing under an edit/toggle.
+    //////////////////////////////////////////////////////
+    const updateOps = [];
+    const newDocs   = [];
+    const keptIds   = new Set();
+
+    for (const item of services) {
       if (!item.name || item.price <= 0 || item.duration <= 0) {
         throw new Error("Invalid service data");
       }
@@ -419,25 +461,32 @@ export const saveServices = async (req, res) => {
         throw new Error("Invalid buffer range");
       }
 
-      return {
-        salonId: salon._id,
-      
-        name: item.name.trim().toLowerCase(),
-      
+      const name = item.name.trim().toLowerCase();
+      const category = item.category
+        ? item.category.trim().toUpperCase()
+        : "OTHER";
+      const applicableFor = item.applicableFor || "BOTH";
+
+      const fields = {
+        name,
+
         price: Math.round(item.price),
-      
+
         duration: item.duration,
-      
+
         buffer: item.buffer ?? 5,
         bufferMin: item.bufferMin ?? 5,
         bufferMax: item.bufferMax ?? 15,
-      
-        category: item.category
-          ? item.category.trim().toUpperCase()
-          : "OTHER",
-      
-        applicableFor: item.applicableFor || "BOTH",
-      
+
+        category,
+
+        applicableFor,
+
+        // Was silently dropped by the old insertMany-only path —
+        // every service always ended up isActive:true regardless
+        // of what the owner toggled. Fixed as part of this rewrite.
+        isActive: item.isActive !== false,
+
         thumbnailImage: item.thumbnailImage || null,
 
         description: item.description || "",
@@ -445,53 +494,106 @@ export const saveServices = async (req, res) => {
         benefits: Array.isArray(item.benefits)
           ? item.benefits
           : [],
-        
+
         suitableFor: Array.isArray(item.suitableFor)
           ? item.suitableFor
           : [],
-        
+
         brandsUsed: Array.isArray(item.brandsUsed)
           ? item.brandsUsed
           : [],
-        
+
         steps: Array.isArray(item.steps)
           ? item.steps
           : [],
-        
+
         resultsDurationText:
           item.resultsDurationText || "",
 
         images: Array.isArray(item.images)
           ? item.images
           : [],
-        
+
         beforeAfterImages: Array.isArray(item.beforeAfterImages)
           ? item.beforeAfterImages
           : [],
-        
+
         introVideo: item.introVideo || null,
-        
-        searchTags: Array.isArray(item.searchTags)
-          ? item.searchTags
-          : [],
-      
+
+        // Auto-generated, never taken from the request — owners
+        // manually entering tags is a spam vector (see model note).
+        searchTags: generateSearchTags(name, category, applicableFor),
+
         isFeatured: item.isFeatured || false,
-      
-        createdBy: ownerId,
+
+        updatedBy: ownerId,
       };
-      
-    });
+
+      const existing = item._id && existingById.get(item._id.toString());
+
+      if (existing) {
+        keptIds.add(existing._id.toString());
+        updateOps.push({ id: existing._id, fields });
+      } else {
+        newDocs.push({
+          ...fields,
+          salonId: salon._id,
+          createdBy: ownerId,
+        });
+      }
+    }
 
     //////////////////////////////////////////////////////
-    // 💾 INSERT (VALIDATION SAFE)
+    // 🗑️ SOFT-DELETE — existing services no longer present
+    // in the incoming array (owner pressed Delete). Never
+    // hard-delete: Booking.serviceRefs and bookingCount must
+    // keep resolving for historical bookings. isDeleted:false
+    // is already respected everywhere that matters (discovery,
+    // slot engine, booking populate) — isActive:false alongside
+    // it frees up the unique {salonId,name} slot so the name
+    // can be reused by a future service.
+    //////////////////////////////////////////////////////
+    const removedIds = existingServices
+      .map((s) => s._id.toString())
+      .filter((id) => !keptIds.has(id));
+
+    if (removedIds.length > 0) {
+      await Service.updateMany(
+        { _id: { $in: removedIds }, salonId: salon._id },
+        { $set: { isDeleted: true, isActive: false, updatedBy: ownerId } },
+        { session }
+      );
+    }
+
+    //////////////////////////////////////////////////////
+    // 💾 APPLY UPDATES + INSERTS (VALIDATION SAFE)
+    //
+    // Sequential findOneAndUpdate, NOT bulkWrite — verified directly
+    // that bulkWrite's per-operation `runValidators: true` does NOT
+    // actually enforce Mongoose schema validation (confirmed via a
+    // live test: an invalid category + out-of-range duration were
+    // both silently written to Mongo through bulkWrite). findOneAndUpdate
+    // with runValidators:true was verified to correctly reject the
+    // same invalid input. Slower (N round-trips vs 1 bulk op) but a
+    // salon's service catalog is small — correctness over micro-perf
+    // here. This also makes the schema's own pre("findOneAndUpdate")
+    // buffer-range hook fire again, which bulkWrite was silently
+    // skipping too.
     //////////////////////////////////////////////////////
 
-    await Service.deleteMany({ salonId: salon._id }, { session });
+    for (const { id, fields } of updateOps) {
+      await Service.findOneAndUpdate(
+        { _id: id, salonId: salon._id },
+        { $set: fields },
+        { session, runValidators: true }
+      );
+    }
 
-    await Service.insertMany(serviceDocs, {
-      session,
-      ordered: true,
-    });
+    if (newDocs.length > 0) {
+      await Service.insertMany(newDocs, { session, ordered: true });
+    }
+
+    const totalProcessed = updateOps.length + newDocs.length;
 
     //////////////////////////////////////////////////////
     // 🔄 UPDATE ONBOARDING STEP → 3
@@ -511,7 +613,7 @@ export const saveServices = async (req, res) => {
       success: true,
       message: "Services saved successfully",
       data: {
-        totalServices: serviceDocs.length,
+        totalServices: totalProcessed,
         onboardingStep: salon.onboarding.step,
       },
     });
@@ -1360,7 +1462,7 @@ export const getReview = async (req, res) => {
     const [services, staff, media, chairs] = await Promise.all([
       Service.find({ salonId: salon._id, isDeleted: false, isActive: true })
         .select(
-        "_id name price duration category bookingCount description benefits suitableFor brandsUsed steps resultsDurationText thumbnailImage images beforeAfterImages introVideo applicableFor isFeatured"
+        "_id name price duration buffer category bookingCount description benefits suitableFor brandsUsed steps resultsDurationText thumbnailImage images beforeAfterImages introVideo applicableFor isFeatured"
         )
         .sort({ createdAt: 1 })
         .lean(),
