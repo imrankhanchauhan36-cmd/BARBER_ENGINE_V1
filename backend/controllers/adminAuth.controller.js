@@ -14,22 +14,10 @@ import {
   Errors,
   successResponse,
 } from "../utils/response.js";
-
-//////////////////////////////////////////////////////////////
-// COOKIE OPTIONS
-//////////////////////////////////////////////////////////////
-
-const getCookieOptions = () => {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  return {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  };
-};
+import {
+  getRefreshCookieOptions as getCookieOptions,
+  getClearRefreshCookieOptions,
+} from "../utils/refreshCookie.js";
 
 //////////////////////////////////////////////////////////////
 // SECURITY CONSTANTS
@@ -217,12 +205,7 @@ export const adminLogout = async (req, res, next) => {
 
     if (refreshToken) await revokeSession(refreshToken);
 
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    res.clearCookie("refreshToken", getClearRefreshCookieOptions());
 
     res.set({
       "Cache-Control": "no-store",

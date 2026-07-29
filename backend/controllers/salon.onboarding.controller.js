@@ -12,6 +12,7 @@ import User from "../models/User.js";
 import { assignAdminByDistrict } from "../services/adminAssign.service.js";
 import geoService from "../services/geo.service.js";
 import { invalidateAllNextSlotCache } from "../services/slotEngine.service.js";
+import logger from "../utils/logger.js";
 
 ///////////////////////////////////////////////////////////
 // STEP 1 — SAVE BASIC INFO (UNCHANGED — PERFECT)
@@ -622,7 +623,7 @@ export const saveServices = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    console.error("SAVE_SERVICES_ERROR:", {
+    logger.error("SAVE_SERVICES_ERROR", {
       message: error.message,
       stack: error.stack,
     });

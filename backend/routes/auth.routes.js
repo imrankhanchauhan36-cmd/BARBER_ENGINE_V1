@@ -20,30 +20,13 @@ import {
   rotateSession,
   verifySession,
 } from "../services/session.service.js";
+import {
+  REFRESH_COOKIE_NAME,
+  getRefreshCookieOptions as getCookieOptions,
+  getClearRefreshCookieOptions,
+} from "../utils/refreshCookie.js";
 
 const router = express.Router();
-
-const REFRESH_COOKIE_NAME = "refreshToken";
-
-/* =====================================================
-COOKIE OPTIONS
-===================================================== */
-
-const getCookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
-  path: "/api/auth/refresh",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
-
-const CLEAR_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
-  path: "/api/auth/refresh",
-  maxAge: 0,
-};
 
 /* =====================================================
 RATE LIMITERS
@@ -234,7 +217,7 @@ router.post("/logout", async (req, res) => {
     res.cookie(
       REFRESH_COOKIE_NAME,
       "",
-      CLEAR_COOKIE_OPTIONS
+      getClearRefreshCookieOptions()
     );
 
     return res.json({
@@ -278,7 +261,7 @@ router.post("/logout-all", async (req, res) => {
     res.cookie(
       REFRESH_COOKIE_NAME,
       "",
-      CLEAR_COOKIE_OPTIONS
+      getClearRefreshCookieOptions()
     );
 
     return res.json({

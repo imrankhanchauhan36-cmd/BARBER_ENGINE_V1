@@ -10,11 +10,54 @@ const SESSION_PREFIX = "session:";
 const USER_SESSION_PREFIX = "user_sessions:";
 const SESSION_TTL = 60 * 60 * 24 * 7; // 7 days
 
+// Legitimate concurrent duplicate refresh calls happen in practice —
+// e.g. a client's proactive pre-expiry timer racing a reactive
+// 401-triggered refresh, with no shared lock between them. Without
+// this, whichever call loses that race sees the winner's just-rotated
+// token as reuse/theft and revokes the ENTIRE family, killing the
+// winner's brand-new tokens too, even though nothing was stolen. This
+// cache lets a loser arriving within a short grace window replay the
+// exact tokens the winner already received instead of escalating to
+// compromise. A token reused well outside this window (no matching
+// cache entry) still escalates to full family compromise exactly as
+// before.
+//
+// IMPORTANT: the server cannot distinguish "two genuinely concurrent
+// callers" from "one caller replaying an old token milliseconds after
+// a legitimate rotation" — both look identical (a revoked-but-recent
+// token presented again). So this window tolerates ANY reuse within
+// ROTATION_GRACE_SEC, not just true same-instant races — e.g. a
+// stolen token replayed within that window would also succeed
+// silently instead of triggering compromise. This is the same
+// trade-off industry refresh-rotation implementations make (a short
+// "reuse interval"); keep ROTATION_GRACE_SEC as small as realistic
+// client-side races require, not larger.
+const REPLAY_PREFIX = "rotation_replay:";
+const ROTATION_GRACE_SEC = 2;
+
 /* =======================================================
    HASH TOKEN
 ======================================================= */
 const hashToken = (raw) =>
   crypto.createHash("sha256").update(raw).digest("hex");
+
+/* =======================================================
+   WAIT FOR ROTATION REPLAY (short poll, handles the winner's
+   Redis write landing a beat after the loser's check)
+======================================================= */
+const waitForReplay = async (tokenHash) => {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const cached = await redis.get(REPLAY_PREFIX + tokenHash);
+      if (cached) return JSON.parse(cached);
+    } catch (err) {
+      logger.warn("Redis replay check failed", { message: err.message });
+      return null;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return null;
+};
 
 /* =======================================================
    CREATE NEW SESSION
@@ -183,6 +226,10 @@ export const rotateSession = async (rawToken, req) => {
   // triggered family revocation. Fixed: both paths now compromise
   // the whole family.
   if (existingToken.revokedAt) {
+    // Grace-period idempotent replay — see REPLAY_PREFIX comment above.
+    const replay = await waitForReplay(tokenHash);
+    if (replay) return replay;
+
     await RefreshToken.updateMany(
       { familyId: existingToken.familyId },
       {
@@ -237,6 +284,12 @@ export const rotateSession = async (rawToken, req) => {
   );
 
   if (updateResult.modifiedCount === 0) {
+    // Grace-period idempotent replay — same-millisecond race variant
+    // of the check above (this caller's initial read won, but lost
+    // the atomic update to another legitimate concurrent caller).
+    const replay = await waitForReplay(tokenHash);
+    if (replay) return replay;
+
     /* REUSE DETECTED — concurrent race lost */
     await RefreshToken.updateMany(
       { familyId: existingToken.familyId },
@@ -289,6 +342,14 @@ export const rotateSession = async (rawToken, req) => {
     buildNumber: req.headers["x-build-number"] || null,
   });
 
+  const accessToken = generateAccessToken(user);
+
+  const rotationResult = {
+    accessToken,
+    refreshToken: newRawToken,
+    user,
+  };
+
   try {
     await redis.del(SESSION_PREFIX + tokenHash);
 
@@ -307,19 +368,36 @@ export const rotateSession = async (rawToken, req) => {
       "active",
       { EX: SESSION_TTL }
     );
+
+    // Grace-period replay cache — see REPLAY_PREFIX comment at top of
+    // file. Only the fields actual callers (auth.routes.js,
+    // adminAuth.controller.js) read off `.user` are cached, not the
+    // full Mongoose doc.
+    await redis.set(
+      REPLAY_PREFIX + tokenHash,
+      JSON.stringify({
+        accessToken,
+        refreshToken: newRawToken,
+        user: {
+          _id: user._id.toString(),
+          role: user.role,
+          tokenVersion: Number(user.tokenVersion),
+          adminLevel: user.adminLevel ?? null,
+          countryRef: user.countryRef ?? null,
+          stateRef: user.stateRef ?? null,
+          districtRef: user.districtRef ?? null,
+          cityRef: user.cityRef ?? null,
+        },
+      }),
+      { EX: ROTATION_GRACE_SEC }
+    );
   } catch (err) {
     logger.warn("Redis rotate write failed", { message: err.message });
   }
 
-  const accessToken = generateAccessToken(user);
-
   logger.info("[analytics] refresh_success", { userId: user._id.toString() });
 
-  return {
-    accessToken,
-    refreshToken: newRawToken,
-    user,
-  };
+  return rotationResult;
 };
 
 /* =======================================================

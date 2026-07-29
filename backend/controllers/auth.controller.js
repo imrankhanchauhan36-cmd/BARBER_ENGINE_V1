@@ -10,24 +10,10 @@ import {
   storeOtpHash,
   verifyOtpAttempt,
 } from "../utils/otp.helpers.js";
-
-const REFRESH_COOKIE_NAME = "refreshToken";
-
-//////////////////////////////////////////////////////
-// COOKIE OPTIONS
-//////////////////////////////////////////////////////
-
-const getCookieOptions = () => {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  return {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  };
-};
+import {
+  REFRESH_COOKIE_NAME,
+  getRefreshCookieOptions as getCookieOptions,
+} from "../utils/refreshCookie.js";
 
 //////////////////////////////////////////////////////
 // PHONE NORMALIZER

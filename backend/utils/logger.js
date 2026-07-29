@@ -56,29 +56,29 @@ const prodFormat = combine(
 );
 
 // ─── Transports ────────────────────────────────────────────────────
+// File transports now attach in every environment, not just
+// production — dev logs were previously silently console-only, with
+// nothing on disk to inspect after the fact. Files always use
+// prodFormat (JSON) regardless of environment — colorized/ANSI
+// devFormat output would look like garbage in a text file.
 const transports = [
   new winston.transports.Console({
     format: isDev ? devFormat : prodFormat,
   }),
+  new winston.transports.File({
+    level:    'error',
+    filename: path.join(LOG_DIR, 'error.log'),
+    format:   prodFormat,
+    maxsize:  10 * 1024 * 1024,
+    maxFiles: 14,
+  }),
+  new winston.transports.File({
+    filename: path.join(LOG_DIR, 'combined.log'),
+    format:   prodFormat,
+    maxsize:  20 * 1024 * 1024,
+    maxFiles: 14,
+  }),
 ];
-
-if (!isDev) {
-  transports.push(
-    new winston.transports.File({
-      level:    'error',
-      filename: path.join(LOG_DIR, 'error.log'),
-      format:   prodFormat,
-      maxsize:  10 * 1024 * 1024,
-      maxFiles: 14,
-    }),
-    new winston.transports.File({
-      filename: path.join(LOG_DIR, 'combined.log'),
-      format:   prodFormat,
-      maxsize:  20 * 1024 * 1024,
-      maxFiles: 14,
-    })
-  );
-}
 
 // ─── Logger Instance ───────────────────────────────────────────────
 const logger = winston.createLogger({
@@ -90,18 +90,18 @@ const logger = winston.createLogger({
 
   exceptionHandlers: [
     new winston.transports.Console({ format: isDev ? devFormat : prodFormat }),
-    ...(!isDev ? [new winston.transports.File({
+    new winston.transports.File({
       filename: path.join(LOG_DIR, 'exceptions.log'),
       format:   prodFormat,
-    })] : []),
+    }),
   ],
 
   rejectionHandlers: [
     new winston.transports.Console({ format: isDev ? devFormat : prodFormat }),
-    ...(!isDev ? [new winston.transports.File({
+    new winston.transports.File({
       filename: path.join(LOG_DIR, 'rejections.log'),
       format:   prodFormat,
-    })] : []),
+    }),
   ],
 });
 
