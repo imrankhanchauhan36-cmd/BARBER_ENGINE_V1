@@ -90,7 +90,7 @@ export const getDashboardStats = async (req, res) => {
     }
 
     const salon = await Salon.findOne({ ownerId })
-      .select("_id basicInfo business")
+      .select("_id basicInfo business timings")
       .lean();
 
     if (!salon) {
@@ -268,6 +268,16 @@ export const getDashboardStats = async (req, res) => {
         averageRating:   Number(ratingResult?.[0]?.averageRating?.toFixed(1) || 0),
         totalReviews:    ratingResult?.[0]?.totalReviews || 0,
         topServices:     topServicesResult || [],
+
+        // Consumed by SalonWorkingHoursScreen.js via res.data.salon.timings
+        // and res.data.salon.business.isForceClosed — did not exist on this
+        // response before, so those reads always resolved to undefined.
+        salon: {
+          timings: salon.timings || {},
+          business: {
+            isForceClosed: salon.business?.isForceClosed || false,
+          },
+        },
       },
     });
 

@@ -48,10 +48,15 @@ const TimeRangeSchema = new mongoose.Schema(
 
 const DayScheduleSchema = new mongoose.Schema(
   {
-    open:     { type: String, match: /^([01]\d|2[0-3]):([0-5]\d)$/ },
-    close:    { type: String, match: /^([01]\d|2[0-3]):([0-5]\d)$/ },
-    isClosed: { type: Boolean, default: false },
-    breaks:   { type: [TimeRangeSchema], default: [] },
+    open:          { type: String, match: /^([01]\d|2[0-3]):([0-5]\d)$/ },
+    close:         { type: String, match: /^([01]\d|2[0-3]):([0-5]\d)$/ },
+    isClosed:      { type: Boolean, default: false },
+    // Controller always normalizes open="00:00"/close="23:59" when this is
+    // true, before save — open/close stay the single source of truth for
+    // every existing consumer (slotEngine, salonReady.guard, etc.), this
+    // flag only tells the UI which input mode to render.
+    isOpen24Hours: { type: Boolean, default: false },
+    breaks:        { type: [TimeRangeSchema], default: [] },
   },
   { _id: false }
 );
@@ -59,10 +64,16 @@ const DayScheduleSchema = new mongoose.Schema(
 DayScheduleSchema.pre("validate", function (next) {
   if (!this.isClosed) {
     if (!this.open || !this.close) return next(new Error("Open and close time required"));
-    if (this.open >= this.close)   return next(new Error("Open time must be before close time"));
+    // "00:00" as a close time means "closes at midnight" (end of day), not
+    // start-of-day — treat it as the latest possible boundary so a normal
+    // late-closing business (e.g. 18:00-00:00) can actually be saved.
+    // "24:00" sorts after every valid "HH:MM" string, so plain string
+    // comparison below still works unchanged.
+    const effectiveClose = this.close === "00:00" ? "24:00" : this.close;
+    if (this.open >= effectiveClose) return next(new Error("Open time must be before close time"));
     for (const b of this.breaks) {
-      if (b.start >= b.end)                          return next(new Error("Invalid break time"));
-      if (b.start < this.open || b.end > this.close) return next(new Error("Break must be within working hours"));
+      if (b.start >= b.end)                              return next(new Error("Invalid break time"));
+      if (b.start < this.open || b.end > effectiveClose) return next(new Error("Break must be within working hours"));
     }
   }
   next();

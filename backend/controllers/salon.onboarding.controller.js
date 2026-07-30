@@ -894,20 +894,41 @@ export const saveTimings = async (req, res) => {
       }
 
       //////////////////////////////////////////////////////
+      // 🌐 OPEN 24 HOURS — server owns the actual open/close
+      // values here, not the client. Every existing consumer
+      // (slotEngine, salonReady.guard, discovery projections)
+      // keeps reading plain open/close strings unchanged.
+      //////////////////////////////////////////////////////
+      const isOpen24Hours = !!d.isOpen24Hours;
+      const dayOpen  = isOpen24Hours ? "00:00" : d.open;
+      const dayClose = isOpen24Hours ? "23:59" : d.close;
+
+      //////////////////////////////////////////////////////
       // ❗ VALIDATION
       //////////////////////////////////////////////////////
-      if (!d.open || !d.close) {
-        return res.status(400).json({
-          success: false,
-          message: `${day}: open & close required`,
-        });
+      if (!isOpen24Hours) {
+        if (!dayOpen || !dayClose) {
+          return res.status(400).json({
+            success: false,
+            message: `${day}: open & close required`,
+          });
+        }
       }
 
-      if (toMinutes(d.open) >= toMinutes(d.close)) {
-        return res.status(400).json({
-          success: false,
-          message: `${day}: open must be before close`,
-        });
+      // "00:00" as a close time means "closes at midnight" (end of day),
+      // not start-of-day — compare against 24:00 (1440 min) instead of 0
+      // so a normal late-closing business (e.g. 18:00-00:00) validates
+      // correctly. For isOpen24Hours days dayClose is already "23:59", so
+      // this only ever changes behavior for the literal "00:00" case.
+      const closeMinutesForCompare = dayClose === "00:00" ? 24 * 60 : toMinutes(dayClose);
+
+      if (!isOpen24Hours) {
+        if (toMinutes(dayOpen) >= closeMinutesForCompare) {
+          return res.status(400).json({
+            success: false,
+            message: `${day}: open must be before close`,
+          });
+        }
       }
 
       //////////////////////////////////////////////////////
@@ -932,7 +953,7 @@ export const saveTimings = async (req, res) => {
           });
         }
 
-        if (toMinutes(b.start) < toMinutes(d.open) || toMinutes(b.end) > toMinutes(d.close)) {
+        if (toMinutes(b.start) < toMinutes(dayOpen) || toMinutes(b.end) > closeMinutesForCompare) {
           return res.status(400).json({
             success: false,
             message: `${day}: break must be within working hours`,
@@ -956,9 +977,10 @@ export const saveTimings = async (req, res) => {
       // ✅ SAVE CLEAN DATA
       //////////////////////////////////////////////////////
       finalTimings[day] = {
-        open: d.open,
-        close: d.close,
+        open: dayOpen,
+        close: dayClose,
         isClosed: false,
+        isOpen24Hours,
         breaks,
       };
     }

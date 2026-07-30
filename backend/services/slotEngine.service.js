@@ -8,7 +8,6 @@ import { getChairTimelines } from "./chairTimeline.service.js";
 //////////////////////////////////////////////////////////////
 
 const SLOT_INTERVAL = 5;  // minutes between candidate slot starts
-const MAX_SLOTS     = 50; // max slots returned per query
 
 // IST offset in milliseconds — used for safe date parsing.
 // new Date("YYYY-MM-DD") parses as UTC midnight. On a UTC server,
@@ -169,13 +168,39 @@ export const getSmartSlots = async ({
 
     const todayTiming = salon?.timings?.[dayName];
 
-    let openHour  = 0;
-    let closeHour = 23;
+    // Explicitly marked closed → zero slots, full stop. Previously this
+    // fell through to the "no timing configured" default below and
+    // generated slots for the entire day even on a day the owner
+    // marked closed.
+    if (todayTiming?.isClosed) return [];
 
-    if (todayTiming && !todayTiming.isClosed) {
+    let openHour  = 0;
+    let openMin   = 0;
+    let closeHour = 23;
+    let closeMin  = 59;
+
+    if (todayTiming) {
       openHour  = parseInt(todayTiming.open.split(":")[0],  10);
-      closeHour = parseInt(todayTiming.close.split(":")[0], 10);
+      openMin   = parseInt(todayTiming.open.split(":")[1],  10);
+
+      // "00:00" as a close time means "closes at midnight" (end of day) —
+      // treat it as 23:59 (last bookable minute of THIS calendar day),
+      // matching how isOpen24Hours already normalizes. Taken literally,
+      // "00:00" parses as the START of the day, producing an inverted
+      // (endOfDay < startOfDay) window in chairTimeline.service.js and
+      // silently zeroing out every slot.
+      if (todayTiming.close === "00:00") {
+        closeHour = 23;
+        closeMin  = 59;
+      } else {
+        closeHour = parseInt(todayTiming.close.split(":")[0], 10);
+        closeMin  = parseInt(todayTiming.close.split(":")[1], 10);
+      }
     }
+
+    // Applies identically whether the day is normal hours or 24-hour —
+    // both just have a breaks array on the same todayTiming object.
+    const breaks = todayTiming?.breaks || [];
 
     //////////////////////////////////////////////////////////
     // STEP 2: GET FREE GAPS PER CHAIR
@@ -187,7 +212,10 @@ export const getSmartSlots = async ({
       serviceDuration,
       bufferTime,
       openHour,
+      openMin,
       closeHour,
+      closeMin,
+      breaks,
     });
 
     if (!timelines.length) return [];
@@ -243,15 +271,21 @@ export const getSmartSlots = async ({
     });
 
     //////////////////////////////////////////////////////////
-    // STEP 6: SORT → FILTER PAST → CAP
-    //////////////////////////////////////////////////////////
+    // STEP 6: SORT → FILTER PAST
+    //
+    // No count cap — a day's slot list is inherently bounded by
+    // the calendar (startOfDay/endOfDay + SLOT_INTERVAL stepping),
+    // never by an arbitrary limit. See architecture review: even
+    // the most extreme case in this system (isOpen24Hours + a
+    // 5-minute service) tops out around ~288 candidates, a small,
+    // fixed payload regardless of total users/salons on the platform.
+    //////////////////////////////////////////////////////////////
 
     const now = new Date();
 
     return finalSlots
       .sort((a, b) => a.start - b.start)
-      .filter((slot) => slot.start > now)
-      .slice(0, MAX_SLOTS);
+      .filter((slot) => slot.start > now);
 
   } catch (error) {
     console.error(`[SlotEngine] Error for salon=${salonId} date=${date}:`, error.message);

@@ -91,6 +91,21 @@ export const buildChairTimeline = (chairs, bookings) => {
 };
 
 //////////////////////////////////////////////////////////////
+// ☕ BREAK WINDOWS → BLOCKED INTERVALS
+//
+// A break is structurally identical to a booking from findGaps'
+// point of view — just another blocked window. Converting them
+// to the same {start, end} Date shape lets findGaps split gaps
+// around breaks with zero changes to its own logic.
+//////////////////////////////////////////////////////////////
+
+const breaksToIntervals = (date, breaks = []) =>
+  breaks.map((b) => ({
+    start: new Date(`${date}T${b.start}:00+05:30`),
+    end:   new Date(`${date}T${b.end}:00+05:30`),
+  }));
+
+//////////////////////////////////////////////////////////////
 // 🔍 FIND GAPS IN TIMELINE
 //////////////////////////////////////////////////////////////
 
@@ -134,6 +149,7 @@ export const getChairTimelines = async ({
   openMin         = 0,
   closeHour       = 23,
   closeMin        = 59,
+  breaks          = [],
 }) => {
   try {
     //////////////////////////////////////////////////////////
@@ -148,6 +164,10 @@ export const getChairTimelines = async ({
     //////////////////////////////////////////////////////////
 
     const timelineMap = buildChairTimeline(chairs, bookings);
+
+    // Salon-wide, applies to every chair equally — not chair-specific,
+    // so it's merged in per-chair below rather than stored in timelineMap.
+    const breakIntervals = breaksToIntervals(date, breaks);
 
     //////////////////////////////////////////////////////////
     // WORKING HOURS (CONFIGURABLE)
@@ -174,7 +194,12 @@ export const getChairTimelines = async ({
       const key      = chair._id.toString();
       const timeline = timelineMap[key] || [];
 
-      const gaps = findGaps(timeline, startOfDay, endOfDay);
+      // Bookings + breaks, merged and re-sorted — findGaps only cares
+      // that it receives blocked intervals in start-time order.
+      const blockedIntervals = [...timeline, ...breakIntervals]
+        .sort((a, b) => a.start - b.start);
+
+      const gaps = findGaps(blockedIntervals, startOfDay, endOfDay);
 
       // Only return gaps large enough to fit service + buffer
       const validGaps = gaps.filter(
