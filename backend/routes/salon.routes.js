@@ -10,6 +10,7 @@ import {
 } from "../controllers/salon.controller.js";
 
 import { getMySalon, getDashboardStats, getLiveSchedule, getWallet } from "../controllers/salon.me.controller.js";
+import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -49,6 +50,10 @@ ownerRouter.patch("/shop/status", toggleShopOpen);
 
 ownerRouter.get("/live-schedule", getLiveSchedule);
 ownerRouter.get("/wallet", getWallet); // ← ADD KARO
+
+// Holiday Override Engine — Phase 1 (backend only, not yet enforced by Slot Engine)
+ownerRouter.get("/holidays/:date", getHolidayOverride);
+ownerRouter.patch("/holidays/:date", setHolidayOverride);
 
 
 //////////////////////////////////////////////////////

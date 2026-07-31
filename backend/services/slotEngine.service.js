@@ -1,6 +1,7 @@
 import redis, { isRedisReady } from "../config/redis.js";
 import Salon from "../models/Salon.js";
 import Service from "../models/Service.js";
+import HolidayOverride from "../models/HolidayOverride.js";
 import { getChairTimelines } from "./chairTimeline.service.js";
 
 //////////////////////////////////////////////////////////////
@@ -164,7 +165,26 @@ export const getSmartSlots = async ({
     const dateIST   = parseISTDate(date);
     const dayName   = getISTDayName(dateIST);
 
-    const salon = await Salon.findById(salonId).select("timings").lean();
+    // Holiday Override (date-specific, owner-set) is checked here,
+    // alongside the existing Salon fetch, and takes priority over the
+    // recurring weekly Working Hours below. Fetched in parallel so the
+    // common (non-holiday) case adds no extra round-trip latency.
+    // Lookup failure fails OPEN (treated as "not a holiday") so a
+    // transient issue with this collection can never break the core
+    // Slot Engine — same defensive pattern as getNextSlotLabel's own
+    // Redis reads below.
+    const [salon, holidayOverride] = await Promise.all([
+      Salon.findById(salonId).select("timings").lean(),
+      HolidayOverride.findOne({ salonId, date }).select("isHoliday").lean()
+        .catch((err) => {
+          console.warn(`[SlotEngine] HolidayOverride lookup failed for salon=${salonId} date=${date}:`, err.message);
+          return null;
+        }),
+    ]);
+
+    // Highest priority — an explicit per-date holiday overrides even an
+    // otherwise-open weekly schedule.
+    if (holidayOverride?.isHoliday) return [];
 
     const todayTiming = salon?.timings?.[dayName];
 
@@ -407,8 +427,16 @@ export const invalidateAllNextSlotCache = async (salonId) => {
   const keysToDelete = [];
 
   try {
-    for await (const key of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-      keysToDelete.push(key);
+    // node-redis's scanIterator yields a BATCH (array) of matched keys per
+    // iteration, not one key at a time — pushing the batch itself (instead
+    // of spreading it) produced a nested array here, which client.del()
+    // rejects ("arguments[1]" must be of type "string | Buffer", got
+    // object instead), silently failing every bulk invalidation. Handle
+    // both a batch and a lone key defensively, since this isn't guaranteed
+    // by the public API across client versions/configs.
+    for await (const batch of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      if (Array.isArray(batch)) keysToDelete.push(...batch);
+      else keysToDelete.push(batch);
     }
     if (keysToDelete.length > 0) {
       await redis.del(keysToDelete);
