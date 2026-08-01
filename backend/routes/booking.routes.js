@@ -166,10 +166,14 @@ adminRouter.post(
 );
 
 // ── Mark no-show (CONFIRMED → NO_SHOW) ───────────────────────
+// CHECKED_IN is intentionally excluded — bookingState.machine.js's
+// BOOKING_TRANSITIONS only allows CANCELLED/ONGOING from CHECKED_IN,
+// so a CHECKED_IN no-show attempt always failed with a 500 anyway.
+// Narrowed here so the failure is a clean 400 instead.
 adminRouter.post(
   "/no-show",
   validate(bookingSchemas.noShow),
-  checkBookingState(["CONFIRMED", "CHECKED_IN"]),
+  checkBookingState(["CONFIRMED"]),
   markNoShow
 );
 

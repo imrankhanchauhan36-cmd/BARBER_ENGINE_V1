@@ -474,6 +474,13 @@ const BookingSchema = new mongoose.Schema(
 // ── Salon dashboard queries ────────────────────────────────
 BookingSchema.index({ salonRef: 1, startTime: 1, endTime: 1 });
 
+// ── Salon booking list (getSalonBookings) — filter by salonRef
+// (+ optional status, filtered in-memory from this narrowed,
+// already-sorted set), sorted by createdAt. Without this, the
+// sort has no index support and falls back to an in-memory sort
+// that grows with the salon's total booking history.
+BookingSchema.index({ salonRef: 1, createdAt: -1 });
+
 // ── Chair overlap queries (conflict detection) ────────────
 BookingSchema.index({ chairRef: 1, startTime: 1, endTime: 1 });
 

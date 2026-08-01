@@ -1605,9 +1605,12 @@ export const markNoShow = async (req, res) => {
     // 🔁 STATE MACHINE VALIDATION
     //////////////////////////////////////////////////////////
 
-    if (![BOOKING_STATUS.CONFIRMED, BOOKING_STATUS.CHECKED_IN].includes(booking.status)) {
+    // CHECKED_IN intentionally excluded — bookingState.machine.js's
+    // BOOKING_TRANSITIONS never allowed CHECKED_IN -> NO_SHOW, so this
+    // path always failed downstream anyway. Narrowed to match reality.
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
       throw Object.assign(
-        new Error("Only CONFIRMED or CHECKED_IN bookings can be marked as no-show"),
+        new Error("Only CONFIRMED bookings can be marked as no-show"),
         { status: 400 }
       );
     }

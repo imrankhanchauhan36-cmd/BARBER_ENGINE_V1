@@ -7,7 +7,7 @@ import {
   getMe, updateMe, updateProfileLimiter, uploadProfilePhoto,
 } from "../controllers/user.controller.js";
 import {
-  getMyBookings, getUpcomingBookings, getCompletedBookings, cancelBooking,
+  getMyBookings, getUpcomingBookings, getCompletedBookings,
 } from "../controllers/booking.controller.js";
 
 const router = express.Router();
@@ -54,6 +54,5 @@ router.post("/me/photo", upload.single("photo"), async (req, res, next) => {
 router.get("/bookings",           getMyBookings);
 router.get("/bookings/upcoming",  getUpcomingBookings);
 router.get("/bookings/completed", getCompletedBookings);
-router.post("/bookings/:id/cancel", cancelBooking);
 
 export default router;
