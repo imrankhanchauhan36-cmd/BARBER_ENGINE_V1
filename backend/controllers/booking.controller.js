@@ -16,6 +16,7 @@ import WalletTransaction, {
   WALLET_TXN_STATUS,
   WALLET_TXN_TYPE,
 } from "../models/WalletTransaction.js";
+import CancellationPolicyService from "../services/CancellationPolicyService.js";
 import CommissionService from "../services/CommissionService.js";
 import NotificationService from "../services/NotificationService.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
@@ -1409,48 +1410,22 @@ export const cancelBooking = async (req, res) => {
 
     //////////////////////////////////////////////////////////
     // 💰 REFUND/PENALTY CALCULATION
-    // Based on how far before startTime cancellation happens
+    // Based on how far before startTime cancellation happens.
+    // Delegated to CancellationPolicyService — the single source
+    // of truth for cancellation refund policy (pure calculation,
+    // no side effects; this controller remains responsible for
+    // executing the workflow using the returned values).
     //////////////////////////////////////////////////////////
 
-    const now          = new Date();
-    const startTime    = new Date(booking.startTime);
-    const minsUntil    = (startTime - now) / (1000 * 60);
-    const totalPaise   = booking.totalAmountInPaise || 0;
+    const now = new Date();
 
-    // Refund % is applied identically to BOTH components (service +
-    // commission) — the user gets back the same fraction of each,
-    // not a blended figure derived from the combined total. This is
-    // what makes the 3-way split exact: user gets refundFraction of
-    // (service+commission), salon keeps (1-refundFraction) of
-    // service, platform keeps (1-refundFraction) of commission.
-    let refundFraction = 0;
-    let refundPolicy   = "";
-
-    if (booking.status === BOOKING_STATUS.HOLD) {
-      // HOLD — no payment captured yet, no refund needed
-      refundFraction = 0;
-      refundPolicy   = "NO_PAYMENT";
-    } else if (minsUntil >= 120) {
-      // 2+ hours before → 100% refund
-      refundFraction = 1;
-      refundPolicy   = "FULL_REFUND";
-    } else if (minsUntil >= 30) {
-      // 30min - 2hr before → 50% refund
-      refundFraction = 0.5;
-      refundPolicy   = "HALF_REFUND";
-    } else {
-      // Less than 30 min → 0% refund
-      refundFraction = 0;
-      refundPolicy   = "NO_REFUND";
-    }
-
-    // Split refund proportionally across service + commission —
-    // stored per-booking amounts (locked in at lockSlot time), not
-    // re-derived from the current commission rate.
-    const serviceRefundPaise    = Math.round((booking.serviceAmountInPaise || 0) * refundFraction);
-    const commissionRefundPaise = Math.round((booking.commissionAmountInPaise || 0) * refundFraction);
-    const refundPaise           = serviceRefundPaise + commissionRefundPaise;
-    const penaltyPaise          = totalPaise - refundPaise;
+    const {
+      refundPolicy,
+      serviceRefundPaise,
+      commissionRefundPaise,
+      refundPaise,
+      penaltyPaise,
+    } = CancellationPolicyService.evaluate({ booking, now });
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET ADJUSTMENT — deduct refund from salon wallet
