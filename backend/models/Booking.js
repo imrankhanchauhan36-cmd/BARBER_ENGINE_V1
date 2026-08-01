@@ -366,6 +366,22 @@ const BookingSchema = new mongoose.Schema(
       maxlength: 300,
     },
 
+    // Set by cancelBooking (booking.controller.js) — one of
+    // "NO_PAYMENT" | "FULL_REFUND" | "HALF_REFUND" | "NO_REFUND".
+    // Previously written by the controller but silently dropped
+    // (not declared in schema) — added here as additive-only.
+    cancellationPolicy: {
+      type:    String,
+      default: null,
+    },
+
+    // Set by cancelBooking (booking.controller.js) — refund amount
+    // in paise. Previously written but silently dropped.
+    refundAmountInPaise: {
+      type:    Number,
+      default: null,
+    },
+
     //////////////////////////////////////////////////////////
     // 🧾 AUDIT TRAIL
     // Every status transition is appended here automatically
@@ -388,6 +404,14 @@ const BookingSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref:  "User",
         },
+
+        // Freeform extra audit context (e.g. admin cancel reason,
+        // performedByRole, source, ip — see adminBooking.controller.js).
+        // Previously written but silently dropped (not declared in
+        // schema) — added here as additive-only. Not every push sets it.
+        meta: {
+          type: mongoose.Schema.Types.Mixed,
+        },
       },
     ],
 
@@ -403,6 +427,15 @@ const BookingSchema = new mongoose.Schema(
       type:    mongoose.Schema.Types.ObjectId,
       ref:     "User",
       default: null,
+    },
+
+    // Set by forceComplete (booking.controller.js) when an operator
+    // manually completes a booking outside the normal service-start
+    // flow. Previously written but silently dropped (not declared
+    // in schema) — added here as additive-only.
+    forceCompleted: {
+      type:    Boolean,
+      default: false,
     },
 
     //////////////////////////////////////////////////////////
