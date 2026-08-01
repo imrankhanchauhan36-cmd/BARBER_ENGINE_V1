@@ -11,6 +11,7 @@ import {
 
 import { getMySalon, getDashboardStats, getLiveSchedule, getWallet } from "../controllers/salon.me.controller.js";
 import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
+import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -54,6 +55,11 @@ ownerRouter.get("/wallet", getWallet); // ← ADD KARO
 // Holiday Override Engine — Phase 1 (backend only, not yet enforced by Slot Engine)
 ownerRouter.get("/holidays/:date", getHolidayOverride);
 ownerRouter.patch("/holidays/:date", setHolidayOverride);
+
+// Chair Availability Engine — Phase 1 (backend only)
+// Mounted at /api/salon/owner/chairs/availability — inherits
+// protect + requireRole("OWNER") from this router.
+ownerRouter.use("/chairs/availability", chairAvailabilityRoutes);
 
 
 //////////////////////////////////////////////////////
