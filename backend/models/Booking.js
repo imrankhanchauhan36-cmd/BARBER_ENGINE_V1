@@ -1,6 +1,33 @@
 import mongoose from "mongoose";
 
 //////////////////////////////////////////////////////////////
+// 📖 MODEL OVERVIEW
+//
+// The Booking document is the single source of truth for one
+// customer's slot at one salon, from HOLD through its terminal
+// state (COMPLETED / CANCELLED / NO_SHOW / EXPIRED). Every status
+// transition is driven exclusively through bookingState.machine.js
+// (BOOKING_TRANSITIONS + transitionBookingStatus) — this file only
+// declares storage shape and data-integrity constraints, it never
+// encodes lifecycle rules itself.
+//
+// Related models, each with a distinct, non-overlapping role:
+//   Transaction        — the payment gateway record for this booking
+//                         (1:1, unique bookingId)
+//   WalletTransaction   — the CUSTOMER's own wallet ledger entry
+//                         (top-ups, wallet-funded payments, refunds)
+//   WalletLedger        — the SALON's earnings ledger (bucketed:
+//                         available/pending/locked/processing),
+//                         written exclusively via WalletBalanceService
+//   CancellationPolicyService — pure refund-policy calculator; this
+//                         model only stores its output
+//                         (cancellationPolicy, refundAmountInPaise)
+//
+// Money is always paise (integer), except `amount` (display-only,
+// rupees) and User.walletBalance (rupees) — see inline notes below.
+//////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////
 // 🔥 BOOKING STATUS ENUM
 //////////////////////////////////////////////////////////////
 
@@ -38,26 +65,36 @@ const BookingSchema = new mongoose.Schema(
     //////////////////////////////////////////////////////////
     // 👤 USER
     //////////////////////////////////////////////////////////
+    // immutable: no code path ever reassigns a booking to a different
+    // user after creation — locks in a real invariant, not a new rule.
     userRef: {
-      type:     mongoose.Schema.Types.ObjectId,
-      ref:      "User",
-      required: true,
-      index:    true,
+      type:      mongoose.Schema.Types.ObjectId,
+      ref:       "User",
+      required:  true,
+      index:     true,
+      immutable: true,
     },
 
     //////////////////////////////////////////////////////////
     // 🏪 SALON
     //////////////////////////////////////////////////////////
+    // immutable: a booking never moves to a different salon —
+    // same rationale as userRef above.
     salonRef: {
-      type:     mongoose.Schema.Types.ObjectId,
-      ref:      "Salon",
-      required: true,
-      index:    true,
+      type:      mongoose.Schema.Types.ObjectId,
+      ref:       "Salon",
+      required:  true,
+      index:     true,
+      immutable: true,
     },
 
     //////////////////////////////////////////////////////////
     // 🪑 CHAIR
     //////////////////////////////////////////////////////////
+    // NOT marked immutable, deliberately: the Chair Availability
+    // Engine's locked business rules include silent chair
+    // reassignment when a chair becomes unavailable — chairRef may
+    // legitimately change after creation under that flow.
     chairRef: {
       type:     mongoose.Schema.Types.ObjectId,
       ref:      "Chair",
@@ -84,8 +121,13 @@ const BookingSchema = new mongoose.Schema(
       type:     String,   // "YYYY-MM-DD" — used for date-only queries
       required: true,
       index:    true,
+      trim:     true,
+      match:    [/^\d{4}-\d{2}-\d{2}$/, "bookingDate must be in YYYY-MM-DD format"],
     },
 
+    // NOT marked immutable: bookingState.machine.js reserves a future
+    // RESCHEDULED status (see EXTENSION GUIDE above) that will need
+    // to move a booking to a new startTime/endTime.
     startTime: {
       type:     Date,
       required: true,
@@ -101,11 +143,13 @@ const BookingSchema = new mongoose.Schema(
     serviceDuration: {
       type:     Number, // minutes
       required: true,
+      min:      [1, "serviceDuration must be at least 1 minute"],
     },
 
     bufferTime: {
       type:    Number, // minutes
       default: 0,
+      min:     [0, "bufferTime cannot be negative"],
     },
 
     //////////////////////////////////////////////////////////
@@ -209,9 +253,13 @@ const BookingSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // India-only for now — mirrors the identical convention already
+    // established in models/WalletTransaction.js. Widen when
+    // multi-currency support is actually needed.
     currency: {
       type:    String,
       default: "INR",
+      enum:    ["INR"],
     },
 
     //////////////////////////////////////////////////////////
@@ -346,10 +394,17 @@ const BookingSchema = new mongoose.Schema(
     //////////////////////////////////////////////////////////
     // ⭐ RATING
     //////////////////////////////////////////////////////////
+    // No default (undefined = "not rated yet", distinct from a real
+    // rating value) — validator is null/undefined-guarded so an
+    // unrated booking never fails validation on save.
     rating: {
       type: Number,
       min:  1,
       max:  5,
+      validate: {
+        validator: (v) => v == null || Number.isInteger(v),
+        message:   "rating must be a whole number of stars",
+      },
     },
 
     //////////////////////////////////////////////////////////
@@ -364,22 +419,35 @@ const BookingSchema = new mongoose.Schema(
     cancelReason: {
       type:      String,
       maxlength: 300,
+      trim:      true,
     },
 
     // Set by cancelBooking (booking.controller.js) — one of
     // "NO_PAYMENT" | "FULL_REFUND" | "HALF_REFUND" | "NO_REFUND".
     // Previously written by the controller but silently dropped
     // (not declared in schema) — added here as additive-only.
+    // enum is the exhaustive set CancellationPolicyService.evaluate()
+    // can ever return — null included explicitly (never-cancelled
+    // bookings), matching WalletTransaction.js's failureCode pattern.
     cancellationPolicy: {
       type:    String,
       default: null,
+      enum:    [null, "NO_PAYMENT", "FULL_REFUND", "HALF_REFUND", "NO_REFUND"],
     },
 
     // Set by cancelBooking (booking.controller.js) — refund amount
     // in paise. Previously written but silently dropped.
+    // Validator is explicitly null-guarded — this field defaults to
+    // null (empirically confirmed: an un-guarded Number.isInteger
+    // check fails Mongoose validation on its own null default,
+    // which would break saving every never-cancelled booking).
     refundAmountInPaise: {
       type:    Number,
       default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message:   "refundAmountInPaise must be a non-negative whole number (paise) or null",
+      },
     },
 
     //////////////////////////////////////////////////////////
@@ -516,7 +584,6 @@ BookingSchema.index(
   { chairRef: 1, startTime: 1 },
   {
     unique: true,
-    sparse: true,
     partialFilterExpression: {
       status: {
         $in: [

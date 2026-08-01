@@ -324,7 +324,14 @@ export const getLiveSchedule = async (req, res) => {
           phone:     b.userRef?.phone || "",
           service:   b.serviceRefs?.map(s => s.name).join(", ") || "",
           status:    b.status,
-          amount:    b.amount,
+          // b.amount is the legacy/optional display field (Booking.js:247-254,
+          // "NEVER use this for finance logic") — never set by lockSlot/
+          // confirmBooking, always 0 on real bookings, which silently zeroed
+          // out both the per-row price and "Today's Revenue". totalAmountInPaise
+          // is the authoritative field and was already being fetched (this
+          // query has no .select() restricting it) — just not read. Same
+          // response field name/shape/type (a rupee Number), no contract change.
+          amount:    Math.round((b.totalAmountInPaise ?? 0) / 100),
           duration:         b.serviceRefs?.reduce((sum, s) => sum + (s.duration || 30), 0) || 30,
           serviceStartedAt: b.serviceStartedAt || null,
         })),

@@ -27,11 +27,56 @@ import WalletLedger, {
 //      not a double-credit.
 //////////////////////////////////////////////////////////////
 
+// Generous ceiling — ₹1000 crore in paise. Verified against the real
+// database before adding this: the largest amount ever recorded here
+// is ~₹2,448 (244,820 paise), so this bound is nowhere near legitimate
+// data; it exists purely to catch a garbage/corrupted/malicious value
+// (e.g. an upstream calculation bug producing an absurd number) before
+// it silently corrupts a wallet balance.
+const MAX_AMOUNT_IN_PAISE = 1_000_000_000_000;
+
 const integerOrThrow = (amountInPaise) => {
   if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
     throw Object.assign(
       new Error("amountInPaise must be a positive integer"),
       { status: 400 }
+    );
+  }
+  if (amountInPaise > MAX_AMOUNT_IN_PAISE) {
+    throw Object.assign(
+      new Error(`amountInPaise exceeds the sanity ceiling (${MAX_AMOUNT_IN_PAISE})`),
+      { status: 400 }
+    );
+  }
+};
+
+const salonIdOrThrow = (salonId) => {
+  if (!salonId) {
+    throw Object.assign(
+      new Error("salonId is required"),
+      { status: 400 }
+    );
+  }
+};
+
+/**
+ * Every mutating method in this service composes into the caller's
+ * existing mongoose transaction (see header note) — it never starts
+ * its own. Without an active transaction, the atomic conditional
+ * $inc still protects each individual bucket update, but the
+ * cross-leg atomicity that two-leg methods (hold, release,
+ * releasePendingToAvailable, etc.) depend on silently vanishes: if
+ * the second leg fails, the first leg's effect has nothing to roll
+ * it back. This has never been true of any real caller (verified
+ * against every call site in the codebase), but nothing enforced it
+ * — a future caller forgetting `session` would fail this way
+ * silently instead of loudly.
+ */
+const sessionOrThrow = (session) => {
+  if (!session || typeof session.inTransaction !== "function" || !session.inTransaction()) {
+    throw Object.assign(
+      new Error("WalletBalanceService requires an active mongoose transaction session"),
+      { status: 500 }
     );
   }
 };
@@ -66,6 +111,8 @@ const applyLedgerEntry = async ({
   session,
 }) => {
   integerOrThrow(amountInPaise);
+  salonIdOrThrow(salonId);
+  sessionOrThrow(session);
 
   // ── Idempotency short-circuit ──────────────────────────────
   if (idempotencyKey) {
@@ -82,6 +129,13 @@ const applyLedgerEntry = async ({
     [LEDGER_BUCKET.LOCKED]:     "lockedBalanceInPaise",
     [LEDGER_BUCKET.PROCESSING]: "processingBalanceInPaise",
   }[bucket];
+
+  if (!bucketField) {
+    throw Object.assign(
+      new Error(`Unknown wallet bucket: ${bucket}`),
+      { status: 500 }
+    );
+  }
 
   const delta = direction === LEDGER_DIRECTION.CREDIT ? amountInPaise : -amountInPaise;
 
@@ -138,15 +192,33 @@ const applyLedgerEntry = async ({
     return { ledgerEntry, wallet, idempotent: false };
   } catch (err) {
     // Duplicate idempotencyKey raced in between our check and
-    // insert (rare, but possible under concurrent retries) —
-    // treat as the same safe no-op rather than letting the
-    // wallet $inc above stand uncommitted-but-unlogged. Since this
-    // whole function runs inside the caller's session, the $inc
-    // above will be rolled back along with everything else when
-    // the caller aborts the transaction on this thrown error.
+    // insert (rare, but requires two overlapping transactions whose
+    // wallet writes don't conflict with each other — e.g. the same
+    // idempotencyKey mistakenly reused across two different
+    // salonIds. Same-salon races are additionally caught by
+    // MongoDB's own transaction conflict detection on the $inc
+    // above, since both would target the same document — but that
+    // protection doesn't apply here, so this path must be self-
+    // sufficient rather than assume it never survives to this point.
     if (err?.code === 11000 && idempotencyKey) {
       const existing = await findExistingByIdempotencyKey(idempotencyKey, session);
-      if (existing) return { ledgerEntry: existing, wallet: null, idempotent: true };
+      if (existing) {
+        // This call's own $inc already committed against the wallet
+        // above, but its ledger entry lost the race and was never
+        // recorded — the *other* call's entry is the one that
+        // exists. Reverse exactly the delta this call applied so
+        // the wallet ends up matching the ledger (the documented
+        // single source of truth) instead of silently double-
+        // counting. Safe unconditional reversal: within this same
+        // transaction, nothing else can have touched this field
+        // between our forward $inc and this compensating one.
+        await SalonEarnings.findOneAndUpdate(
+          { salonId },
+          { $inc: { [bucketField]: -delta } },
+          { session }
+        );
+        return { ledgerEntry: existing, wallet: null, idempotent: true };
+      }
     }
     throw err;
   }

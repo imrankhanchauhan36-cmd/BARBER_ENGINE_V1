@@ -48,7 +48,15 @@ if (process.env.NODE_ENV === "production" && !process.env.OTP_SECRET) {
 }
 const OTP_SECRET = process.env.OTP_SECRET || "otp-fallback-secret-change-in-prod";
 
-// AES-256 encryption for OTP — allows user to see OTP in booking history
+// AES-256 encryption for OTP — allows user to see OTP in booking history.
+// Same hard-fail rationale as OTP_SECRET above — a fallback key in prod
+// means every deployment with a missing env var uses the same known key.
+if (process.env.NODE_ENV === "production" && !process.env.OTP_ENCRYPT_KEY) {
+  throw new Error(
+    "OTP_ENCRYPT_KEY environment variable is required in production. " +
+    "Set it to a random 32-character string."
+  );
+}
 const OTP_ENCRYPT_KEY = process.env.OTP_ENCRYPT_KEY || "barber-engine-otp-key-32-chars!!"; // 32 chars
 const encryptOtp = (otp) => {
   const iv     = crypto.randomBytes(16);
@@ -63,6 +71,24 @@ const decryptOtp = (encrypted) => {
   const enc     = Buffer.from(encHex, "hex");
   const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(OTP_ENCRYPT_KEY), iv);
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString();
+};
+
+/**
+ * Decrypts checkInOtpEncrypted for list responses (getMyBookings,
+ * getUpcomingBookings) — never throws. One malformed/corrupted
+ * ciphertext on a single old booking must not take down the entire
+ * list response for every other booking the user has; falls back to
+ * null, the same value already shown when there's no encrypted OTP
+ * to begin with.
+ */
+const safeDecryptOtp = (encrypted) => {
+  if (!encrypted) return null;
+  try {
+    return decryptOtp(encrypted);
+  } catch (err) {
+    console.warn("[safeDecryptOtp] Failed to decrypt checkInOtpEncrypted:", err.message);
+    return null;
+  }
 };
 
 
@@ -81,6 +107,71 @@ const getPagination = (query) => {
   return { page, limit, skip };
 };
 
+/**
+ * Buffer-aware chair-overlap conflict filter — shared by lockSlot()
+ * and confirmBooking(), previously duplicated verbatim in both.
+ * A booking is considered occupied until (endTime + bufferTime); two
+ * bookings conflict when:
+ *   existing.effectiveOccupiedUntil > incoming.start
+ *   AND existing.start < incoming.effectiveOccupiedUntil
+ * @param {object} params
+ * @param {ObjectId} params.chairId
+ * @param {Date}     params.startTime
+ * @param {Date}     params.endTime
+ * @param {number}   params.bufferTime
+ * @param {ObjectId} [params.excludeBookingId] — confirmBooking's own
+ *   booking already exists at query time and must not conflict with
+ *   itself; lockSlot's booking doesn't exist yet, so it omits this.
+ */
+const buildChairOverlapFilter = ({ chairId, startTime, endTime, bufferTime, excludeBookingId }) => {
+  const filter = {
+    chairRef: chairId,
+    $and: [
+      {
+        $or: [
+          {
+            status: {
+              $in: [
+                BOOKING_STATUS.CONFIRMED,
+                BOOKING_STATUS.CHECKED_IN,
+                BOOKING_STATUS.ONGOING,
+              ],
+            },
+          },
+          {
+            status:    BOOKING_STATUS.HOLD,
+            lockUntil: { $gt: new Date() },
+          },
+        ],
+      },
+      {
+        // $expr computes the existing booking's effectiveOccupiedUntil
+        // at query time — no extra field needed on the schema.
+        startTime: {
+          $lt: new Date(endTime.getTime() + bufferTime * 60 * 1000),
+        },
+        $expr: {
+          $gt: [
+            {
+              $add: [
+                "$endTime",
+                { $multiply: ["$bufferTime", 60 * 1000] },
+              ],
+            },
+            startTime,
+          ],
+        },
+      },
+    ],
+  };
+
+  if (excludeBookingId) {
+    filter._id = { $ne: excludeBookingId };
+  }
+
+  return filter;
+};
+
 /** Shared populate config for user-facing booking queries */
 const USER_BOOKING_POPULATE = [
   { path: "salonRef",    select: "basicInfo.shopName basicInfo.phone location.address location.geo" },
@@ -95,8 +186,12 @@ const USER_BOOKING_POPULATE = [
  * database leak does not expose valid OTPs (4-digit codes are
  * trivially brute-forced if stored in plaintext).
  *
- * hashOtp(otp)       → hex string stored in booking.checkInOtp
- * verifyOtp(raw, stored) → boolean — use instead of === comparison
+ * hashOtp(otp) → hex string stored in booking.checkInOtp
+ *
+ * checkInBooking() verifies an incoming OTP by hashing it and using
+ * the hash as a DB query filter (checkInOtp: hashedOtp), not an
+ * in-application string comparison — so the match happens inside
+ * MongoDB's own equality check, not a JS-level === on the hash.
  *
  * Uses HMAC (not plain SHA) so the secret is required to reproduce
  * the hash — protects against offline rainbow-table attacks.
@@ -106,9 +201,6 @@ const hashOtp = (otp) =>
     .createHmac("sha256", OTP_SECRET)
     .update(String(otp))
     .digest("hex");
-
-const verifyOtp = (rawOtp, storedHash) =>
-  storedHash === hashOtp(rawOtp);
 
 /**
  * 🔐 RAZORPAY SIGNATURE VERIFICATION
@@ -331,59 +423,14 @@ export const lockSlot = async (req, res) => {
     let booking;
 
     try {
-      const conflictingBooking = await Booking.findOne({
-        chairRef: matchedSlot.chairId,
-        $and: [
-          {
-            $or: [
-              {
-                status: {
-                  $in: [
-                    BOOKING_STATUS.CONFIRMED,
-                    BOOKING_STATUS.CHECKED_IN,
-                    BOOKING_STATUS.ONGOING,
-                  ],
-                },
-              },
-              {
-                status:    BOOKING_STATUS.HOLD,
-                lockUntil: { $gt: new Date() },
-              },
-            ],
-          },
-          {
-            // Buffer-aware overlap check.
-            //
-            // A booking is considered occupied until (endTime + bufferTime).
-            // Two bookings conflict when:
-            //   existing.effectiveOccupiedUntil > incoming.start
-            //   AND existing.start < incoming.effectiveOccupiedUntil
-            //
-            // The $lt side uses the incoming slot's effective end so a new
-            // booking starting before an existing one's cleanup finishes
-            // is correctly blocked.
-            startTime: {
-              $lt: new Date(
-                matchedSlot.end.getTime() +
-                bufferTime * 60 * 1000
-              ),
-            },
-            // $expr computes the existing booking's effectiveOccupiedUntil
-            // at query time — no extra field needed on the schema.
-            $expr: {
-              $gt: [
-                {
-                  $add: [
-                    "$endTime",
-                    { $multiply: ["$bufferTime", 60 * 1000] },
-                  ],
-                },
-                matchedSlot.start,
-              ],
-            },
-          },
-        ],
-      }).session(lockSession);
+      const conflictingBooking = await Booking.findOne(
+        buildChairOverlapFilter({
+          chairId:   matchedSlot.chairId,
+          startTime: matchedSlot.start,
+          endTime:   matchedSlot.end,
+          bufferTime,
+        })
+      ).session(lockSession);
 
       if (conflictingBooking) {
         await lockSession.abortTransaction();
@@ -410,12 +457,27 @@ export const lockSlot = async (req, res) => {
       // confirmBooking() for finance calculations.
       //////////////////////////////////////////////////////////
 
-      const selectedServices = await Service
+      const existingServices = await Service
         .find({ _id: { $in: serviceRefs } })
         .select("price")
         .lean()
         .session(lockSession);
-      const serviceAmountInPaise = selectedServices.reduce(
+
+      // A nonexistent serviceRef matches nothing in $in — no error,
+      // just fewer results than requested. Without this check, the
+      // booking silently priced only the services that were actually
+      // found (as low as ₹0 for an entirely fabricated serviceRefs
+      // list) while still occupying a real chair slot. serviceRefs is
+      // already duplicate-free by this point (validated at the schema
+      // layer), so a plain length comparison is exact here.
+      if (existingServices.length !== serviceRefs.length) {
+        throw Object.assign(
+          new Error("One or more selected services are invalid or unavailable"),
+          { status: 400 }
+        );
+      }
+
+      const serviceAmountInPaise = existingServices.reduce(
         (sum, s) => sum + Math.round(s.price * 100),
         0
       );
@@ -480,6 +542,19 @@ export const lockSlot = async (req, res) => {
         });
       }
 
+      // Transaction WriteConflict ("TransientTransactionError" label) —
+      // two concurrent transactions raced on the same unique index entry
+      // before either committed, so MongoDB's storage engine aborts one
+      // rather than surfacing a duplicate-key error. Same underlying
+      // cause as the 11000 case above, different MongoDB-level shape —
+      // must not leak the raw driver error to the client.
+      if (typeof lockError.hasErrorLabel === "function" && lockError.hasErrorLabel("TransientTransactionError")) {
+        return res.status(409).json({
+          success: false,
+          message: "Selected slot is no longer available.",
+        });
+      }
+
       throw lockError; // unexpected — re-throw so outer catch returns 500
     }
 
@@ -517,9 +592,9 @@ export const lockSlot = async (req, res) => {
   
   } catch (error) {
     console.error("lockSlot error:", error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
-      message: "Failed to lock slot",
+      message: error.message || "Failed to lock slot",
     });
   }
 };
@@ -602,48 +677,15 @@ export const confirmBooking = async (req, res) => {
     // 🚫 DOUBLE-BOOKING OVERLAP CHECK
     //////////////////////////////////////////////////////////
 
-    const conflicting = await Booking.findOne({
-      _id:      { $ne: booking._id },
-      chairRef: booking.chairRef,
-      $and: [
-        {
-          $or: [
-            {
-              status: {
-                $in: [
-                  BOOKING_STATUS.CONFIRMED,
-                  BOOKING_STATUS.CHECKED_IN,
-                  BOOKING_STATUS.ONGOING,
-                ],
-              },
-            },
-            {
-              status:    BOOKING_STATUS.HOLD,
-              lockUntil: { $gt: new Date() },
-            },
-          ],
-        },
-        {
-          startTime: {
-            $lt: new Date(
-              booking.endTime.getTime() +
-              booking.bufferTime * 60 * 1000
-            ),
-          },
-          $expr: {
-            $gt: [
-              {
-                $add: [
-                  "$endTime",
-                  { $multiply: ["$bufferTime", 60 * 1000] },
-                ],
-              },
-              booking.startTime,
-            ],
-          },
-        },
-      ],
-    }).session(session);
+    const conflicting = await Booking.findOne(
+      buildChairOverlapFilter({
+        chairId:          booking.chairRef,
+        startTime:        booking.startTime,
+        endTime:          booking.endTime,
+        bufferTime:       booking.bufferTime,
+        excludeBookingId: booking._id,
+      })
+    ).session(session);
 
     if (conflicting) {
       throw Object.assign(new Error("Slot already booked by another user"), { status: 409 });
@@ -876,7 +918,15 @@ export const confirmBooking = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
 
 
@@ -1002,15 +1052,32 @@ export const checkInBooking = async (req, res) => {
     checkInSession.startTransaction();
 
     try {
-      booking.checkInOtp          = null;
-      booking.checkInOtpExpiresAt = null;
+      // Re-fetch inside the session immediately before mutating —
+      // the OTP lookup above ran outside any session, so a
+      // near-simultaneous retry (e.g. a mobile client resending
+      // after a timeout) could have already checked this exact
+      // booking in between. Re-verifying here turns that race into
+      // a clean, expected rejection instead of a raw write conflict
+      // surfacing as an unhandled error. Same defensive re-fetch
+      // pattern already used by holdExpiry.job.js's expireOneBooking.
+      const freshBooking = await Booking.findById(booking._id).session(checkInSession);
+
+      if (!freshBooking || freshBooking.status !== BOOKING_STATUS.CONFIRMED) {
+        throw Object.assign(
+          new Error("This booking was already checked in or is no longer available"),
+          { status: 409 }
+        );
+      }
+
+      freshBooking.checkInOtp          = null;
+      freshBooking.checkInOtpExpiresAt = null;
 
       // Clear delayed flag — customer did eventually arrive.
       // Without this, customerDelayedAt remains set even after
       // successful check-in, corrupting late-arrival analytics
       // (the booking would be counted as a delay even though the
       // customer showed up). Null here = "arrived within session".
-      booking.customerDelayedAt   = null;
+      freshBooking.customerDelayedAt   = null;
 
       // Clear grace window — customer has arrived, the arrival
       // timer is no longer relevant. Without this, the
@@ -1018,10 +1085,10 @@ export const checkInBooking = async (req, res) => {
       // on CHECKED_IN bookings if the status index update and job
       // query race at the same second, emitting a spurious
       // booking:customerDelayed event for a customer already inside.
-      booking.arrivalGraceUntil   = null;
+      freshBooking.arrivalGraceUntil   = null;
 
       await transitionBookingStatus({
-        booking,
+        booking:    freshBooking,
         nextStatus: BOOKING_STATUS.CHECKED_IN,
         session:    checkInSession,
       });
@@ -1071,9 +1138,9 @@ export const checkInBooking = async (req, res) => {
 
   } catch (error) {
     console.error("checkInBooking error:", error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
-      message: "Check-in failed",
+      message: error.message || "Check-in failed",
     });
   }
 };
@@ -1162,7 +1229,15 @@ export const startService = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
 
     console.error("startService error:", error);
@@ -1373,7 +1448,15 @@ export const completeService = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
 
     console.error("completeService error:", error);
@@ -1389,10 +1472,23 @@ export const completeService = async (req, res) => {
 //////////////////////////////////////////////////////////////
 
 export const cancelBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // Bounded retry, MongoDB's own documented handling for
+  // TransientTransactionError (WriteConflict, code 112): two
+  // concurrent cancel requests for the same booking legitimately
+  // both pass validation against the same pre-cancel snapshot, then
+  // collide at the physical write — one transaction is correctly
+  // aborted by the storage engine, not corrupted. Retrying lets the
+  // loser re-read the now-updated document fresh; it then lands on
+  // the *existing* "Invalid booking state: CANCELLED" 400 path
+  // (validateBookingTransition below) instead of a raw 500 — no new
+  // response shape, no frontend change needed for that case.
+  const MAX_ATTEMPTS = 3;
 
-  try {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
     const { bookingId } = req.body;
 
     const booking = await Booking.findById(bookingId).session(session);
@@ -1563,13 +1659,70 @@ export const cancelBooking = async (req, res) => {
     });
 
     } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
+
+    // Genuine concurrent-write collision (see comment above the
+    // retry loop) — retry the whole attempt on a fresh session
+    // rather than surface it. Every other error (not found,
+    // unauthorized, invalid state, wallet/ledger failures, etc.)
+    // falls through unchanged to the existing response below.
+    const isTransientConflict =
+      typeof error.hasErrorLabel === "function" &&
+      error.hasErrorLabel("TransientTransactionError");
+
+    if (isTransientConflict && attempt < MAX_ATTEMPTS) {
+      continue;
+    }
+
+    if (isTransientConflict) {
+      // Exhausted retries on a genuine conflict (rare — would need
+      // 3 consecutive collisions). Still not a raw driver error to
+      // the client: a clean, retryable 409 the client's own retry
+      // (same Idempotency-Key) can safely resolve.
+      console.error("cancelBooking error (transient conflict, retries exhausted):", error);
+      return res.status(409).json({
+        success: false,
+        message: "This booking is being updated. Please try again in a moment.",
+      });
+    }
+
+    // validateBookingTransition (utils/bookingState.machine.js) throws
+    // a bare Error (no .status) for "current === next" instead of
+    // returning false — the `if (!validateBookingTransition(...))`
+    // guard above it is therefore unreachable for this exact case.
+    // Surfaces here specifically because a retried attempt (after
+    // the concurrency conflict above) legitimately re-validates
+    // against the booking's now-current status and finds it's
+    // already CANCELLED. Reworded to match checkBookingState
+    // middleware's existing "Invalid booking state: <STATUS>" shape
+    // (bookingState.middleware.js:19-22) — same message format
+    // whether this rejection comes from the middleware (a fresh,
+    // sequential duplicate request) or from here (a retried one),
+    // so the client's existing handling for that exact string covers
+    // both without needing to know which path produced it.
+    if (error.message?.startsWith("Booking already in state:")) {
+      const status = error.message.replace("Booking already in state: ", "");
+      return res.status(400).json({
+        success: false,
+        message: `Invalid booking state: ${status}`,
+      });
+    }
+
     console.error("cancelBooking error:", error);
     return res.status(error.status || 500).json({
       success: false,
       message: error.message || "Failed to cancel booking",
     });
+    }
   }
 };
 
@@ -1660,7 +1813,15 @@ export const markNoShow = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
 
     console.error("markNoShow error:", error);
@@ -1704,7 +1865,7 @@ export const getMyBookings = async (req, res) => {
 
     const bookingsWithOtp = bookings.map(b => ({
       ...b,
-      checkInOtp: b.checkInOtpEncrypted ? decryptOtp(b.checkInOtpEncrypted) : null,
+      checkInOtp: safeDecryptOtp(b.checkInOtpEncrypted),
       checkInOtpEncrypted: undefined,
       friendlyBookingId: toFriendlyId(b._id, "BK"),
     }));
@@ -1769,7 +1930,7 @@ export const getUpcomingBookings = async (req, res) => {
 
     const bookingsWithOtp = bookings.map(b => ({
       ...b,
-      checkInOtp: b.checkInOtpEncrypted ? decryptOtp(b.checkInOtpEncrypted) : null,
+      checkInOtp: safeDecryptOtp(b.checkInOtpEncrypted),
       checkInOtpEncrypted: undefined,
       friendlyBookingId: toFriendlyId(b._id, "BK"),
     }));
@@ -1934,8 +2095,19 @@ export const forceComplete = async (req, res) => {
       triggeredBy:    "SYSTEM",
       remarks:        "Service force-completed — funds released to available balance",
     });
-    const now        = new Date();
-    const durationMs = (actualDurationMinutes || 30) * 60 * 1000;
+    const now = new Date();
+    // actualDurationMinutes has no route-level validation on this
+    // endpoint (bookingSchemas.forceComplete's Joi schema exists but
+    // isn't wired to this route in booking.routes.js) — a bare
+    // `|| 30` fallback only catches falsy input, not a wrong-typed
+    // one (e.g. a string, which `"abc" * 60000` turns into NaN).
+    // Defensively parse and clamp to the same 5-300 minute range
+    // that schema already documents as the intended bound.
+    const parsedDuration  = Number(actualDurationMinutes);
+    const durationMinutes = (Number.isFinite(parsedDuration) && parsedDuration >= 5 && parsedDuration <= 300)
+      ? parsedDuration
+      : 30;
+    const durationMs = durationMinutes * 60 * 1000;
     booking.serviceStartedAt = new Date(now.getTime() - durationMs);
     booking.status           = BOOKING_STATUS.COMPLETED;
     booking.completedAt      = now;
@@ -1968,7 +2140,15 @@ export const forceComplete = async (req, res) => {
     });
     return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.availableBalanceInPaise ?? 0, message: "Booking marked as completed" });
   } catch (error) {
-    await session.abortTransaction();
+    // Guarded: post-commit code (cache/socket/notification) runs
+    // inside this same try block. If it throws AFTER a successful
+    // commit, session.inTransaction() is already false, and calling
+    // abortTransaction() unconditionally would itself throw
+    // ("Cannot call abortTransaction after calling commitTransaction"),
+    // masking the real error. Only abort a still-open transaction.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     return res.status(error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
   }

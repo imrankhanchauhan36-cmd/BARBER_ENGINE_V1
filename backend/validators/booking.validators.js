@@ -65,11 +65,22 @@ export const bookingSchemas = {
         "date.greater":  "requestedTime must be in the future",
       }),
 
+    // .unique() rejects the same serviceRef repeated in one request.
+    // The real client can never produce this (service selection is a
+    // toggle, not an add-only list — re-tapping a selected service
+    // removes it), and the previous behavior for a duplicate was
+    // already wrong: the stored serviceRefs array kept both entries
+    // while MongoDB's $in de-duplicated the lookup, so the booking
+    // priced/allocated only one instance while claiming two.
     serviceRefs: Joi.array()
       .items(objectId)
+      .unique()
       .min(1)
       .required()
-      .messages({ "any.required": "at least one serviceRef is required" }),
+      .messages({
+        "any.required":  "at least one serviceRef is required",
+        "array.unique":   "Duplicate service selected — each service must be listed only once",
+      }),
 
   }).unknown(false),
 

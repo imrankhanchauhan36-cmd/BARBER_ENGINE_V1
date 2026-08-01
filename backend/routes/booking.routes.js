@@ -119,14 +119,22 @@ userRouter.post(
 // ── Cancel booking (HOLD / CONFIRMED → CANCELLED) ────────────
 userRouter.post(
   "/cancel",
+  bookingRateLimiter,
+  idempotency,
   validate(bookingSchemas.cancel),
   checkBookingState(["HOLD", "CONFIRMED"]),
   cancelBooking
 );
 
 // ── Check-in (CONFIRMED → CHECKED_IN) ────────────────────────
+// lockRateLimiter (5/min) reused here rather than the general
+// bookingRateLimiter — this endpoint accepts a 4-digit OTP, so it
+// needs the strictest available throttle to meaningfully slow down
+// a brute-force attempt against a known bookingId.
 userRouter.post(
   "/check-in",
+  lockRateLimiter,
+  idempotency,
   validate(bookingSchemas.checkIn),
   checkBookingState(["CONFIRMED"]),
   checkInBooking
@@ -172,15 +180,20 @@ adminRouter.post(
 // Narrowed here so the failure is a clean 400 instead.
 adminRouter.post(
   "/no-show",
+  bookingRateLimiter,
   validate(bookingSchemas.noShow),
   checkBookingState(["CONFIRMED"]),
   markNoShow
 );
 
 // ── Force complete (CHECKED_IN → COMPLETED, already served) ──
+// validate() added — bookingSchemas.forceComplete already declared
+// actualDurationMinutes as required (5-300 min) but was never wired
+// to this route, so it was previously unenforced at the HTTP layer.
 adminRouter.post(
   "/force-complete",
   bookingRateLimiter,
+  validate(bookingSchemas.forceComplete),
   checkBookingState(["CHECKED_IN"]),
   forceComplete
 );

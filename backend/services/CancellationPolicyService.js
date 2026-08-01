@@ -22,7 +22,25 @@
 // platform keeps (1-refundFraction) of commission.
 //////////////////////////////////////////////////////////////
 
-import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
+import { BOOKING_STATUS, BOOKING_TRANSITIONS } from "../utils/bookingState.machine.js";
+
+// Derived, not hardcoded a second time — the set of statuses from
+// which CANCELLED is reachable, read directly from the state
+// machine's own transition table. Stays in sync automatically if
+// that table ever changes, instead of risking a second, drifting
+// copy of the same rule (the exact class of duplication flagged
+// elsewhere in this codebase's admin controllers).
+const CANCELLABLE_STATUSES = Object.entries(BOOKING_TRANSITIONS)
+  .filter(([, nextStates]) => nextStates.includes(BOOKING_STATUS.CANCELLED))
+  .map(([status]) => status);
+
+const isValidDate = (d) => d instanceof Date && !Number.isNaN(d.getTime());
+
+// Allows the existing "missing/null defaults to 0" behavior through
+// unchanged — only rejects a present-but-invalid value (negative,
+// non-numeric, non-finite), which was never valid data to begin with.
+const isValidOptionalAmount = (v) =>
+  v === undefined || v === null || (typeof v === "number" && Number.isFinite(v) && v >= 0);
 
 const CancellationPolicyService = {
   /**
@@ -42,9 +60,45 @@ const CancellationPolicyService = {
    *   refundPaise: number,
    *   penaltyPaise: number,
    * }}
+   * @throws {Error & {status:400}} if `now`, `booking.startTime`, or
+   *   any of the three amount fields is missing/invalid — previously
+   *   this silently produced NaN comparisons that always fell through
+   *   to NO_REFUND, a wrong answer with no error at all.
+   * @throws {Error & {status:500}} if `booking.status` is not one of
+   *   the statuses CANCELLED is actually reachable from today (HOLD,
+   *   CONFIRMED, CHECKED_IN) — this function is never legitimately
+   *   called with anything else; a caller bug should fail loudly
+   *   rather than return a nonsense policy for an already-terminal
+   *   booking.
    */
   evaluate: ({ booking, now }) => {
-    const startTime  = new Date(booking.startTime);
+    if (!booking || typeof booking !== "object") {
+      throw Object.assign(new Error("CancellationPolicyService.evaluate requires a booking object"), { status: 400 });
+    }
+    if (!CANCELLABLE_STATUSES.includes(booking.status)) {
+      throw Object.assign(
+        new Error(`CancellationPolicyService.evaluate called with a non-cancellable booking status: ${booking.status}`),
+        { status: 500 }
+      );
+    }
+    if (!isValidDate(now)) {
+      throw Object.assign(new Error("CancellationPolicyService.evaluate requires a valid `now` Date"), { status: 400 });
+    }
+    const startTime = new Date(booking.startTime);
+    if (!isValidDate(startTime)) {
+      throw Object.assign(new Error("CancellationPolicyService.evaluate requires a valid booking.startTime"), { status: 400 });
+    }
+    if (
+      !isValidOptionalAmount(booking.totalAmountInPaise) ||
+      !isValidOptionalAmount(booking.serviceAmountInPaise) ||
+      !isValidOptionalAmount(booking.commissionAmountInPaise)
+    ) {
+      throw Object.assign(
+        new Error("CancellationPolicyService.evaluate requires non-negative numeric amount fields"),
+        { status: 400 }
+      );
+    }
+
     const minsUntil  = (startTime - now) / (1000 * 60);
     const totalPaise = booking.totalAmountInPaise || 0;
 
