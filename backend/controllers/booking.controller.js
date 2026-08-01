@@ -1438,12 +1438,26 @@ export const cancelBooking = async (req, res) => {
       // Salon only ever gets refunded FOR the service-amount portion
       // — commission was never the salon's money, so it's never
       // deducted from the salon's balance. serviceRefundPaise is
-      // exactly what the salon's pending balance shrinks by.
-      await SalonEarnings.findOneAndUpdate(
-        { salonId: booking.salonRef },
-        { $inc: { balanceInPaise: -serviceRefundPaise, totalEarningsInPaise: -serviceRefundPaise } },
-        { session }
-      );
+      // exactly what the salon's PENDING balance shrinks by — this
+      // booking's payment was credited to PENDING at confirmBooking
+      // time (via WalletBalanceService.creditPending) and hasn't
+      // been released to AVAILABLE yet, so the claw-back must debit
+      // PENDING via WalletBalanceService, not a raw SalonEarnings
+      // write (WalletBalanceService is the only file allowed to
+      // write to SalonEarnings' *InPaise fields — see its header).
+      if (serviceRefundPaise > 0) {
+        await WalletBalanceService.debitPending({
+          salonId:        booking.salonRef,
+          amountInPaise:  serviceRefundPaise,
+          action:         "REFUND",
+          entityType:     "BOOKING",
+          entityId:       booking._id,
+          idempotencyKey: `booking:refund:${booking._id}`,
+          session,
+          triggeredBy:    "SYSTEM",
+          remarks:        "Booking cancelled — refund claws back salon's pending balance",
+        });
+      }
 
       //////////////////////////////////////////////////////////
       // 💰 CREDIT REFUND TO USER'S WALLET

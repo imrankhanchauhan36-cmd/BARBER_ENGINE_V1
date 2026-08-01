@@ -235,6 +235,26 @@ const WalletBalanceService = {
   },
 
   /**
+   * Debit PENDING balance directly. Used for: cancelling a booking
+   * whose payment was credited to PENDING (via creditPending at
+   * confirm time) but hasn't yet been released to AVAILABLE (via
+   * releasePendingToAvailable at service completion) — the refund
+   * claws back money that was never released, so it must come out
+   * of PENDING, not AVAILABLE. Mirrors `debit` exactly except the
+   * bucket. Atomic conditional $inc (see applyLedgerEntry) means
+   * this throws rather than silently under/over-drawing if PENDING
+   * doesn't have enough balance for the requested amount.
+   */
+  debitPending: async ({ salonId, amountInPaise, action, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+    return applyLedgerEntry({
+      salonId, amountInPaise, action, entityType, entityId, idempotencyKey,
+      triggeredBy, triggeredById, remarks, session,
+      direction: LEDGER_DIRECTION.DEBIT,
+      bucket:    LEDGER_BUCKET.PENDING,
+    });
+  },
+
+  /**
    * Withdrawal requested: AVAILABLE → LOCKED. Two ledger rows
    * (one per bucket) so each bucket's change is independently
    * auditable, both inside the same caller session.
