@@ -58,9 +58,34 @@ if (process.env.NODE_ENV === "production" && !process.env.OTP_ENCRYPT_KEY) {
   );
 }
 const OTP_ENCRYPT_KEY = process.env.OTP_ENCRYPT_KEY || "barber-engine-otp-key-32-chars!!"; // 32 chars
+
+// aes-256-cbc requires EXACTLY a 32-byte key — Buffer.from(OTP_ENCRYPT_KEY)
+// had no length check, so any deployment whose OTP_ENCRYPT_KEY env var
+// isn't exactly 32 bytes throws "Invalid key length" on every single
+// confirmBooking call (both WALLET and RAZORPAY — encryptOtp runs
+// unconditionally, after either payment branch already succeeded),
+// which is indistinguishable from a total outage since it's 100% of
+// requests, every time.
+//
+// Fix: only when the raw key ISN'T already 32 bytes, derive a
+// deterministic 32-byte key via SHA-256 instead of crashing. When it
+// IS already 32 bytes, use it completely unchanged — any environment
+// where this already worked (and may already have OTPs encrypted
+// under the raw-byte key) decrypts them identically to before. The
+// derived-key path only ever activates for a key length that could
+// never have successfully encrypted anything previously (it always
+// threw), so there is nothing pre-existing to preserve there.
+const getOtpCipherKey = (rawKey) => {
+  const rawBuffer = Buffer.from(rawKey, "utf8");
+  return rawBuffer.length === 32
+    ? rawBuffer
+    : crypto.createHash("sha256").update(rawKey).digest();
+};
+const OTP_CIPHER_KEY = getOtpCipherKey(OTP_ENCRYPT_KEY);
+
 const encryptOtp = (otp) => {
   const iv     = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(OTP_ENCRYPT_KEY), iv);
+  const cipher = crypto.createCipheriv("aes-256-cbc", OTP_CIPHER_KEY, iv);
   const encrypted = Buffer.concat([cipher.update(String(otp)), cipher.final()]);
   return iv.toString("hex") + ":" + encrypted.toString("hex");
 };
@@ -69,7 +94,7 @@ const decryptOtp = (encrypted) => {
   const [ivHex, encHex] = encrypted.split(":");
   const iv      = Buffer.from(ivHex, "hex");
   const enc     = Buffer.from(encHex, "hex");
-  const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(OTP_ENCRYPT_KEY), iv);
+  const decipher = crypto.createDecipheriv("aes-256-cbc", OTP_CIPHER_KEY, iv);
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString();
 };
 
