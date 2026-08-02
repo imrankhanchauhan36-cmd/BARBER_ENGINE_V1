@@ -1644,3 +1644,62 @@ export const submitSalon = async (req, res) => {
     });
   }
 };
+
+///////////////////////////////////////////////////////////
+// 🔥 REJECTED → RESUBMIT — reopen a rejected application
+// for editing. Only flips approval.status back to DRAFT so
+// the existing onboarding flow (Review screen, Edit buttons,
+// submitSalon) can run again unmodified. Rejection history
+// (rejectionReason/rejectedBy/rejectedAt) and onboarding
+// data/step are left untouched — nothing here duplicates
+// or replaces the existing onboarding logic.
+///////////////////////////////////////////////////////////
+
+export const resubmitOnboarding = async (req, res) => {
+  try {
+    const ownerId = req.user?._id;
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const salon = await Salon.findOne({ ownerId });
+
+    if (!salon) {
+      return res.status(404).json({
+        success: false,
+        message: "Salon not found",
+      });
+    }
+
+    if (salon.approval?.status !== "REJECTED") {
+      return res.status(400).json({
+        success: false,
+        message: "Salon is not in a rejected state",
+      });
+    }
+
+    salon.approval.status = "DRAFT";
+    await salon.save({ validateBeforeSave: false });
+
+    return res.status(200).json({
+      success: true,
+      message: "Application reopened for editing",
+      data: {
+        status: salon.approval.status,
+        onboardingStep: salon.onboarding?.step ?? 0,
+      },
+    });
+
+  } catch (error) {
+    console.error("RESUBMIT_ONBOARDING_ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};

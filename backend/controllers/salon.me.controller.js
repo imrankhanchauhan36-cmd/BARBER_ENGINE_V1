@@ -60,6 +60,7 @@ export const getMySalon = async (req, res) => {
         approval: {
           status:          salon.approval?.status ?? "NONE",
           rejectionReason: salon.approval?.rejectionReason ?? null,
+          rejectedAt:      salon.approval?.rejectedAt ?? null,
         },
         basicInfo:      salon.basicInfo ?? null,
         location: {

@@ -14,6 +14,7 @@ import {
   savePhotos, //✅ ADD THIS
   getReview,     // ✅ ADD
   submitSalon,   // ✅ ADD
+  resubmitOnboarding,
 } from "../controllers/salon.onboarding.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
@@ -121,6 +122,16 @@ salonOnboardingRouter.get(
 salonOnboardingRouter.post(
   "/submit",
   submitSalon
+);
+
+///////////////////////////////////////////////////////////
+// REJECTED → RESUBMIT
+// Endpoint: PATCH /api/salon/onboarding/resubmit
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.patch(
+  "/resubmit",
+  resubmitOnboarding
 );
 
 ///////////////////////////////////////////////////////////
