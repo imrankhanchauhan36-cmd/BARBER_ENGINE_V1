@@ -429,9 +429,13 @@ export const saveServices = async (req, res) => {
     // 🔍 FETCH EXISTING SERVICES — needed to diff against
     // the incoming array instead of destroying everything.
     //////////////////////////////////////////////////////
+    // .select("_id") + .lean() — only _id is ever read from these
+    // documents below (existingById.get(...)._id / removedIds mapping);
+    // hydrating full Mongoose documents (description, images[], etc.)
+    // here was pure unnecessary overhead with zero behavioral difference.
     const existingServices = await Service.find(
       { salonId: salon._id, isDeleted: false }
-    ).session(session);
+    ).select("_id").session(session).lean();
 
     const existingById = new Map(
       existingServices.map((s) => [s._id.toString(), s])
@@ -450,7 +454,19 @@ export const saveServices = async (req, res) => {
     const keptIds   = new Set();
 
     for (const item of services) {
-      if (!item.name || item.price <= 0 || item.duration <= 0) {
+      // Number(item.price) / Number(item.duration) — NOT typeof checks —
+      // to preserve existing behavior for numeric strings (e.g. "300",
+      // which already worked via JS's implicit coercion in the original
+      // `<= 0` comparisons and in Math.round below). This only closes the
+      // gap where a genuinely non-numeric value (e.g. "abc") previously
+      // slipped past `"abc" <= 0` (always false — NaN comparisons are
+      // never true) and was written to Mongo as a literal NaN via
+      // Math.round(NaN) / a bare NaN duration.
+      if (
+        !item.name ||
+        isNaN(Number(item.price))    || Number(item.price)    <= 0 ||
+        isNaN(Number(item.duration)) || Number(item.duration) <= 0
+      ) {
         throw new Error("Invalid service data");
       }
 
@@ -460,6 +476,18 @@ export const saveServices = async (req, res) => {
         item.bufferMin > item.bufferMax
       ) {
         throw new Error("Invalid buffer range");
+      }
+
+      // Booking Engine V2 — Phase 5 — optional, only validated if
+      // present (null/undefined both skip this, same "optional field"
+      // pattern as the buffer check above).
+      for (const graceField of ["autoCompleteGraceMinutes", "autoNoShowGraceMinutes"]) {
+        const value = item[graceField];
+        if (value !== undefined && value !== null) {
+          if (!Number.isInteger(value) || value < 0 || value > 120) {
+            throw new Error(`Invalid ${graceField} — must be a whole number between 0 and 120`);
+          }
+        }
       }
 
       const name = item.name.trim().toLowerCase();
@@ -478,6 +506,13 @@ export const saveServices = async (req, res) => {
         buffer: item.buffer ?? 5,
         bufferMin: item.bufferMin ?? 5,
         bufferMax: item.bufferMax ?? 15,
+
+        // Booking Engine V2 — Phase 5 — optional per-service grace
+        // override. null means "no override — jobs fall back to the
+        // platform-wide default." Never a fixed default here, unlike
+        // buffer above — there is no sane single number to assume.
+        autoCompleteGraceMinutes: item.autoCompleteGraceMinutes ?? null,
+        autoNoShowGraceMinutes:   item.autoNoShowGraceMinutes   ?? null,
 
         category,
 
@@ -583,11 +618,21 @@ export const saveServices = async (req, res) => {
     //////////////////////////////////////////////////////
 
     for (const { id, fields } of updateOps) {
-      await Service.findOneAndUpdate(
+      const updated = await Service.findOneAndUpdate(
         { _id: id, salonId: salon._id },
         { $set: fields },
         { session, runValidators: true }
       );
+
+      // updateOps is built exclusively from existingById (fetched under
+      // this same salonId, isDeleted:false a moment ago), so this filter
+      // should always match. A null here means the document vanished
+      // between that read and this write (e.g. a genuinely concurrent
+      // transaction) — surface it as an explicit error and abort rather
+      // than silently reporting success for a write that never happened.
+      if (!updated) {
+        throw new Error(`Service not found for update: ${id}`);
+      }
     }
 
     if (newDocs.length > 0) {
@@ -595,6 +640,18 @@ export const saveServices = async (req, res) => {
     }
 
     const totalProcessed = updateOps.length + newDocs.length;
+
+    // Success-path visibility — mirrors the existing logger.error(...)
+    // call in the catch block below (same logger, same call shape).
+    // Previously only failures were logged for this endpoint; a mutation
+    // this consequential (an owner's entire service catalog) is worth an
+    // audit-trail entry on the happy path too, for support/debugging.
+    logger.info("SAVE_SERVICES_SUCCESS", {
+      salonId: salon._id.toString(),
+      updated: updateOps.length,
+      created: newDocs.length,
+      removed: removedIds.length,
+    });
 
     //////////////////////////////////////////////////////
     // 🔄 UPDATE ONBOARDING STEP → 3

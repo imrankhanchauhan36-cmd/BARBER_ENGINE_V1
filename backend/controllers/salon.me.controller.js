@@ -110,6 +110,8 @@ export const getDashboardStats = async (req, res) => {
       todayBookings,
       revenueResult,
       cancelled,
+      manualNoShow,
+      autoNoShow,
       todayCustomers,
       chairs,
       staff,
@@ -126,6 +128,12 @@ export const getDashboardStats = async (req, res) => {
         startTime: { $gte: todayStart, $lte: todayEnd },
       }),
 
+      // Booking Engine V2 — Phase 5, Step 4 — manualCompleted/autoCompleted
+      // are additive sibling accumulators inside this SAME existing $group.
+      // $match is untouched (still COMPLETED-only, today-scoped), so the
+      // existing `total` revenue sum is unaffected — these two new fields
+      // only count how many of the already-matched documents were
+      // system- vs. human-triggered.
       Booking.aggregate([
         {
           $match: {
@@ -134,12 +142,41 @@ export const getDashboardStats = async (req, res) => {
             startTime: { $gte: todayStart, $lte: todayEnd },
           },
         },
-        { $group: { _id: null, total: { $sum: "$totalAmountInPaise" } } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$totalAmountInPaise" },
+            manualCompleted: { $sum: { $cond: [{ $ne: ["$autoCompleted", true] }, 1, 0] } },
+            autoCompleted:   { $sum: { $cond: [{ $eq: ["$autoCompleted", true] }, 1, 0] } },
+          },
+        },
       ]),
 
       Booking.countDocuments({
         salonRef: salonId,
         status: "CANCELLED",
+        startTime: { $gte: todayStart, $lte: todayEnd },
+      }),
+
+      // Booking Engine V2 — Phase 5, Step 4 — manualNoShow/autoNoShow.
+      // Not folded into the aggregate above: revenueResult's $match is
+      // COMPLETED-only, and broadening it to include NO_SHOW would
+      // silently pull NO_SHOW booking amounts into the existing
+      // `total` revenue sum — an unintended change to an existing
+      // field. countDocuments() is not an aggregation pipeline; this
+      // mirrors the `cancelled` counter's own existing style directly
+      // above, not a new technique.
+      Booking.countDocuments({
+        salonRef: salonId,
+        status: "NO_SHOW",
+        autoNoShow: { $ne: true },
+        startTime: { $gte: todayStart, $lte: todayEnd },
+      }),
+
+      Booking.countDocuments({
+        salonRef: salonId,
+        status: "NO_SHOW",
+        autoNoShow: true,
         startTime: { $gte: todayStart, $lte: todayEnd },
       }),
 
@@ -259,6 +296,14 @@ export const getDashboardStats = async (req, res) => {
         todayCustomers: todayCustomers.length,
         todayRevenue: Math.round((revenueResult[0]?.total || 0) / 100),
         cancelled,
+
+        // Booking Engine V2 — Phase 5, Step 4 — read-only breakdown,
+        // additive only. todayBookings/todayRevenue/cancelled above are
+        // unchanged.
+        manualCompleted: revenueResult[0]?.manualCompleted ?? 0,
+        autoCompleted:   revenueResult[0]?.autoCompleted ?? 0,
+        manualNoShow,
+        autoNoShow,
         chairs,
         staff,
         services,
@@ -335,6 +380,15 @@ export const getLiveSchedule = async (req, res) => {
           amount:    Math.round((b.totalAmountInPaise ?? 0) / 100),
           duration:         b.serviceRefs?.reduce((sum, s) => sum + (s.duration || 30), 0) || 30,
           serviceStartedAt: b.serviceStartedAt || null,
+          // Booking Engine V2 — Phase 4: lets the dashboard distinguish
+          // a system-triggered completion from a manual one without a
+          // new status value. Additive field — every existing consumer
+          // of this response already ignores unknown keys.
+          autoCompleted: b.autoCompleted || false,
+          // Booking Engine V2 — Phase 6: lets the app show Call/Send
+          // Reminder/Generate OTP once customerArrival.job.js has
+          // flagged this booking delayed. Additive field.
+          customerDelayedAt: b.customerDelayedAt || null,
         })),
     }));
 

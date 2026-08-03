@@ -41,9 +41,14 @@
  *   booking:checkedIn      — customer checked in
  *   booking:serviceStarted — service timer started
  *   booking:completed      — service done, chair freed, wallet credited
+ *                            (also emitted to the "admin" room, with
+ *                            autoCompleted:true, for system-triggered
+ *                            completions — see jobs/autoComplete.job.js)
  *   booking:cancelled      — booking cancelled, chair freed
  *   booking:noShow         — no-show marked, chair freed
  *   booking:expired        — HOLD expired, chair freed
+ *   booking:serviceOverdue — ONGOING service past expected duration (salon room only)
+ *   booking:graceExtended  — salon owner extended an overdue service
  *   sync:response          — reply to sync:request (reconnect recovery)
  *   error:auth             — authentication failure (client should re-login)
  *

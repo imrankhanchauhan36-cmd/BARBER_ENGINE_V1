@@ -56,8 +56,14 @@ export const listBookingsForAdmin = async (req, res, next) => {
       sortOrder = "desc",
     } = req.query;
 
-    const pageNumber  = Math.max(parseInt(page,  10), 1);
-    const limitNumber = Math.min(Math.max(parseInt(limit, 10), 1), 100);
+    // Number.isFinite guard — Math.max/Math.min return NaN (not the other
+    // operand) if ANY argument is NaN, so a malformed ?page=abc/?limit=abc
+    // previously produced skip=NaN, crashing the query at the driver level
+    // instead of falling back to the intended defaults.
+    const parsedPage  = parseInt(page,  10);
+    const parsedLimit = parseInt(limit, 10);
+    const pageNumber  = Math.max(Number.isFinite(parsedPage)  ? parsedPage  : 1,  1);
+    const limitNumber = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 20, 1), 100);
     const skip        = (pageNumber - 1) * limitNumber;
 
     // ── Base Filter ──────────────────────────────────
@@ -79,13 +85,20 @@ export const listBookingsForAdmin = async (req, res, next) => {
       if (isValidId(s)) {
         filter._id = s;
       } else {
+        // Escape regex metacharacters — s is raw user input fed directly
+        // into $regex below; unescaped, characters like ( ) . * + change
+        // matching semantics unpredictably (no behavior change for
+        // ordinary name/phone/shop-name search text, which contains none
+        // of these).
+        const safeS = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
         // Search users by name/phone, then filter bookings
         const matchedUsers = await User
           .find({
             isDeleted: { $ne: true },
             $or: [
-              { name:  { $regex: s, $options: "i" } },
-              { phone: { $regex: s, $options: "i" } },
+              { name:  { $regex: safeS, $options: "i" } },
+              { phone: { $regex: safeS, $options: "i" } },
             ],
           })
           .select("_id")
@@ -93,7 +106,7 @@ export const listBookingsForAdmin = async (req, res, next) => {
 
         const matchedSalons = await Salon.find({
           isDeleted: { $ne: true },
-          "basicInfo.shopName": { $regex: s, $options: "i" },
+          "basicInfo.shopName": { $regex: safeS, $options: "i" },
         }).select("_id").lean();
 
         filter.$or = [
@@ -346,8 +359,21 @@ export const adminCancelBooking = async (req, res, next) => {
     if (!reason?.trim()) return next(Errors.badRequest("Cancellation reason is required"));
     if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid booking ID"));
 
-    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .populate("salonRef", "location.territory.stateRef");
     if (!booking) return next(Errors.notFound("Booking not found"));
+
+    // Jurisdiction scope guard — same rule getBookingDetail() already
+    // enforces for STATE admins (this file, above). The role check
+    // above only confirms adminLevel is INDIA/STATE; without this, a
+    // STATE admin could cancel any booking PAN-India, not just their
+    // own state's.
+    if (req.user.adminLevel === "STATE") {
+      const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
+      if (salonStateRef !== req.user.stateRef?.toString()) {
+        return next(Errors.forbidden("Access denied"));
+      }
+    }
 
     const cancellableStatuses = [
       BOOKING_STATUS.HOLD,
@@ -425,8 +451,21 @@ export const adminUpdateBookingStatus = async (req, res, next) => {
       HOLD:       ["CANCELLED"],
     };
 
-    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .populate("salonRef", "location.territory.stateRef");
     if (!booking) return next(Errors.notFound("Booking not found"));
+
+    // Jurisdiction scope guard — same rule getBookingDetail() already
+    // enforces for STATE admins (this file, above). The role check
+    // above only confirms adminLevel is INDIA/STATE; without this, a
+    // STATE admin could transition any booking PAN-India, not just
+    // their own state's.
+    if (req.user.adminLevel === "STATE") {
+      const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
+      if (salonStateRef !== req.user.stateRef?.toString()) {
+        return next(Errors.forbidden("Access denied"));
+      }
+    }
 
     const allowed = allowedTransitions[booking.status] || [];
     if (!allowed.includes(status)) {
@@ -491,8 +530,16 @@ export const getBookingsSummary = async (req, res, next) => {
     const scopeFilter = await buildSalonScope(admin);
     const baseFilter  = { isDeleted: { $ne: true }, ...scopeFilter };
 
-    const now       = new Date();
-    const todayStr  = now.toISOString().split("T")[0];
+    const now = new Date();
+
+    // toISOString() is always UTC; India is UTC+5:30, so between 12:00 AM
+    // and 5:30 AM IST the raw UTC calendar date is still "yesterday."
+    // bookingDate is an exact-match string, so without this shift the
+    // "Today" stats would show zero/wrong data every day during that
+    // window. Matches this file's own IST convention used in
+    // getBookingsAnalytics (TZ = "Asia/Kolkata") below.
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const todayStr  = new Date(now.getTime() + IST_OFFSET_MS).toISOString().split("T")[0];
     const weekStart = new Date(now); weekStart.setDate(now.getDate() - 7);
     const monStart  = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -511,6 +558,15 @@ export const getBookingsSummary = async (req, res, next) => {
             noShow:       { $sum: { $cond: [{ $eq: ["$status", "NO_SHOW"]    }, 1, 0] } },
             hold:         { $sum: { $cond: [{ $eq: ["$status", "HOLD"]       }, 1, 0] } },
             totalRevenue: { $sum: "$totalAmountInPaise" },
+
+            // totalAmountInPaise is set at confirm/payment time, not at
+            // completion — so totalRevenue above already includes money
+            // from CONFIRMED/CHECKED_IN/ONGOING bookings that haven't
+            // completed yet. avgTicket below divides by completed-count,
+            // so it needs completed-only revenue as its numerator, not
+            // totalRevenue — otherwise the average is inflated by
+            // revenue from bookings that were never in its denominator.
+            completedRevenue: { $sum: { $cond: [{ $eq: ["$status", "COMPLETED"] }, "$totalAmountInPaise", 0] } },
 
             // ✅ Payment summary
             payPaid:      { $sum: { $cond: [{ $eq: ["$paymentStatus", "PAID"]     }, 1, 0] } },
@@ -575,9 +631,13 @@ export const getBookingsSummary = async (req, res, next) => {
     const w = weekStats[0]  || {};
     const m = monthStats[0] || {};
 
-    const totalRevPaise  = s.totalRevenue ?? 0;
-    const totalComplete  = s.completed    ?? 0;
-    const avgTicket      = totalComplete > 0 ? Math.round(totalRevPaise / totalComplete / 100) : 0;
+    const totalRevPaise      = s.totalRevenue     ?? 0;
+    const completedRevPaise  = s.completedRevenue ?? 0;
+    const totalComplete      = s.completed         ?? 0;
+    // Numerator now scoped to COMPLETED-only revenue, matching the
+    // COMPLETED-only denominator (totalComplete) — see completedRevenue
+    // comment in the aggregation above.
+    const avgTicket      = totalComplete > 0 ? Math.round(completedRevPaise / totalComplete / 100) : 0;
     const cancelRate     = s.total > 0 ? +((s.cancelled  / s.total) * 100).toFixed(1) : 0;
     // ✅ Completion rate
     const completionRate = s.total > 0 ? +((s.completed  / s.total) * 100).toFixed(1) : 0;
@@ -597,7 +657,7 @@ export const getBookingsSummary = async (req, res, next) => {
           totalRevenueRupees:  Math.round(totalRevPaise / 100),
           totalRevenuePaise:   totalRevPaise,
           avgTicketSizeRupees: avgTicket,
-          avgTicketSizePaise:  totalComplete > 0 ? Math.round(totalRevPaise / totalComplete) : 0,
+          avgTicketSizePaise:  totalComplete > 0 ? Math.round(completedRevPaise / totalComplete) : 0,
           // ✅ Rates
           cancellationRate:  cancelRate,
           completionRate:    completionRate,
@@ -720,6 +780,16 @@ export const getBookingsAnalytics = async (req, res, next) => {
                 cancelled:    { $sum: { $cond: [{ $eq: ["$status", "CANCELLED"] }, 1, 0] } },
                 ongoing:      { $sum: { $cond: [{ $eq: ["$status", "ONGOING"]   }, 1, 0] } },
                 noShow:       { $sum: { $cond: [{ $eq: ["$status", "NO_SHOW"]   }, 1, 0] } },
+
+                // Booking Engine V2 — Phase 5 — additive breakdown of the
+                // existing completed/noShow counts above by trigger
+                // (SYSTEM via autoComplete.job.js vs. a human action).
+                // Same $group, same cursor — no new query, no new stage.
+                manualCompleted: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "COMPLETED"] }, { $ne: ["$autoCompleted", true] }] }, 1, 0] } },
+                autoCompleted:   { $sum: { $cond: [{ $and: [{ $eq: ["$status", "COMPLETED"] }, { $eq: ["$autoCompleted", true] }] }, 1, 0] } },
+                manualNoShow:    { $sum: { $cond: [{ $and: [{ $eq: ["$status", "NO_SHOW"]   }, { $ne: ["$autoNoShow",   true] }] }, 1, 0] } },
+                autoNoShow:      { $sum: { $cond: [{ $and: [{ $eq: ["$status", "NO_SHOW"]   }, { $eq: ["$autoNoShow",   true] }] }, 1, 0] } },
+
                 upcoming: {
                   $sum: {
                     $cond: [
@@ -734,6 +804,15 @@ export const getBookingsAnalytics = async (req, res, next) => {
                   },
                 },
                 totalRevenuePaise:    { $sum: "$totalAmountInPaise" },
+
+                // totalAmountInPaise is set at confirm/payment time, not
+                // completion — totalRevenuePaise above already includes
+                // revenue from CONFIRMED/CHECKED_IN/ONGOING bookings that
+                // haven't completed yet. avgBookingValueRupees below
+                // divides by completedCount, so it needs completed-only
+                // revenue as its numerator, not totalRevenuePaise.
+                completedRevenuePaise: { $sum: { $cond: [{ $eq: ["$status", "COMPLETED"] }, "$totalAmountInPaise", 0] } },
+
                 refundedAmountPaise: {
                   $sum: { $cond: [{ $eq: ["$paymentStatus", "REFUNDED"] }, "$totalAmountInPaise", 0] },
                 },
@@ -942,10 +1021,14 @@ export const getBookingsAnalytics = async (req, res, next) => {
     const cf  = result.customerFrequency[0]    || {};
     const platformRevenuePaise = platformRevenueAgg[0]?.totalCommissionPaise ?? 0;
 
-    const totalRevenuePaise = o.totalRevenuePaise ?? 0;
-    const completedCount    = o.completed ?? 0;
+    const totalRevenuePaise     = o.totalRevenuePaise     ?? 0;
+    const completedRevenuePaise = o.completedRevenuePaise ?? 0;
+    const completedCount       = o.completed ?? 0;
+    // Numerator scoped to COMPLETED-only revenue, matching the
+    // COMPLETED-only denominator (completedCount) — see
+    // completedRevenuePaise comment in the aggregation above.
     const avgBookingValueRupees = completedCount > 0
-      ? Math.round(totalRevenuePaise / completedCount / 100)
+      ? Math.round(completedRevenuePaise / completedCount / 100)
       : 0;
 
     const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -964,6 +1047,14 @@ export const getBookingsAnalytics = async (req, res, next) => {
           ongoing:              o.ongoing ?? 0,
           noShow:               o.noShow ?? 0,
           upcoming:             o.upcoming ?? 0,
+
+          // Booking Engine V2 — Phase 5 — read-only breakdown, sourced
+          // from the same overall facet above; completed/noShow totals
+          // are unchanged and still the authoritative counts.
+          manualCompleted:      o.manualCompleted ?? 0,
+          autoCompleted:        o.autoCompleted ?? 0,
+          manualNoShow:         o.manualNoShow ?? 0,
+          autoNoShow:           o.autoNoShow ?? 0,
           totalRevenueRupees:   Math.round(totalRevenuePaise / 100),
           platformRevenueRupees: Math.round(platformRevenuePaise / 100),
           avgBookingValueRupees,

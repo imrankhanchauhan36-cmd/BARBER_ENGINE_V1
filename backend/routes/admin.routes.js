@@ -12,6 +12,7 @@ import {
   adminCancelBooking,
   adminUpdateBookingStatus,
   getBookingDetail,
+  getBookingsAnalytics,
   getBookingsSummary,
   listBookingsForAdmin,
 } from "../controllers/adminBooking.controller.js";
@@ -184,6 +185,9 @@ router.patch("/users/:id/status", requireAdminLevel("INDIA","STATE"),           
 
 // ── Bookings ──────────────────────────────────────────────
 router.get  ("/bookings/summary",    requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getBookingsSummary));
+// MUST stay above "/bookings/:id" — Express would otherwise match
+// "/bookings/analytics" as :id="analytics" and call getBookingDetail.
+router.get  ("/bookings/analytics",  requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getBookingsAnalytics));
 router.get  ("/bookings",            requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(listBookingsForAdmin));
 router.get  ("/bookings/:id",        requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getBookingDetail));
 router.patch("/bookings/:id/cancel", requireAdminLevel("INDIA","STATE"),            asyncHandler(adminCancelBooking));

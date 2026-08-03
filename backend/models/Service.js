@@ -217,6 +217,32 @@ const ServiceSchema = new mongoose.Schema(
       ref:  "User",
     },
 
+    //////////////////////////////////////////////////////////
+    // ⏰ AUTOMATION ENGINE (Booking Engine V2 — Phase 5)
+    //
+    // Additive-only, per-service override for the grace constants
+    // autoComplete.job.js / the auto-no-show job use. Both default
+    // to null, meaning "no override — use the platform-wide
+    // default." Neither field is read by any booking/slot/timeline/
+    // payment engine directly; jobs must resolve grace with this
+    // exact priority (per-service value wins, global is the
+    // fallback only when null):
+    //
+    //   const grace = service.autoCompleteGraceMinutes ?? AUTO_COMPLETE_GRACE_MINUTES;
+    //
+    // NEVER the other way around — a service's own configured value
+    // must never be overridden by the global default.
+    //////////////////////////////////////////////////////////
+    autoCompleteGraceMinutes: {
+      type:    Number,
+      default: null,
+    },
+
+    autoNoShowGraceMinutes: {
+      type:    Number,
+      default: null,
+    },
+
     //==========================================================
     // SERVICE EXPERIENCE LAYER
     // DISPLAY + TRUST layer only.

@@ -4,8 +4,12 @@ import mongoose from "mongoose"; // ← IMPROVEMENT-2: needed for DB close + hea
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import redis from "./config/redis.js";
+import { startAutoCompleteJob } from "./jobs/autoComplete.job.js";
+import { startAutoStartJob } from "./jobs/autoStart.job.js";
 import { startCustomerArrivalJob } from "./jobs/customerArrival.job.js";
 import { startHoldExpiryJob } from "./jobs/holdExpiry.job.js";
+import { startReminderJob } from "./jobs/reminder.job.js";
+import { startServiceOverdueJob } from "./jobs/serviceOverdue.job.js";
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -52,6 +56,10 @@ app.get("/health", (req, res) => {
     jobs: {
       holdExpiry:      "running",
       customerArrival: "running",
+      serviceOverdue:  "running",
+      autoComplete:    "running",
+      reminder:        "running",
+      autoStart:       "running",
     },
   });
 });
@@ -122,6 +130,50 @@ const holdExpiryJob = startHoldExpiryJob(io);
 const customerArrivalJob = startCustomerArrivalJob(io);
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7d: START SERVICE OVERDUE BACKGROUND JOB
+//
+// Monitors ONGOING bookings running past their expected duration.
+// Flag-only — never transitions status. See jobs/serviceOverdue.job.js.
+//
+// Started after customerArrivalJob — both need io, both independent.
+// Returns a { stop } controller used in graceful shutdown.
+//////////////////////////////////////////////////////////////
+
+const serviceOverdueJob = startServiceOverdueJob(io);
+
+//////////////////////////////////////////////////////////////
+// 🚀 STEP 7e: START AUTO COMPLETE BACKGROUND JOB
+//
+// Automatically completes an ONGOING booking that has been
+// overdue long enough with no owner action. Reuses the same
+// transitionBookingStatus/WalletBalanceService/NotificationService
+// every manual completion uses. See jobs/autoComplete.job.js.
+//
+// Started after serviceOverdueJob — both need io, both independent.
+// Returns a { stop } controller used in graceful shutdown.
+//////////////////////////////////////////////////////////////
+
+const autoCompleteJob = startAutoCompleteJob(io);
+
+//////////////////////////////////////////////////////////////
+// 🚀 STEP 7f: START REMINDER BACKGROUND JOB (Booking Engine V2 — Phase 6)
+//
+// Sends 30-min and 5-min appointment reminders to the customer.
+// No io needed — notification only, no socket emit.
+//////////////////////////////////////////////////////////////
+
+const reminderJob = startReminderJob();
+
+//////////////////////////////////////////////////////////////
+// 🚀 STEP 7g: START AUTO START BACKGROUND JOB (Booking Engine V2 — Phase 6)
+//
+// Auto-transitions a CHECKED_IN booking to ONGOING once startTime
+// arrives, if the owner forgot to tap "Start Service".
+//////////////////////////////////////////////////////////////
+
+const autoStartJob = startAutoStartJob(io);
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -132,7 +184,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -168,6 +220,18 @@ const shutdown = async (signal) => {
 
       customerArrivalJob.stop();
       console.log("✅ Customer arrival job stopped");
+
+      serviceOverdueJob.stop();
+      console.log("✅ Service overdue job stopped");
+
+      autoCompleteJob.stop();
+      console.log("✅ Auto complete job stopped");
+
+      reminderJob.stop();
+      console.log("✅ Reminder job stopped");
+
+      autoStartJob.stop();
+      console.log("✅ Auto start job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

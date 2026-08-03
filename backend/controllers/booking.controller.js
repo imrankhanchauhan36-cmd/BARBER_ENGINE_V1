@@ -19,6 +19,7 @@ import WalletTransaction, {
 import CancellationPolicyService from "../services/CancellationPolicyService.js";
 import CommissionService from "../services/CommissionService.js";
 import NotificationService from "../services/NotificationService.js";
+import { sendOtpSms } from "../services/sms.service.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
@@ -27,6 +28,12 @@ import {
   validateBookingTransition,
 } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
+// generateOtp only — hashOtp is NOT imported here: this file already has
+// its own local hashOtp (HMAC-SHA256 with OTP_SECRET, below) used for
+// check-in OTP, which is stronger than otp.helpers.js's plain SHA-256
+// (no secret). The new no-show OTP is booking-scoped exactly like
+// check-in OTP, so it reuses the SAME local, stronger hashOtp.
+import { generateOtp } from "../utils/otp.helpers.js";
 import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
 
 //////////////////////////////////////////////////////////////
@@ -213,6 +220,10 @@ const USER_BOOKING_POPULATE = [
  *
  * hashOtp(otp) → hex string stored in booking.checkInOtp
  *
+ * Also reused (Booking Engine V2 — Phase 6) for the no-show
+ * cancellation OTP → booking.noShowOtp — same booking-scoped,
+ * document-stored-hash pattern, different purpose.
+ *
  * checkInBooking() verifies an incoming OTP by hashing it and using
  * the hash as a DB query filter (checkInOtp: hashedOtp), not an
  * in-application string comparison — so the match happens inside
@@ -329,7 +340,8 @@ const emitBookingEvent = (req, { event, salonId, userId, payload }) => {
  * 🔐 ASSERT SALON OWNERSHIP
  *
  * Reusable ownership guard for all salon-only operations:
- *   startService(), completeService(), markNoShow(),
+ *   startService(), completeService(), markNoShow(), extendService(),
+ *   resendReminder(), generateNoShowOtp(), confirmNoShowCancellation(),
  *   extendArrivalGrace(), releaseChairForNoShow() (future).
  *
  * Single atomic query — matches BOTH the booking's salon AND the
@@ -2176,6 +2188,399 @@ export const forceComplete = async (req, res) => {
     }
     session.endSession();
     return res.status(error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 13. EXTEND SERVICE (Booking Engine V2 — Phase 3)
+// PATCH /v1/bookings/admin/extend-service
+// body: { bookingId, minutes }
+//
+// Manual override for an overdue ONGOING booking. Does NOT change
+// status, does NOT touch the wallet, does NOT free the chair —
+// it only pushes overdueOverrideUntil forward so the (not yet
+// built) auto-complete job will skip this booking until then,
+// and records a GRACE_EXTENDED timeline event for the UI.
+//////////////////////////////////////////////////////////////
+
+export const extendService = async (req, res) => {
+  try {
+    const { bookingId, minutes } = req.body;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      throw Object.assign(new Error("Booking not found"), { status: 404 });
+    }
+
+    await assertSalonOwnership(booking.salonRef, req.user._id);
+
+    if (booking.status !== BOOKING_STATUS.ONGOING) {
+      throw Object.assign(
+        new Error("Only an ONGOING booking's service can be extended"),
+        { status: 400 }
+      );
+    }
+
+    if (!booking.serviceOverdueAt) {
+      throw Object.assign(
+        new Error("This booking is not overdue yet — nothing to extend"),
+        { status: 400 }
+      );
+    }
+
+    const now                 = new Date();
+    const overdueOverrideUntil = new Date(now.getTime() + minutes * 60 * 1000);
+
+    // Atomic — mirrors serviceOverdue.job.js's own atomic-write
+    // pattern rather than mutate-then-save, so a concurrent edit
+    // to an unrelated field (e.g. rating) is never clobbered.
+    const updated = await Booking.findByIdAndUpdate(
+      bookingId,
+      {
+        $set: {
+          overdueOverrideUntil,
+        },
+        $push: {
+          timelineEvents: {
+            eventType:  "GRACE_EXTENDED",
+            occurredAt: now,
+            actor:      "SALON",
+            meta: {
+              minutes,
+              extendedBy: req.user._id,
+              reason:     "Salon owner requested more time",
+            },
+          },
+        },
+      },
+      { new: true }
+    );
+
+    emitBookingEvent(req, {
+      event:   "booking:graceExtended",
+      salonId: updated.salonRef.toString(),
+      userId:  updated.userRef.toString(),
+      payload: {
+        bookingId:            updated._id,
+        chairId:              updated.chairRef,
+        minutes,
+        overdueOverrideUntil,
+      },
+    });
+
+    await NotificationService.send({
+      recipientId:   updated.userRef,
+      recipientType: "USER",
+      title:         "Service Extended",
+      message:       "Your service has been extended by the salon.",
+      type:          "BOOKING",
+      priority:      "LOW",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${updated._id}`,
+      meta:          { bookingId: updated._id, minutes, friendlyBookingId: toFriendlyId(updated._id, "BK") },
+    });
+
+    await NotificationService.send({
+      recipientId:   updated.salonRef,
+      recipientType: "SALON",
+      title:         "Service Extended",
+      message:       "Service extended successfully.",
+      type:          "BOOKING",
+      priority:      "LOW",
+      meta:          { bookingId: updated._id, minutes },
+    });
+
+    return res.status(200).json({
+      success:  true,
+      bookingId: updated._id,
+      overdueOverrideUntil,
+      message:  "Service extended successfully",
+    });
+
+  } catch (error) {
+    console.error("extendService error:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to extend service",
+    });
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 RESEND REMINDER (Booking Engine V2 — Phase 6)
+// POST /v1/bookings/admin/resend-reminder
+// body: { bookingId }
+//
+// Manual, on-demand version of what reminder.job.js already sends
+// automatically. Same NotificationService, same copy convention.
+// Deliberately independent of reminder30MinSentAt/reminder5MinSentAt —
+// those only gate the AUTOMATIC sends; a manual request from the
+// owner should always work regardless of the automatic timers.
+//////////////////////////////////////////////////////////////
+
+export const resendReminder = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    const booking = await Booking.findById(bookingId).populate("serviceRefs", "name");
+    if (!booking) {
+      throw Object.assign(new Error("Booking not found"), { status: 404 });
+    }
+
+    await assertSalonOwnership(booking.salonRef, req.user._id);
+
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
+      throw Object.assign(
+        new Error("Reminder can only be sent for a CONFIRMED booking"),
+        { status: 400 }
+      );
+    }
+
+    const serviceNames = (booking.serviceRefs || []).map(s => s.name).join(", ") || "your service";
+
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Appointment Reminder",
+      message:       `Reminder: your appointment for ${serviceNames} is coming up. Please head to the salon.`,
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Reminder sent",
+    });
+
+  } catch (error) {
+    console.error("resendReminder error:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to send reminder",
+    });
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 GENERATE NO-SHOW OTP (Booking Engine V2 — Phase 6)
+// POST /v1/bookings/admin/generate-noshow-otp
+// body: { bookingId }
+//
+// Owner taps "Generate OTP" after calling a customer who hasn't
+// checked in past the arrival grace window. Generates a fresh OTP,
+// SMS's it to the CUSTOMER (same sendOtpSms channel auth already
+// uses), stores only its hash on the booking — same hashOtp()
+// function and hash-only-on-document pattern as the existing
+// check-in OTP, reused for a different purpose.
+//////////////////////////////////////////////////////////////
+
+export const generateNoShowOtp = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    const booking = await Booking.findById(bookingId).populate("userRef", "phone");
+    if (!booking) {
+      throw Object.assign(new Error("Booking not found"), { status: 404 });
+    }
+
+    await assertSalonOwnership(booking.salonRef, req.user._id);
+
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
+      throw Object.assign(
+        new Error("OTP can only be generated for a CONFIRMED booking"),
+        { status: 400 }
+      );
+    }
+
+    // Same precondition style as extendService's serviceOverdueAt
+    // guard — the owner can only start this flow once the customer
+    // has genuinely been flagged delayed by customerArrival.job.js,
+    // not before their arrival grace window has even elapsed.
+    if (!booking.customerDelayedAt) {
+      throw Object.assign(
+        new Error("Customer is not yet marked delayed — nothing to confirm"),
+        { status: 400 }
+      );
+    }
+
+    if (!booking.userRef?.phone) {
+      throw Object.assign(new Error("Customer phone number not available"), { status: 409 });
+    }
+
+    const otp        = generateOtp();
+    const otpHashed   = hashOtp(otp);
+    const now         = new Date();
+    const expiresAt   = new Date(now.getTime() + 5 * 60 * 1000); // 5 min validity
+
+    booking.noShowOtp          = otpHashed;
+    booking.noShowOtpExpiresAt = expiresAt;
+    await booking.save();
+
+    const smsResult = await sendOtpSms(booking.userRef.phone, otp);
+    if (!smsResult.success) {
+      throw Object.assign(new Error("Could not send OTP. Please try again."), { status: 502 });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent to customer",
+      expiresAt,
+    });
+
+  } catch (error) {
+    console.error("generateNoShowOtp error:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to generate OTP",
+    });
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 CONFIRM NO-SHOW CANCELLATION (Booking Engine V2 — Phase 6)
+// POST /v1/bookings/admin/confirm-noshow
+// body: { bookingId, otp }
+//
+// Owner reads back the OTP the customer gave over the call. On
+// match: transitions CONFIRMED → CANCELLED — this is the EXISTING,
+// already-allowed transition (cancelBooking/adminCancelBooking
+// already use it), NOT NO_SHOW, and NOT markNoShow() — a human
+// confirmed this cancellation, it is not a silent no-show.
+//
+// LOCKED PAYMENT RULE: no refund. The full amount already sitting
+// in the salon's PENDING bucket (credited at confirmBooking time)
+// is released to AVAILABLE — same shared WalletBalanceService call,
+// same idempotency key format, that completeService()/forceComplete()/
+// autoComplete.job.js already use. No new wallet math, no
+// CancellationPolicyService, no refund API — this function never
+// imports or calls either.
+//////////////////////////////////////////////////////////////
+
+export const confirmNoShowCancellation = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { bookingId, otp } = req.body;
+
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) {
+      throw Object.assign(new Error("Booking not found"), { status: 404 });
+    }
+
+    await assertSalonOwnership(booking.salonRef, req.user._id, session);
+
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
+      throw Object.assign(
+        new Error("Only a CONFIRMED booking can be cancelled via this flow"),
+        { status: 400 }
+      );
+    }
+
+    if (!booking.noShowOtp || !booking.noShowOtpExpiresAt || booking.noShowOtpExpiresAt < new Date()) {
+      throw Object.assign(
+        new Error("OTP expired or was never generated — generate a new one"),
+        { status: 400 }
+      );
+    }
+
+    if (hashOtp(otp) !== booking.noShowOtp) {
+      throw Object.assign(new Error("Invalid OTP"), { status: 401 });
+    }
+
+    //////////////////////////////////////////////////////////
+    // 💰 RELEASE PENDING → AVAILABLE — full amount, no refund.
+    // Same shared primitive every other completion path uses.
+    //////////////////////////////////////////////////////////
+
+    const paymentTxn = await Transaction.findOne({
+      bookingId: booking._id,
+      type:      TRANSACTION_TYPE.BOOKING,
+      status:    TRANSACTION_STATUS.PAID,
+    }).session(session);
+
+    if (paymentTxn) {
+      await WalletBalanceService.releasePendingToAvailable({
+        salonId:        booking.salonRef,
+        amountInPaise:  paymentTxn.payoutAmount,
+        entityType:     "BOOKING",
+        entityId:       paymentTxn._id,
+        idempotencyKey: `booking:release:${booking._id}`,
+        session,
+        triggeredBy:    "SYSTEM",
+        remarks:        "OTP-confirmed cancellation after no-show — full amount retained by salon (no refund)",
+      });
+    }
+
+    const now = new Date();
+
+    booking.cancelledAt              = now;
+    booking.cancelledBy              = req.user._id;
+    booking.cancelReason             = "Customer confirmed cancellation via OTP (did not check in)";
+    booking.cancelledViaOtpConfirmation = true;
+    booking.noShowOtp                = null;
+    booking.noShowOtpExpiresAt       = null;
+
+    booking.timelineEvents.push({
+      eventType:  "CUSTOMER_CANCELLED_OTP",
+      occurredAt: now,
+      actor:      "SALON",
+      meta:       { verifiedByOwner: req.user._id },
+    });
+
+    await transitionBookingStatus({ booking, nextStatus: BOOKING_STATUS.CANCELLED, session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    //////////////////////////////////////////////////////////
+    // 📡 REALTIME — chair freed (derived from status, no extra code)
+    //////////////////////////////////////////////////////////
+
+    emitBookingEvent(req, {
+      event:   "booking:cancelled",
+      salonId: booking.salonRef.toString(),
+      userId:  booking.userRef.toString(),
+      payload: {
+        bookingId: booking._id,
+        chairId:   booking.chairRef,
+        status:    BOOKING_STATUS.CANCELLED,
+      },
+    });
+
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      title:         "Booking Cancelled",
+      message:       "Your booking has been cancelled as confirmed over the call.",
+      type:          "BOOKING",
+      priority:      "HIGH",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    });
+
+    return res.status(200).json({
+      success: true,
+      bookingId: booking._id,
+      status:    booking.status,
+      message:   "Booking cancelled. Chair is now free.",
+    });
+
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
+
+    console.error("confirmNoShowCancellation error:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to confirm cancellation",
+    });
   }
 };
 

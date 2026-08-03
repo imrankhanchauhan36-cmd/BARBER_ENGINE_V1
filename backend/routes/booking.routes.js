@@ -5,7 +5,10 @@ import {
   checkInBooking,
   completeService,
   confirmBooking,
+  confirmNoShowCancellation,
+  extendService,
   forceComplete,
+  generateNoShowOtp,
   getCompletedBookings, // ← YE ADD KARO
   getMyBookings, // FIX-2: was missing
   getPaymentHistory, // FIX-2: was missing
@@ -13,6 +16,7 @@ import {
   getUpcomingBookings,
   lockSlot,
   markNoShow,
+  resendReminder,
   startService,
 } from "../controllers/booking.controller.js";
 
@@ -196,6 +200,50 @@ adminRouter.post(
   validate(bookingSchemas.forceComplete),
   checkBookingState(["CHECKED_IN"]),
   forceComplete
+);
+
+// ── Extend service (Booking Engine V2 — Phase 3) ─────────────
+// Manual grace extension for an overdue ONGOING booking. Does NOT
+// transition status — reuses checkBookingState(["ONGOING"]) exactly
+// like start-service/complete above; the additional "must already
+// be overdue" business rule is enforced inside extendService itself,
+// since checkBookingState only asserts status membership.
+adminRouter.patch(
+  "/extend-service",
+  bookingRateLimiter,
+  validate(bookingSchemas.extendService),
+  checkBookingState(["ONGOING"]),
+  extendService
+);
+
+// ── Resend reminder (Booking Engine V2 — Phase 6) ────────────
+adminRouter.post(
+  "/resend-reminder",
+  bookingRateLimiter,
+  validate(bookingSchemas.resendReminder),
+  checkBookingState(["CONFIRMED"]),
+  resendReminder
+);
+
+// ── Generate no-show OTP (Booking Engine V2 — Phase 6) ───────
+adminRouter.post(
+  "/generate-noshow-otp",
+  bookingRateLimiter,
+  validate(bookingSchemas.generateNoShowOtp),
+  checkBookingState(["CONFIRMED"]),
+  generateNoShowOtp
+);
+
+// ── Confirm no-show cancellation via OTP (Booking Engine V2 — Phase 6) ──
+// lockRateLimiter (5/min), not the general bookingRateLimiter — this
+// endpoint accepts an OTP, same strictest-throttle precedent as
+// check-in (booking.routes.js's own comment on that route explains why).
+adminRouter.post(
+  "/confirm-noshow",
+  lockRateLimiter,
+  validate(bookingSchemas.confirmNoShowCancellation),
+  checkBookingState(["CONFIRMED"]),
+  confirmNoShowCancellation
 );
 
 //////////////////////////////////////////////////////////////

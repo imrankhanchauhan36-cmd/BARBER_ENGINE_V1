@@ -376,7 +376,11 @@ const BookingSchema = new mongoose.Schema(
       min:     0,
     },
 
-    // Per-booking wait window (minutes). Default 15.
+    // Per-booking wait window (minutes). Default 5 (Booking Engine V2 —
+    // Phase 6, approved business flow: "customer still not CHECKED_IN
+    // after 5 minutes from appointment start"). Previously 15 — changed
+    // here only, no other logic touched; existing CONFIRMED bookings
+    // keep whatever value was already stored on them (never retroactive).
     //
     // MIGRATION NOTE: when Salon.settings is introduced in a
     // future phase, the lockSlot() controller should read the
@@ -387,7 +391,7 @@ const BookingSchema = new mongoose.Schema(
     // they were created — no retroactive policy changes.
     maxArrivalWaitMinutes: {
       type:    Number,
-      default: 15,
+      default: 5,
       min:     0,
     },
 
@@ -505,6 +509,167 @@ const BookingSchema = new mongoose.Schema(
       type:    Boolean,
       default: false,
     },
+
+    //////////////////////////////////////////////////////////
+    // ⏰ REMINDER + AUTO-START + OTP-CANCEL (Booking Engine V2 — Phase 6)
+    //
+    // Additive-only. No new BOOKING_STATUS value — CONFIRMED→CANCELLED
+    // is already a legal transition; this phase only adds a
+    // SYSTEM/OWNER-triggered caller for it (via OTP confirmation)
+    // and two idempotency markers for the reminder job.
+    //////////////////////////////////////////////////////////
+
+    // Set once each by reminder.job.js — prevents re-sending the same
+    // reminder on a later tick. Same "flag once, never re-fire"
+    // pattern as every other job in this codebase.
+    reminder30MinSentAt: {
+      type:    Date,
+      default: null,
+    },
+    reminder5MinSentAt: {
+      type:    Date,
+      default: null,
+    },
+
+    // Hashed (never plaintext) OTP for the owner-initiated "confirm
+    // customer cancellation" flow — same hashOtp() function and
+    // hash-on-the-booking-document pattern as the existing
+    // checkInOtp field above, reused for a different purpose.
+    noShowOtp: {
+      type:    String,
+      default: null,
+    },
+    noShowOtpExpiresAt: {
+      type:    Date,
+      default: null,
+    },
+
+    // True only when this booking's CANCELLED status was reached via
+    // the OTP-confirmed no-show flow — distinguishes it from a normal
+    // pre-appointment cancellation (cancelBooking/adminCancelBooking)
+    // for analytics/audit, exactly like autoCompleted/forceCompleted
+    // distinguish HOW an existing status was reached without adding
+    // a new status value.
+    cancelledViaOtpConfirmation: {
+      type:    Boolean,
+      default: false,
+    },
+
+    //////////////////////////////////////////////////////////
+    // ⏰ AUTOMATION ENGINE (Booking Engine V2 — Phase 1)
+    //
+    // Additive-only fields for the upcoming auto-complete /
+    // auto-no-show automation. NONE of these are read or written
+    // by any controller or job yet — this phase only declares
+    // storage shape so later phases have somewhere to write.
+    //
+    // No new BOOKING_STATUS value is introduced by this feature.
+    // ONGOING → COMPLETED and CONFIRMED → NO_SHOW are already
+    // legal transitions in bookingState.machine.js — automation
+    // only adds a SYSTEM-triggered caller of the existing
+    // transitionBookingStatus(), distinguished from a human
+    // action via the flags below.
+    //////////////////////////////////////////////////////////
+
+    // Set once by the future serviceOverdue.job.js when an ONGOING
+    // booking runs past (serviceStartedAt + serviceDuration + grace)
+    // and is still not COMPLETED. Flag-only — mirrors the existing
+    // customerDelayedAt pattern (Customer Arrival Engine above):
+    // it marks the booking as overdue, it never transitions status
+    // by itself.
+    serviceOverdueAt: {
+      type:    Date,
+      default: null,
+      index:   true,   // future job will query this field on an interval
+    },
+
+    // Set by a future salon-facing "Extend N min" action. While
+    // this is in the future (> now), any future auto-complete /
+    // auto-no-show job MUST skip the booking — a manual extension
+    // always takes priority over automation. Mirrors arrivalGraceUntil's
+    // role for the Customer Arrival Engine, but for the in-service
+    // (ONGOING) phase instead of the pre-service (CONFIRMED) phase.
+    overdueOverrideUntil: {
+      type:    Date,
+      default: null,
+    },
+
+    // True only when a future automation job transitions this
+    // booking to COMPLETED itself (SYSTEM-triggered), as opposed
+    // to a salon owner calling completeService() or forceComplete().
+    // Mirrors the existing forceCompleted flag's role: both
+    // distinguish HOW a terminal status was reached without adding
+    // a new status value.
+    autoCompleted: {
+      type:    Boolean,
+      default: false,
+    },
+
+    // True only when a future automation job transitions this
+    // booking to NO_SHOW itself (SYSTEM-triggered), as opposed to
+    // a salon owner calling the existing markNoShow().
+    autoNoShow: {
+      type:    Boolean,
+      default: false,
+    },
+
+    // Append-only operational narrative, separate from statusHistory
+    // above. statusHistory records STATUS transitions only (its
+    // `status` field is constrained to BOOKING_STATUS). timelineEvents
+    // records the richer story a future UI will render — including
+    // events that are NOT status transitions at all (e.g. a grace
+    // extension, or the moment expected service duration elapses
+    // while status is still ONGOING) — so it needs its own, wider
+    // eventType enum rather than reusing BOOKING_STATUS.
+    //
+    // Nothing pushes to this array yet in this phase.
+    timelineEvents: [
+      {
+        eventType: {
+          type: String,
+          enum: [
+            "CONFIRMED",
+            "CHECKED_IN",
+            "SERVICE_STARTED",
+            "SERVICE_TIME_COMPLETED",
+            "AUTO_COMPLETED",
+            "GRACE_EXTENDED",
+            "OVERDUE_FLAGGED",
+            "AUTO_NO_SHOW",
+            // Booking Engine V2 — Phase 6 — customer confirmed
+            // cancellation over a call by reading back a system-
+            // generated OTP, after not checking in within the
+            // arrival grace window. Distinct from AUTO_NO_SHOW —
+            // this is a human-confirmed cancellation, not a silent
+            // no-show.
+            "CUSTOMER_CANCELLED_OTP",
+          ],
+          required: true,
+        },
+
+        occurredAt: {
+          type:    Date,
+          default: Date.now,
+        },
+
+        // Who/what caused this event. "SYSTEM" for job-triggered
+        // events (e.g. OVERDUE_FLAGGED, AUTO_COMPLETED) — no
+        // separate changedBy ObjectId needed since these events
+        // are never attributable to a specific User document the
+        // way statusHistory.changedBy is.
+        actor: {
+          type: String,
+          enum: ["SYSTEM", "SALON", "USER", "ADMIN"],
+          required: true,
+        },
+
+        // Freeform extra context (e.g. minutesExtended, thresholdUsed)
+        // — same Mixed-type pattern as statusHistory.meta above.
+        meta: {
+          type: mongoose.Schema.Types.Mixed,
+        },
+      },
+    ],
 
     //////////////////////////////////////////////////////////
     // 🗑 SOFT DELETE
