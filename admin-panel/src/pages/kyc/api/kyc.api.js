@@ -13,6 +13,7 @@ const EP = {
   REJECT:          (id) => `/admin/kyc/${id}/reject`,
   ASSIGN:          (id) => `/admin/kyc/${id}/assign`,
   REQUEST_REUPLOAD:(id) => `/admin/kyc/${id}/request-reupload`,
+  VERIFY_BANK:     (id) => `/admin/kyc/${id}/verify-bank`,
 }
 
 const KYCAPI = {
@@ -23,6 +24,7 @@ const KYCAPI = {
   reject:           (id, body)   => apiClient.patch(EP.REJECT(id), body),
   assign:           (id, body)   => apiClient.patch(EP.ASSIGN(id), body),
   requestReupload:  (id, body)   => apiClient.patch(EP.REQUEST_REUPLOAD(id), body),
+  verifyBank:       (id, body)   => apiClient.patch(EP.VERIFY_BANK(id), body),
 }
 
 export default KYCAPI

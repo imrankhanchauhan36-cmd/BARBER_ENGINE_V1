@@ -17,6 +17,7 @@ export const ADMIN_LEVELS = {
 
 export const canApproveKYC  = (l) => ["INDIA", "STATE"].includes(l)
 export const canRejectKYC   = (l) => ["INDIA", "STATE"].includes(l)
+export const canVerifyBank  = (l) => ["INDIA", "STATE"].includes(l) // matches PATCH /admin/kyc/:id/verify-bank
 export const canManageStaff = (l) => ["INDIA", "STATE"].includes(l)
 export const canManageSalon = (l) => ["INDIA", "STATE", "DISTRICT"].includes(l)
 export const canExport      = (l) => ["INDIA", "STATE"].includes(l)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { canApproveKYC, canRejectKYC, canViewPII as canViewPIIRole } from '../../config/adminRoles'
+import { canApproveKYC, canRejectKYC, canVerifyBank as canVerifyBankRole, canViewPII as canViewPIIRole } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 import KYCAPI from './api/kyc.api'
@@ -166,6 +166,71 @@ function ReuploadModal({ onConfirm, onCancel, processing }) {
   )
 }
 
+// ─── Verify Bank Modal ────────────────────────────────────
+// PATCH .../verify-bank requires the admin to re-enter the full raw
+// account number (not just confirm the masked value on file) — this
+// mirrors the backend's own real requirement (verifyBankHandler in
+// adminKyc.controller.js), not an invented UI step. accountHolder/
+// ifsc/bankName are pre-filled from what's already visible on this
+// page (non-sensitive); the account number is never pre-filled,
+// same principle already applied in the owner-app's bank screen —
+// only a masked value is ever available to pre-fill from.
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
+
+function VerifyBankModal({ kyc, onConfirm, onCancel, processing }) {
+  const [accountHolder, setAccountHolder] = useState(kyc.bank?.accountHolder || '')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [ifsc,          setIfsc]          = useState(kyc.bank?.ifsc || '')
+  const [bankName,      setBankName]      = useState(kyc.bank?.bankName || '')
+
+  const digitsOnly = accountNumber.replace(/\D/g, '')
+  const valid = accountHolder.trim().length > 0
+    && digitsOnly.length >= 9 && digitsOnly.length <= 18
+    && IFSC_REGEX.test(ifsc.trim().toUpperCase())
+    && bankName.trim().length > 0
+
+  const fieldStyle = { width:'100%', border:'1px solid #D4C9B0', padding:'8px 10px', fontSize:'13px', fontFamily:FONTS.body, outline:'none', marginBottom:'12px', boxSizing:'border-box' }
+  const labelStyle = { fontSize:'10px', color:'#9E8E6E', fontWeight:800, letterSpacing:'1px', display:'block', marginBottom:'6px' }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'440px', border:'2px solid #059669' }}>
+        <div style={{ background:'#065F46', padding:'14px 18px', borderBottom:'2px solid #059669' }}>
+          <div style={{ color:'#fff', fontWeight:800, fontSize:'13px', letterSpacing:'1px' }}>✓ VERIFY BANK ACCOUNT</div>
+          <div style={{ color:'rgba(255,255,255,0.6)', fontSize:'10px', marginTop:'2px' }}>{v(kyc.owner?.name)} — {kyc.id}</div>
+        </div>
+        <div style={{ padding:'20px 18px' }}>
+          <div style={{ background:'#F0FDF4', border:'1px solid #D1FAE5', padding:'10px', marginBottom:'14px', fontSize:'11px', color:'#065F46', fontWeight:600 }}>
+            ℹ Re-enter the account number exactly as it appears on the cancelled cheque/passbook document to confirm this is a genuine, matching account. This unlocks payouts for the provider.
+          </div>
+
+          <label style={labelStyle}>ACCOUNT HOLDER NAME</label>
+          <input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} style={fieldStyle} placeholder="As per bank records"/>
+
+          <label style={labelStyle}>ACCOUNT NUMBER (9–18 DIGITS)</label>
+          <input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} style={fieldStyle} placeholder="Re-enter to confirm"/>
+
+          <label style={labelStyle}>IFSC CODE</label>
+          <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} style={fieldStyle} placeholder="e.g. HDFC0001234" maxLength={11}/>
+
+          <label style={labelStyle}>BANK NAME</label>
+          <input value={bankName} onChange={e => setBankName(e.target.value)} style={fieldStyle} placeholder="e.g. HDFC Bank"/>
+
+          <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end', marginTop:'4px' }}>
+            <button onClick={onCancel} style={{ background:'#fff', border:'1px solid #D4C9B0', color:'#6B5E3E', padding:'8px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer' }}>CANCEL</button>
+            <button
+              onClick={() => valid && onConfirm({ accountHolder: accountHolder.trim(), accountNumber: accountNumber.trim(), ifsc: ifsc.trim().toUpperCase(), bankName: bankName.trim() })}
+              disabled={!valid || processing}
+              style={{ background:valid?'#059669':'#F5F0E8', border:'none', color:valid?'#fff':'#C4B49A', padding:'8px 20px', fontSize:'11px', fontWeight:800, cursor:valid?'pointer':'not-allowed', opacity:processing?0.7:1 }}>
+              {processing ? 'VERIFYING...' : '✓ VERIFY BANK'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function KYCDetailPage() {
   const { id }     = useParams()
@@ -173,18 +238,20 @@ export default function KYCDetailPage() {
   const admin      = useAuthStore(s => s.admin)
   const adminLevel = admin?.adminLevel || 'INDIA'
 
-  const hasApprove = canApproveKYC(adminLevel)
-  const hasReject  = canRejectKYC(adminLevel)
-  const hasPII     = canViewPIIRole(adminLevel)
+  const hasApprove    = canApproveKYC(adminLevel)
+  const hasReject     = canRejectKYC(adminLevel)
+  const hasVerifyBank = canVerifyBankRole(adminLevel)
+  const hasPII        = canViewPIIRole(adminLevel)
 
-  const [kyc,           setKyc]          = useState(null)
-  const [loading,       setLoading]      = useState(true)
-  const [error,         setError]        = useState(null)
-  const [processing,    setProcessing]   = useState(false)
-  const [tab,           setTab]          = useState('overview')
-  const [toast,         setToast]        = useState(null)
-  const [rejectModal,   setRejectModal]  = useState(false)
-  const [reuploadModal, setReuploadModal]= useState(false)
+  const [kyc,             setKyc]            = useState(null)
+  const [loading,         setLoading]        = useState(true)
+  const [error,           setError]          = useState(null)
+  const [processing,      setProcessing]     = useState(false)
+  const [tab,             setTab]            = useState('overview')
+  const [toast,           setToast]          = useState(null)
+  const [rejectModal,     setRejectModal]    = useState(false)
+  const [reuploadModal,   setReuploadModal]  = useState(false)
+  const [verifyBankModal, setVerifyBankModal]= useState(false)
 
   const showToast = (msg, color = '#059669') => {
     setToast({ msg, color })
@@ -241,6 +308,23 @@ export default function KYCDetailPage() {
       setReuploadModal(false)
       fetchKYC()
     } catch (err) {
+      showToast(`⚠ ${err.message}`, '#DC2626')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleVerifyBank = async (body) => {
+    setProcessing(true)
+    try {
+      await KYCAPI.verifyBank(id, body)
+      showToast('✓ Bank account verified', '#059669')
+      setVerifyBankModal(false)
+      fetchKYC()
+    } catch (err) {
+      // Real backend message surfaced verbatim (e.g. invalid IFSC
+      // format, invalid account number length) — never replaced with
+      // a guessed client-side string.
       showToast(`⚠ ${err.message}`, '#DC2626')
     } finally {
       setProcessing(false)
@@ -473,16 +557,36 @@ export default function KYCDetailPage() {
                 { key:'manualReview', label:'Manual Review', level:7 },
               ].map(item => {
                 const field = vf[item.key] || {}
+                const isBankRow = item.key === 'bank'
                 return (
-                  <div key={item.key} style={{ display:'grid', gridTemplateColumns:'0.5fr 1.5fr 1fr 1fr 1fr 1fr', padding:'10px 14px', borderBottom:'1px solid #F0EAE0', alignItems:'center', gap:'8px' }}>
-                    <span style={{ fontSize:'10px', color:'#9E8E6E', fontWeight:700 }}>L{item.level}</span>
-                    <span style={{ fontSize:'12px', fontWeight:700, color:'#1A1A2E' }}>{item.label}</span>
-                    <span style={{ fontSize:'10px', fontWeight:800, background:field.verified?'#D1FAE5':'#F3F4F6', color:field.verified?'#065F46':'#9E8E6E', padding:'2px 6px', display:'inline-block' }}>
-                      {field.verified ? '✓ VERIFIED' : v(field.status)}
-                    </span>
-                    <span style={{ fontSize:'10px', color:'#9E8E6E' }}>{v(field.verificationSource)}</span>
-                    <span style={{ fontSize:'10px', color:'#9E8E6E' }}>{dt(field.verifiedAt)}</span>
-                    <span style={{ fontSize:'10px', color:'#6B5E3E' }}>{v(field.remarks)}</span>
+                  <div key={item.key} style={{ borderBottom:'1px solid #F0EAE0' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'0.5fr 1.5fr 1fr 1fr 1fr 1fr', padding:'10px 14px', alignItems:'center', gap:'8px' }}>
+                      <span style={{ fontSize:'10px', color:'#9E8E6E', fontWeight:700 }}>L{item.level}</span>
+                      <span style={{ fontSize:'12px', fontWeight:700, color:'#1A1A2E' }}>{item.label}</span>
+                      <span style={{ fontSize:'10px', fontWeight:800, background:field.verified?'#D1FAE5':'#F3F4F6', color:field.verified?'#065F46':'#9E8E6E', padding:'2px 6px', display:'inline-block' }}>
+                        {field.verified ? '✓ VERIFIED' : v(field.status)}
+                      </span>
+                      <span style={{ fontSize:'10px', color:'#9E8E6E' }}>{v(field.verificationSource)}</span>
+                      <span style={{ fontSize:'10px', color:'#9E8E6E' }}>{dt(field.verifiedAt)}</span>
+                      <span style={{ fontSize:'10px', color:'#6B5E3E' }}>{v(field.remarks)}</span>
+                    </div>
+                    {/* Bank is the one leg with a real, dedicated backend
+                        verify action (PATCH .../verify-bank) — every other
+                        row above is either OTP-driven or set as a side
+                        effect of Approve/Reject, so no separate button
+                        exists (or should exist) for them. */}
+                    {isBankRow && !field.verified && (
+                      <div style={{ padding:'0 14px 12px', display:'flex', justifyContent:'flex-end' }}>
+                        {hasVerifyBank ? (
+                          <button onClick={() => setVerifyBankModal(true)}
+                            style={{ background:'#059669', color:'#fff', border:'none', padding:'6px 14px', fontSize:'10px', fontWeight:800, cursor:'pointer' }}>
+                            ✓ VERIFY BANK
+                          </button>
+                        ) : (
+                          <span style={{ fontSize:'10px', color:'#9E8E6E' }}>No verify-bank permission</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -566,6 +670,9 @@ export default function KYCDetailPage() {
       )}
       {reuploadModal && (
         <ReuploadModal onConfirm={handleReupload} onCancel={() => setReuploadModal(false)} processing={processing}/>
+      )}
+      {verifyBankModal && (
+        <VerifyBankModal kyc={kyc} onConfirm={handleVerifyBank} onCancel={() => setVerifyBankModal(false)} processing={processing}/>
       )}
     </div>
   )

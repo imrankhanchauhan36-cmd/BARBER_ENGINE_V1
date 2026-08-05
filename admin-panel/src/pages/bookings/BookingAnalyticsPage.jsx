@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
@@ -135,18 +135,34 @@ export default function BookingAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
+  // requestIdRef guards against out-of-order responses: the "↻ REFRESH"
+  // and error-banner "RETRY" buttons both call fetchAnalytics() directly
+  // (onClick={() => fetchAnalytics()}), which uses the default
+  // isMountedFn = () => true — no staleness protection at all. A rapid
+  // double-click, or a Refresh click followed by a range change before
+  // the first request resolves, could let an older/slower response
+  // apply its state AFTER a newer one already resolved. The isMountedFn
+  // param (passed by the useEffect below) still correctly guards against
+  // unmount/superseded-effect races on its own; this ref adds the same
+  // protection for the two manually-triggered call sites, without
+  // changing either of their onClick handlers.
+  const requestIdRef = useRef(0)
+
   const fetchAnalytics = useCallback(async (isMountedFn = () => true) => {
+    const myRequestId = ++requestIdRef.current
+    const isCurrent = () => isMountedFn() && requestIdRef.current === myRequestId
+
     setLoading(true)
     setError(null)
     try {
       const res = await BookingsAPI.getAnalytics({ range })
-      if (!isMountedFn()) return
+      if (!isCurrent()) return
       setData(res.data || null)
     } catch (err) {
-      if (!isMountedFn()) return
+      if (!isCurrent()) return
       setError(err.data?.message || err.message || 'Failed to load analytics')
     } finally {
-      if (isMountedFn()) setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
   }, [range])
 
@@ -170,7 +186,7 @@ export default function BookingAnalyticsPage() {
           <span style={{ background:'rgba(184,150,12,0.2)', color:'#B8960C', fontSize:'10px', fontWeight:800, padding:'2px 8px', border:'1px solid rgba(184,150,12,0.3)' }}>{scope}</span>
         </div>
         <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-          <select value={range} onChange={e => setRange(e.target.value)}
+          <select value={range} onChange={e => setRange(e.target.value)} aria-label="Date Range"
             style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(184,150,12,0.4)', color:'#B8960C', padding:'6px 10px', fontSize:'11px', fontWeight:700, cursor:'pointer', fontFamily:FONTS.body, outline:'none' }}>
             {RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -190,7 +206,7 @@ export default function BookingAnalyticsPage() {
       {/* Sub-header */}
       <div style={{ background:'#0A1520', borderBottom:'1px solid rgba(184,150,12,0.15)', padding:'6px 20px', display:'flex', justifyContent:'space-between' }}>
         <span style={{ fontSize:'10px', color:'rgba(255,255,255,0.3)' }}>Period: <strong style={{ color:'#B8960C' }}>{RANGE_OPTIONS.find(o=>o.value===range)?.label}</strong></span>
-        <span style={{ fontSize:'10px', color:'rgba(255,255,255,0.25)' }}>Data Last Updated: <strong style={{ color:'rgba(255,255,255,0.4)' }}>{data?.lastUpdated ? new Date(data.lastUpdated).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true }) : '—'}</strong></span>
+        <span style={{ fontSize:'10px', color:'rgba(255,255,255,0.25)' }}>Data Last Updated: <strong style={{ color:'rgba(255,255,255,0.4)' }}>{data?.lastUpdated ? new Date(data.lastUpdated).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata' }) : '—'}</strong></span>
         {/* TODO (future, not blocking freeze): native Date + toLocaleString works
             correctly today. If date logic grows more complex elsewhere in the app
             (relative time, multiple timezones, parsing edge cases), standardize on
@@ -213,6 +229,21 @@ export default function BookingAnalyticsPage() {
             { label:'Total Revenue',     value: loading ? '...' : formatCompact(s?.totalRevenueRupees),          color:'#059669' },
             { label:'Platform Revenue',  value: loading ? '...' : formatCompact(s?.platformRevenueRupees),       color:'#2563EB' },
             { label:'Avg Booking Value', value: loading ? '...' : formatCurrency(s?.avgBookingValueRupees),       color:'#D97706' },
+          ].map(k => (
+            <div key={k.label} style={{ background:'#0D1B2A', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)' }}>{k.label}</span>
+              <span style={{ fontSize:'22px', fontWeight:800, color:k.color }}>{k.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Manual vs Auto — Booking Engine V2 — Phase 5 (read-only) */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1px', background:'#D4C9B0', border:'1px solid #D4C9B0', marginBottom:'14px' }}>
+          {[
+            { label:'Manual Completed', value: loading ? '...' : (s?.manualCompleted ?? 0).toLocaleString('en-IN'), color:'#059669' },
+            { label:'Auto Completed',   value: loading ? '...' : (s?.autoCompleted   ?? 0).toLocaleString('en-IN'), color:'#2563EB' },
+            { label:'Manual No Show',   value: loading ? '...' : (s?.manualNoShow    ?? 0).toLocaleString('en-IN'), color:'#D97706' },
+            { label:'Auto No Show',     value: loading ? '...' : (s?.autoNoShow      ?? 0).toLocaleString('en-IN'), color:'#DC2626' },
           ].map(k => (
             <div key={k.label} style={{ background:'#0D1B2A', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)' }}>{k.label}</span>
@@ -310,7 +341,9 @@ export default function BookingAnalyticsPage() {
 
           <BCard>
             <BCardHeader title="Top Services"/>
-            {!loading && (!data?.topServices || data.topServices.length === 0) ? (
+            {loading ? (
+              <NotAvailable label="Loading…"/>
+            ) : (!data?.topServices || data.topServices.length === 0) ? (
               <NotAvailable/>
             ) : (
               <>
@@ -322,7 +355,7 @@ export default function BookingAnalyticsPage() {
                 {(data?.topServices || []).map((sv,i) => (
                   <div key={sv.name + i} style={{ display:'grid', gridTemplateColumns:'1.5fr 0.8fr 1fr 0.8fr', padding:'10px 14px', borderBottom:'1px solid #F0EAE0', alignItems:'center', gap:'8px', background:i%2===0?'#fff':'#FDFAF6' }}>
                     <span style={{ fontSize:'12px', fontWeight:600, color:'#1A1A2E' }}>{sv.name}</span>
-                    <span style={{ fontSize:'12px', fontWeight:700, color:'#B8960C' }}>{sv.bookings.toLocaleString('en-IN')}</span>
+                    <span style={{ fontSize:'12px', fontWeight:700, color:'#B8960C' }}>{(sv.bookings ?? 0).toLocaleString('en-IN')}</span>
                     <span style={{ fontSize:'11px', color:'#059669', fontWeight:600 }}>{formatCompact(sv.estimatedRevenueRupees)}</span>
                     <span style={{ fontSize:'11px', color:'#6B5E3E' }}>{formatCurrency(sv.avgValueRupees)}</span>
                   </div>
@@ -335,7 +368,7 @@ export default function BookingAnalyticsPage() {
           <BCard>
             <BCardHeader title="Payment Status"/>
             <div style={{ padding:'16px' }}>
-              {loading || !data?.paymentStatusSplit?.length ? <NotAvailable/> : (
+              {loading ? <NotAvailable label="Loading…"/> : !data?.paymentStatusSplit?.length ? <NotAvailable/> : (
                 <>
                   <div style={{ marginBottom:'16px' }}>
                     <svg width="100%" viewBox="0 0 120 120">
@@ -368,7 +401,7 @@ export default function BookingAnalyticsPage() {
                         </div>
                         <div style={{ textAlign:'right' }}>
                           <div style={{ fontSize:'13px', fontWeight:800, color }}>{p.pct}%</div>
-                          <div style={{ fontSize:'10px', color:'#9E8E6E' }}>{p.count.toLocaleString('en-IN')}</div>
+                          <div style={{ fontSize:'10px', color:'#9E8E6E' }}>{(p.count ?? 0).toLocaleString('en-IN')}</div>
                         </div>
                       </div>
                     )
@@ -385,7 +418,9 @@ export default function BookingAnalyticsPage() {
             {['STATE','DISTRICT'].includes(adminLevel) && (
               <InfoNote>ℹ Showing data scoped to your territory. Full view available to INDIA admin.</InfoNote>
             )}
-            {!loading && (!data?.topStates || data.topStates.length === 0) ? (
+            {loading ? (
+              <NotAvailable label="Loading…"/>
+            ) : (!data?.topStates || data.topStates.length === 0) ? (
               <NotAvailable/>
             ) : (
               <>
@@ -399,7 +434,7 @@ export default function BookingAnalyticsPage() {
                     <span style={{ fontSize:'12px', fontWeight:800, color:'#9E8E6E' }}>#{i+1}</span>
                     <div>
                       <div style={{ fontSize:'12px', fontWeight:700, color:'#1A1A2E' }}>{st.code}</div>
-                      <div style={{ fontSize:'10px', color:'#9E8E6E' }}>{st.bookings.toLocaleString('en-IN')} bookings</div>
+                      <div style={{ fontSize:'10px', color:'#9E8E6E' }}>{(st.bookings ?? 0).toLocaleString('en-IN')} bookings</div>
                     </div>
                     <span style={{ fontSize:'12px', fontWeight:700, color:'#B8960C' }}>{formatCompact(Math.round((st.revenuePaise ?? 0)/100))}</span>
                     <span style={{ fontSize:'12px', fontWeight:700, color:st.cancelRate>8?'#DC2626':'#059669' }}>{st.cancelRate}%</span>
