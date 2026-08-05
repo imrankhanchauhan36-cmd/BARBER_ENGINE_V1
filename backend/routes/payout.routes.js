@@ -13,6 +13,7 @@ import { requireRole } from "../middlewares/role.middleware.js";
 
 import {
   cancelWithdrawal,
+  getLedger,
   getPayoutHistory,
   getWallet,
   requestWithdrawal,
@@ -33,6 +34,7 @@ router.get ("/wallet",       protect, requireRole("OWNER"), asyncHandler(getWall
 router.post("/withdraw",     protect, requireRole("OWNER"), asyncHandler(requestWithdrawal));
 router.post("/cancel/:id",   protect, requireRole("OWNER"), asyncHandler(cancelWithdrawal));
 router.get ("/history",      protect, requireRole("OWNER"), asyncHandler(getPayoutHistory));
+router.get ("/ledger",       protect, requireRole("OWNER"), asyncHandler(getLedger));
 
 // ── Admin Routes ──────────────────────────────────────────
 router.get  ("/admin/summary",      protect, requireRole("ADMIN"), requireAdminLevel("INDIA","STATE"), asyncHandler(getPayoutSummary));

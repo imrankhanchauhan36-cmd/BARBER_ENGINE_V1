@@ -105,10 +105,23 @@ router.post("/admin/login", adminLoginLimiter, async (req, res) => {
         message: "Credentials required",
       });
 
+    // ✅ Fix — was `.select("+password tokenVersion")`. Mixing a bare
+    // (inclusive) field name with a `+field` switches Mongoose into
+    // inclusion-only mode, so the fetched doc only ever had _id/
+    // password/tokenVersion — every other field, including adminLevel,
+    // was silently undefined. generateAccessToken() reads
+    // user.adminLevel directly off this object, so every admin who
+    // logged in via password got a JWT with adminLevel:null regardless
+    // of their real DB value — silently failing every
+    // requireAdminLevel() gate app-wide. tokenVersion is itself
+    // select:false on the schema (models/User.js), so it still needs
+    // its own `+` — using `+password +tokenVersion` un-hides exactly
+    // those two normally-hidden fields while leaving every other
+    // normally-visible field (adminLevel included) in place.
     const admin = await User.findOne({
       phone,
       role: "ADMIN",
-    }).select("+password tokenVersion");
+    }).select("+password +tokenVersion");
 
     if (!admin)
       return res.status(401).json({

@@ -3,6 +3,11 @@
  * backend/controllers/adminPayout.controller.js
  * Admin Payout Controller — Phase 7 — 10/10 FROZEN
  * + Phase 8 additions: fixed salon populate bug, new getPayoutDetail endpoint
+ * + Phase 4A: approvePayout no longer inlines "how a payout is
+ *   executed" — it delegates to SettlementEngine, which resolves and
+ *   calls the right provider (ManualProvider today). Same API
+ *   contract, same DB writes, same idempotency keys — see
+ *   services/settlement/ for the new architecture.
  */
 
 import mongoose from "mongoose";
@@ -11,6 +16,7 @@ import Salon from "../models/Salon.js";
 import User from "../models/User.js";
 import KYC from "../modules/kyc/models/KYC.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
+import SettlementEngine from "../services/settlement/SettlementEngine.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -53,35 +59,18 @@ export const approvePayout = async (req, res, next) => {
     const { utr, adminNote } = req.body;
     const adminId = req.user?._id ?? null;
 
-    await WalletBalanceService.moveToProcessing({
-      salonId:       payout.salonId,
-      amountInPaise: payout.amountInPaise,
-      entityType:    "WITHDRAWAL",
-      entityId:      payout._id,
-      idempotencyKey:`payout:processing:${payout._id}`,
-      session,
-      triggeredBy:   "ADMIN",
-      triggeredById: adminId,
-      remarks:       adminNote || "Admin approved — moved to processing",
-    });
+    // Controller no longer knows HOW this payout gets executed — it
+    // only knows it wants it executed, and persists whatever the
+    // engine reports back. See services/settlement/SettlementEngine.js.
+    const result = await SettlementEngine.execute({ payout, adminId, utr, adminNote, session });
 
-    await WalletBalanceService.completePayout({
-      salonId:       payout.salonId,
-      amountInPaise: payout.amountInPaise,
-      entityType:    "WITHDRAWAL",
-      entityId:      payout._id,
-      idempotencyKey:`payout:complete:${payout._id}`,
-      session,
-      triggeredBy:   "ADMIN",
-      triggeredById: adminId,
-      remarks:       utr ? `UTR: ${utr}` : "Manual payout confirmed",
-    });
-
-    payout.status     = PAYOUT_STATUS.PAID;
-    payout.approvedBy = adminId;
-    payout.approvedAt = new Date();
-    payout.utr        = utr       || null;
-    payout.adminNote  = adminNote || null;
+    payout.status           = result.status;
+    payout.approvedBy       = adminId;
+    payout.approvedAt       = new Date();
+    payout.utr              = result.utr;
+    payout.adminNote        = adminNote || null;
+    payout.providerPayoutId = result.providerPayoutId;
+    payout.providerResponse = result.providerResponse;
     await payout.save({ session });
 
     await session.commitTransaction();

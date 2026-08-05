@@ -8,6 +8,8 @@ import mongoose from "mongoose";
 import PayoutRequest, { PAYOUT_STATUS } from "../models/PayoutRequest.js";
 import Salon from "../models/Salon.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
+import WalletLedger from "../models/WalletLedger.js";
+import KYC from "../modules/kyc/models/KYC.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 // ✅ Fix — SalonEarnings import REMOVED (unused)
@@ -93,17 +95,27 @@ export const requestWithdrawal = async (req, res, next) => {
       return next(Errors.notFound("Salon not found"));
     }
 
+    // ✅ Wallet Phase 3C — bank verification gate. Reuses the existing
+    // KYC.verification.bank.verified field (set only via the admin
+    // PATCH .../verify-bank action) as the sole source of truth — no
+    // new field, no new status value, no new model. Covers all of:
+    // no KYC record, no bank submitted, bank pending, bank rejected —
+    // every one of those leaves verification.bank.verified !== true.
+    const kyc = await KYC.findOne({ ownerId, isDeleted: { $ne: true } })
+      .select("verification.bank.verified")
+      .session(session)
+      .lean();
+
+    if (kyc?.verification?.bank?.verified !== true) {
+      await session.abortTransaction();
+      return next(Errors.forbidden("Your bank account must be verified before you can request a withdrawal. Please complete KYC bank verification first."));
+    }
+
     const { amountInPaise } = req.body;
 
     if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
       await session.abortTransaction();
       return next(Errors.badRequest("amountInPaise must be a positive integer"));
-    }
-    // ✅ Minor 1 — whole rupees only (no paise fractions)
-    // India me ₹0.50 withdrawals support nahi hote — enterprise standard
-    if (amountInPaise % 100 !== 0) {
-      await session.abortTransaction();
-      return next(Errors.badRequest("amountInPaise must be a whole rupee amount (multiple of 100)"));
     }
     if (amountInPaise < MIN_PAISE) {
       await session.abortTransaction();
@@ -277,6 +289,74 @@ export const getPayoutHistory = async (req, res, next) => {
         cancelledAt:    p.cancelledAt,
         failureReason:  p.failureReason,
         createdAt:      p.createdAt,
+      })),
+      pagination: {
+        page:       pageNum,
+        limit:      limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum) || 1,
+      },
+    });
+  } catch (err) { next(err) }
+};
+
+/**
+ * GET /api/payouts/ledger
+ *
+ * Wallet Phase 3B — owner-facing WalletLedger read. Mirrors
+ * adminFinance.controller.js's getSalonLedger exactly (same query
+ * shape, same pagination convention) but salonId is ALWAYS derived
+ * from the authenticated owner (never a client-supplied param, as
+ * the admin route takes) — an owner can only ever see their own
+ * salon's ledger. Read-only; does not touch WalletBalanceService,
+ * does not write anything.
+ *
+ * entityType/entityId are the real, generic fields WalletLedger
+ * actually stores — there is no separate bookingId/payoutId column.
+ * bookingId/payoutId below are derived, not stored, exactly mirroring
+ * the only two entityType values anything in this codebase ever
+ * writes ("BOOKING" and "WITHDRAWAL" — "PAYOUT" is defined in the
+ * enum but never used at any real write site, verified by grep).
+ */
+export const getLedger = async (req, res, next) => {
+  try {
+    const ownerId = req.user._id;
+    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").lean();
+    if (!salon) return next(Errors.notFound("Salon not found"));
+
+    const pageNum  = Math.max(parseInt(req.query.page  ?? 1,  10), 1);
+    const limitNum = Math.min(Math.max(parseInt(req.query.limit ?? 20, 10), 1), 100);
+    const skip     = (pageNum - 1) * limitNum;
+
+    const filter = { salonId: salon._id };
+
+    const [entries, total] = await Promise.all([
+      WalletLedger.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      WalletLedger.countDocuments(filter),
+    ]);
+
+    return successResponse(res, {
+      message: "Wallet ledger fetched",
+      data: entries.map(e => ({
+        id:             e._id,
+        direction:      e.direction,
+        bucket:         e.bucket,
+        action:         e.action,
+        amountInPaise:  e.amountInPaise,
+        amountInRupees: p2(e.amountInPaise),
+        currency:       e.currency ?? "INR",
+        entityType:     e.entityType,
+        entityId:       e.entityId,
+        bookingId:      e.entityType === "BOOKING"    ? e.entityId : null,
+        payoutId:       e.entityType === "WITHDRAWAL" ? e.entityId : null,
+        balanceAfter:   e.balanceAfter ?? null,
+        triggeredBy:    e.triggeredBy,
+        remarks:        e.remarks ?? null,
+        createdAt:      e.createdAt,
       })),
       pagination: {
         page:       pageNum,
