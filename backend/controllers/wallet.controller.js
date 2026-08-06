@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import User from "../models/User.js";
 import WalletTransaction, {
     WALLET_TXN_DIRECTION,
@@ -237,6 +238,8 @@ export const verifyTopup = async (req, res) => {
     await NotificationService.send({
       recipientId:   userId,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.WALLET_CREDIT,
+      variables:     { amount: Math.round(amountRupees) },
       title:         "Wallet Credited",
       message:       `₹${Math.round(amountRupees)} has been added to your wallet.`,
       type:          "PAYMENT",
@@ -448,6 +451,8 @@ export const mockVerifyTopup = async (req, res) => {
     await NotificationService.send({
       recipientId:   userId,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.WALLET_CREDIT,
+      variables:     { amount: Math.round(amountRupees) },
       title:         "Wallet Credited",
       message:       `₹${Math.round(amountRupees)} has been added to your wallet.`,
       type:          "PAYMENT",

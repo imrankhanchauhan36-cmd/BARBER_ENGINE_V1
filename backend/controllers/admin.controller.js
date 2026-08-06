@@ -3,6 +3,8 @@ import District from "../models/District.js";
 import Salon from "../models/Salon.js";
 import State from "../models/State.js";
 import User from "../models/User.js";
+import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 /**
@@ -171,6 +173,26 @@ export const updateSalonStatus = async (req, res, next) => {
       },
       { new: true }
     );
+
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after write)
+    //////////////////////////////////////////////////////
+
+    await NotificationService.send({
+      recipientId:   updated._id,
+      recipientType: "SALON",
+      templateKey:   status === "APPROVED" ? NOTIFICATION_EVENTS.SALON_APPROVED : NOTIFICATION_EVENTS.SALON_REJECTED,
+      variables:      status === "REJECTED" ? { reason: updated.approval?.rejectionReason || "Not specified" } : {},
+      title:         status === "APPROVED" ? "Salon Approved ✅" : "Salon Application Rejected",
+      message:       status === "APPROVED"
+        ? "Congratulations! Your salon has been approved and is now live."
+        : `Your salon application was rejected. Reason: ${updated.approval?.rejectionReason || "Not specified"}`,
+      type:          "SYSTEM",
+      priority:      "HIGH",
+      actionType:    "OPEN_SALON",
+      actionUrl:     "/salon/profile",
+      meta:          { salonId: updated._id },
+    });
 
     return successResponse(res, { message: "Salon status updated", data: updated });
   } catch (err) {

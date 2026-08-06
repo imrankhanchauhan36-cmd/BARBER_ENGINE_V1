@@ -24,6 +24,7 @@ import masterRoutes from "./routes/master.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import notificationPreferencesRoutes from "./routes/notificationPreferences.routes.js";
 import userNotificationRoutes from "./routes/userNotification.routes.js";
+import deviceTokenRoutes from "./routes/deviceToken.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import payoutRoutes from "./routes/payout.routes.js";
 import ratingRoutes from "./routes/rating.routes.js";
@@ -187,6 +188,10 @@ app.use("/api/salon", salonRoutes);
 /////////////////////////////////////////////////////////
 //NOTIFICATION ROUTES
 ////////////////////////////////////////////////////////
+// Mounted before /api/notifications (more specific prefix first) so
+// this never relies on falling through notificationRoutes' own
+// (unmatched) route table — notification.routes.js itself is untouched.
+app.use("/api/notifications/device-tokens", deviceTokenRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/user/notifications/preferences", notificationPreferencesRoutes);
 app.use("/api/user/notifications", userNotificationRoutes);

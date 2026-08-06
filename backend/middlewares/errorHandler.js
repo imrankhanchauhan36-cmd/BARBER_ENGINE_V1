@@ -57,6 +57,26 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // ── 2b. MongoDB Transient Transaction / Write Conflict ───────────
+  // Two concurrent transactions racing on the same document (e.g.
+  // two simultaneous withdrawal requests both writing the same
+  // SalonEarnings doc inside WalletBalanceService.hold()) — the
+  // storage engine correctly aborts the losing transaction rather
+  // than corrupting data (code 112 "WriteConflict", labeled
+  // "TransientTransactionError" by the driver). Same underlying
+  // class of error as the duplicate-key case above, different
+  // MongoDB-level shape — must not leak the raw driver error to the
+  // client. Same detection already used locally in
+  // booking.controller.js (lockSlot/cancelBooking); centralized here
+  // so every next(err) caller gets it for free.
+  if (typeof err.hasErrorLabel === "function" && err.hasErrorLabel("TransientTransactionError")) {
+    return errorResponse(res, {
+      statusCode: 409,
+      message:    "This request conflicted with another in-flight operation. Please try again.",
+      code:       "CONFLICT",
+    });
+  }
+
   // ── 3. Mongoose Cast Error ───────────────────────────────────────
   if (err instanceof mongoose.Error.CastError) {
     return errorResponse(res, {

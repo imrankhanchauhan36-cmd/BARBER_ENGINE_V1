@@ -10,6 +10,8 @@
 
 import Salon from "../../../models/Salon.js";
 import User from "../../../models/User.js";
+import NotificationService from "../../../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../../../utils/response.js";
 import { KYC_STATUS } from "../constants/kyc.constants.js";
 import { toDetailDTO, toListDTO, toSummaryDTO } from "../dto/adminKyc.dto.js";
@@ -246,6 +248,27 @@ export const approveKYCHandler = async (req, res, next) => {
       requestId:  req.requestId ?? null,
     });
 
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after write)
+    //////////////////////////////////////////////////////
+
+    const kycSalon = await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean();
+    if (kycSalon) {
+      await NotificationService.send({
+        recipientId:   kycSalon._id,
+        recipientType: "SALON",
+        templateKey:   NOTIFICATION_EVENTS.KYC_APPROVED,
+        variables:     {},
+        title:         "KYC Approved ✅",
+        message:       "Your KYC verification has been approved.",
+        type:          "SYSTEM",
+        priority:      "HIGH",
+        actionType:    "OPEN_PROFILE",
+        actionUrl:     "/kyc",
+        meta:          { kycId: updated._id },
+      });
+    }
+
     return successResponse(res, {
       message: "KYC approved successfully",
       data: { id: updated._id, status: updated.status, approvedAt: updated.approvedAt, expiresAt: updated.expiresAt },
@@ -280,6 +303,27 @@ export const rejectKYCHandler = async (req, res, next) => {
       reason:     req.body.reason.trim(),
       requestId:  req.requestId ?? null,
     });
+
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after write)
+    //////////////////////////////////////////////////////
+
+    const kycSalon = await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean();
+    if (kycSalon) {
+      await NotificationService.send({
+        recipientId:   kycSalon._id,
+        recipientType: "SALON",
+        templateKey:   NOTIFICATION_EVENTS.KYC_REJECTED,
+        variables:     { reason: req.body.reason.trim() },
+        title:         "KYC Rejected",
+        message:       `Your KYC verification was rejected. Reason: ${req.body.reason.trim()}`,
+        type:          "SYSTEM",
+        priority:      "HIGH",
+        actionType:    "OPEN_PROFILE",
+        actionUrl:     "/kyc",
+        meta:          { kycId: updated._id },
+      });
+    }
 
     return successResponse(res, {
       message: "KYC rejected",

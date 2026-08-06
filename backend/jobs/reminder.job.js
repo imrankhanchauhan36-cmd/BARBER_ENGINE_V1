@@ -44,6 +44,7 @@
 
 import Booking from "../models/Booking.js";
 import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
 
@@ -68,7 +69,7 @@ let isRunning = false;
 // 🔐 RUN ONE REMINDER PASS (30-min or 5-min)
 //////////////////////////////////////////////////////////////
 
-const runReminderPass = async ({ windowMs, sentAtField, label, buildMessage, now }) => {
+const runReminderPass = async ({ windowMs, sentAtField, label, buildMessage, templateKey, now }) => {
   const query = {
     status:               BOOKING_STATUS.CONFIRMED,
     [sentAtField]:         null,
@@ -101,6 +102,8 @@ const runReminderPass = async ({ windowMs, sentAtField, label, buildMessage, now
       await NotificationService.send({
         recipientId:   booking.userRef,
         recipientType: "USER",
+        templateKey,
+        variables:     { serviceNames },
         title:         label,
         message:       buildMessage(serviceNames),
         type:          "BOOKING",
@@ -141,6 +144,7 @@ const runReminderJob = async () => {
         sentAtField: "reminder30MinSentAt",
         label:       "Appointment Reminder",
         buildMessage: (services) => `Your appointment for ${services} is in 30 minutes.`,
+        templateKey: NOTIFICATION_EVENTS.BOOKING_REMINDER_30MIN,
         now,
       }),
       runReminderPass({
@@ -148,6 +152,7 @@ const runReminderJob = async () => {
         sentAtField: "reminder5MinSentAt",
         label:       "Appointment Starting Soon",
         buildMessage: (services) => `Your appointment for ${services} is in 5 minutes — please head to the salon.`,
+        templateKey: NOTIFICATION_EVENTS.BOOKING_REMINDER_5MIN,
         now,
       }),
     ]);

@@ -101,6 +101,7 @@ import Service from "../models/Service.js";
 import Transaction, { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../models/Transaction.js";
 import SalonEarnings from "../models/SalonEarnings.js";
 import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import { invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
@@ -384,6 +385,7 @@ const autoCompleteOneBooking = async (candidateId, now) => {
     await NotificationService.send({
       recipientId:   booking.salonRef,
       recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_AUTO_COMPLETED_SALON,
       title:         "Service Auto-Completed",
       message:       "Service auto-completed — chair is now free.",
       type:          "BOOKING",
@@ -394,6 +396,7 @@ const autoCompleteOneBooking = async (candidateId, now) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_AUTO_COMPLETED_USER,
       title:         "Service Completed",
       message:       "Your service duration ended. Booking automatically completed. Chair released.",
       type:          "BOOKING",

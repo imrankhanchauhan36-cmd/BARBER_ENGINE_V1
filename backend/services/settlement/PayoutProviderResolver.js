@@ -12,6 +12,7 @@
 
 import { PAYOUT_PROVIDER } from "../../models/PayoutRequest.js";
 import ManualProvider from "./providers/ManualProvider.js";
+import { AppError } from "../../utils/response.js";
 
 const PROVIDERS = Object.freeze({
   [PAYOUT_PROVIDER.MANUAL]: ManualProvider,
@@ -30,9 +31,10 @@ const PayoutProviderResolver = Object.freeze({
   resolve: (payoutProvider) => {
     const provider = PROVIDERS[payoutProvider];
     if (!provider) {
-      throw Object.assign(
-        new Error(`No settlement provider implemented for "${payoutProvider}"`),
-        { status: 501 }
+      throw new AppError(
+        `No settlement provider implemented for "${payoutProvider}"`,
+        501,
+        "NOT_IMPLEMENTED"
       );
     }
     return provider;

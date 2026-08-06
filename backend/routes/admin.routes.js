@@ -23,6 +23,7 @@ import {
   getSalonLedger,
   getStatePerformance,
   getTopSalons,
+  getTransaction,
   getWalletDetail,
   listTransactions,
   listWallets
@@ -229,6 +230,7 @@ router.get("/finance/analytics/top-salons",     requireAdminLevel("INDIA","STATE
 router.get("/finance/wallets",          requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(listWallets));
 router.get("/finance/wallets/:salonId", requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getWalletDetail));
 router.get("/finance/transactions",     requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(listTransactions));
+router.get("/finance/transactions/:id", requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getTransaction));
 router.get  ("/finance/ledger/:salonId",  requireAdminLevel("INDIA","STATE"),            asyncHandler(getSalonLedger));
 router.patch("/finance/wallets/:id/freeze", requireAdminLevel("INDIA"),                   asyncHandler(freezeWallet));
 

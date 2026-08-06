@@ -17,6 +17,8 @@ import User from "../models/User.js";
 import KYC from "../modules/kyc/models/KYC.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import SettlementEngine from "../services/settlement/SettlementEngine.js";
+import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -74,6 +76,24 @@ export const approvePayout = async (req, res, next) => {
     await payout.save({ session });
 
     await session.commitTransaction();
+
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after commit)
+    //////////////////////////////////////////////////////
+
+    await NotificationService.send({
+      recipientId:   payout.salonId,
+      recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.WITHDRAW_APPROVED,
+      variables:     { amount: p2(payout.amountInPaise) },
+      title:         "Withdrawal Approved ✅",
+      message:       `Your withdrawal of ₹${p2(payout.amountInPaise)} has been approved and processed.`,
+      type:          "PAYMENT",
+      priority:      "HIGH",
+      actionType:    "OPEN_WALLET",
+      actionUrl:     "/wallet",
+      meta:          { payoutId: payout._id, amountInPaise: payout.amountInPaise, utr: payout.utr },
+    });
 
     const wallet = await WalletBalanceService.getWallet(payout.salonId);
 
@@ -140,6 +160,24 @@ export const rejectPayout = async (req, res, next) => {
     await payout.save({ session });
 
     await session.commitTransaction();
+
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after commit)
+    //////////////////////////////////////////////////////
+
+    await NotificationService.send({
+      recipientId:   payout.salonId,
+      recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.WITHDRAW_REJECTED,
+      variables:     { amount: p2(payout.amountInPaise), reason: adminNote },
+      title:         "Withdrawal Rejected",
+      message:       `Your withdrawal request of ₹${p2(payout.amountInPaise)} was rejected. Reason: ${adminNote}`,
+      type:          "PAYMENT",
+      priority:      "HIGH",
+      actionType:    "OPEN_WALLET",
+      actionUrl:     "/wallet",
+      meta:          { payoutId: payout._id, amountInPaise: payout.amountInPaise },
+    });
 
     const wallet = await WalletBalanceService.getWallet(payout.salonId);
 

@@ -10,6 +10,8 @@ import Salon from "../models/Salon.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import WalletLedger from "../models/WalletLedger.js";
 import KYC from "../modules/kyc/models/KYC.js";
+import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 // ✅ Fix — SalonEarnings import REMOVED (unused)
@@ -156,6 +158,24 @@ export const requestWithdrawal = async (req, res, next) => {
     });
 
     await session.commitTransaction();
+
+    //////////////////////////////////////////////////////
+    // 📬 NOTIFICATION (non-blocking, after commit)
+    //////////////////////////////////////////////////////
+
+    await NotificationService.send({
+      recipientId:   salon._id,
+      recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.WITHDRAW_REQUESTED,
+      variables:     { amount: p2(amountInPaise) },
+      title:         "Withdrawal Requested",
+      message:       `Your withdrawal request for ₹${p2(amountInPaise)} has been submitted.`,
+      type:          "PAYMENT",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_WALLET",
+      actionUrl:     "/wallet",
+      meta:          { payoutId: payout._id, amountInPaise },
+    });
 
     return successResponse(res, {
       message: "Withdrawal request submitted",

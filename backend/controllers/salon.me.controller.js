@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Chair from "../models/Chair.js";
 import District from "../models/District.js";
+import Notification from "../models/Notification.js";
 import Rating from "../models/Rating.js";
 import Salon from "../models/Salon.js";
 import SalonEarnings from "../models/SalonEarnings.js";
@@ -120,6 +121,7 @@ export const getDashboardStats = async (req, res) => {
       services,
       ratingResult,
       topServicesResult,
+      unreadNotifications,
     ] = await Promise.all([
 
       Booking.countDocuments({
@@ -284,6 +286,17 @@ export const getDashboardStats = async (req, res) => {
           },
         },
       ]),
+
+      // Same filter shape as notification.controller.js's getNotifications
+      // unreadCount — covered by the compound index on Notification
+      // (recipientId+recipientType+isRead+isArchived) built for exactly
+      // this badge use case.
+      Notification.countDocuments({
+        recipientId:   salonId,
+        recipientType: "SALON",
+        isRead:        false,
+        isArchived:    false,
+      }),
     ]);
 
     return res.status(200).json({
@@ -314,6 +327,11 @@ export const getDashboardStats = async (req, res) => {
         averageRating:   Number(ratingResult?.[0]?.averageRating?.toFixed(1) || 0),
         totalReviews:    ratingResult?.[0]?.totalReviews || 0,
         topServices:     topServicesResult || [],
+
+        // Consumed by DashboardHeader/DashboardBottomTab's unread badge
+        // via stats.unreadNotifications — same query notification.controller.js's
+        // getNotifications already uses for its own unreadCount.
+        unreadNotifications: unreadNotifications || 0,
 
         // Consumed by SalonWorkingHoursScreen.js via res.data.salon.timings
         // and res.data.salon.business.isForceClosed — did not exist on this

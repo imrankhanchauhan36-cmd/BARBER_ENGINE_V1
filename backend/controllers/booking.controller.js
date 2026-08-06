@@ -19,6 +19,7 @@ import WalletTransaction, {
 import CancellationPolicyService from "../services/CancellationPolicyService.js";
 import CommissionService from "../services/CommissionService.js";
 import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { sendOtpSms } from "../services/sms.service.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
@@ -246,31 +247,38 @@ const hashOtp = (otp) =>
  *
  * Call BEFORE confirming any booking or recording any transaction.
  * Throws with { status } attached so the catch block can return the right HTTP code.
+ *
+ * SECURITY FIX — the bypass below now requires THREE conditions
+ * simultaneously (previously NODE_ENV alone), so a single misconfigured
+ * environment variable can never silently disable verification, and a
+ * real "RAZORPAY" payment can never take the bypass path even in
+ * development — only the explicit "MOCK_RAZORPAY" paymentMethod can.
  */
-const verifyRazorpaySignature = ({ orderId, paymentId, signature }) => {
-  // ── DEV / TEST BYPASS ──────────────────────────────────────────────────────
-  // When NODE_ENV is not "production", skip Razorpay verification entirely.
-  // This lets you test the full booking lifecycle locally with fake paymentIds
-  // without needing real Razorpay credentials.
-  //
-  // In production this block is never entered — real signature is verified.
-  //
-  // Your .env.development:
-  //   NODE_ENV=development        ← bypass active
-  //
-  // Your .env.production:
-  //   NODE_ENV=production         ← bypass skipped, real verification runs
-  //   RAZORPAY_KEY_SECRET=rzp_live_xxxxx
+const verifyRazorpaySignature = ({ orderId, paymentId, signature, paymentMethod }) => {
+  // ── EXPLICIT MOCK-PAYMENT TEST BYPASS ───────────────────────────────────────
+  // ALL THREE must be true — losing any one of them forces the real
+  // verification below to run:
+  //   1. NODE_ENV !== "production"
+  //   2. RAZORPAY_ALLOW_TEST_BYPASS === "true"  (must be explicitly opted into —
+  //      never set this in a real .env.production)
+  //   3. paymentMethod === "MOCK_RAZORPAY"       (never "RAZORPAY" — a real
+  //      Razorpay payment always goes through full verification, regardless
+  //      of NODE_ENV or the bypass flag)
   // ──────────────────────────────────────────────────────────────────────────
-  if (process.env.NODE_ENV !== "production") {
+  const isMockBypassAllowed =
+    process.env.NODE_ENV !== "production" &&
+    process.env.RAZORPAY_ALLOW_TEST_BYPASS === "true" &&
+    paymentMethod === "MOCK_RAZORPAY";
+
+  if (isMockBypassAllowed) {
     console.warn(
-      "[Razorpay] Signature verification SKIPPED — development mode. " +
-      "Never disable this in production."
+      "[Razorpay] Signature verification SKIPPED — explicit MOCK_RAZORPAY test bypass active. " +
+      "Never set RAZORPAY_ALLOW_TEST_BYPASS in production."
     );
     return; // bypass — no further checks
   }
 
-  // ── PRODUCTION: full verification ─────────────────────────────────────────
+  // ── FULL VERIFICATION (unchanged) ───────────────────────────────────────────
 
   if (!RAZORPAY_KEY_SECRET) {
     throw Object.assign(
@@ -647,7 +655,7 @@ export const confirmBooking = async (req, res) => {
   try {
     const {
       bookingId,
-      paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET"
+      paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET" | "MOCK_RAZORPAY" (test bypass only — see verifyRazorpaySignature)
       paymentId,         // razorpay_payment_id — required only for RAZORPAY
       orderId,           // razorpay_order_id — required only for RAZORPAY
       razorpaySignature, // razorpay_signature — required only for RAZORPAY
@@ -672,7 +680,28 @@ export const confirmBooking = async (req, res) => {
       // 🔐 RAZORPAY SIGNATURE VERIFICATION (server-side)
       //////////////////////////////////////////////////////////
 
-      verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature });
+      try {
+        verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature, paymentMethod });
+      } catch (verifyErr) {
+        // 📬 NOTIFICATION (non-blocking) — real gateway-level payment
+        // failure, distinct from the booking-validation errors below
+        // (hold expired, slot conflict, etc.) which are not payment
+        // failures and intentionally do not send this notification.
+        await NotificationService.send({
+          recipientId:   req.user._id,
+          recipientType: "USER",
+          templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
+          variables:     {},
+          title:         "Payment Failed",
+          message:       "Your payment could not be verified. Please try again.",
+          type:          "PAYMENT",
+          priority:      "HIGH",
+          actionType:    null,
+          actionUrl:     null,
+          meta:          { bookingId },
+        });
+        throw verifyErr;
+      }
     }
 
       //////////////////////////////////////////////////////////
@@ -786,6 +815,22 @@ export const confirmBooking = async (req, res) => {
       const balanceBeforeInPaise = Math.round((userBefore.walletBalance || 0) * 100);
 
       if (balanceBeforeInPaise < amount) {
+        // 📬 NOTIFICATION (non-blocking) — real payment failure for a
+        // WALLET-method attempt (insufficient funds), same class of
+        // event as the Razorpay signature-failure notification above.
+        await NotificationService.send({
+          recipientId:   req.user._id,
+          recipientType: "USER",
+          templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
+          variables:     {},
+          title:         "Payment Failed",
+          message:       "Payment failed — insufficient wallet balance.",
+          type:          "PAYMENT",
+          priority:      "HIGH",
+          actionType:    "OPEN_WALLET",
+          actionUrl:     "/wallet",
+          meta:          { bookingId: booking._id },
+        });
         throw Object.assign(
           new Error("Insufficient wallet balance"),
           { status: 400 }
@@ -805,6 +850,21 @@ export const confirmBooking = async (req, res) => {
       if (!updatedUser) {
         // Balance changed between the read above and this write
         // (concurrent debit) — fail safe rather than overdraw.
+        // 📬 NOTIFICATION (non-blocking) — same real payment-failure
+        // class as the pre-check above.
+        await NotificationService.send({
+          recipientId:   req.user._id,
+          recipientType: "USER",
+          templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
+          variables:     {},
+          title:         "Payment Failed",
+          message:       "Payment failed — insufficient wallet balance.",
+          type:          "PAYMENT",
+          priority:      "HIGH",
+          actionType:    "OPEN_WALLET",
+          actionUrl:     "/wallet",
+          meta:          { bookingId: booking._id },
+        });
         throw Object.assign(
           new Error("Insufficient wallet balance"),
           { status: 400 }
@@ -935,6 +995,8 @@ export const confirmBooking = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CONFIRMED,
+      variables:     { time: bookingTimeStr },
       title:         "Booking Confirmed",
       message:       `Your appointment is confirmed for today at ${bookingTimeStr}.`,
       type:          "BOOKING",
@@ -942,6 +1004,23 @@ export const confirmBooking = async (req, res) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    });
+
+    // Distinct from BOOKING_CONFIRMED above — a separate, finance-focused
+    // notification for the payment itself, matching the reserved
+    // PAYMENT_SUCCESS event in the registry.
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.PAYMENT_SUCCESS,
+      variables:     { amount: Math.round(amount / 100) },
+      title:         "Payment Successful",
+      message:       `Your payment of ₹${Math.round(amount / 100)} was successful.`,
+      type:          "PAYMENT",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id, amountInPaise: amount },
     });
 
     return res.status(200).json({
@@ -968,7 +1047,7 @@ export const confirmBooking = async (req, res) => {
 
 
     console.error("confirmBooking error:", error);
-    return res.status(error.status || 500).json({
+    return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Booking confirmation failed",
     });
@@ -1158,6 +1237,7 @@ export const checkInBooking = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CHECKED_IN,
       title:         "Checked In",
       message:       "You're checked in. The salon will start your service shortly.",
       type:          "BOOKING",
@@ -1249,6 +1329,7 @@ export const startService = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_STARTED,
       title:         "Service Started",
       message:       "Your service has started. Sit back and relax!",
       type:          "BOOKING",
@@ -1442,6 +1523,7 @@ export const completeService = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.salonRef,
       recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_COMPLETED_SALON,
       title:         "Service Completed ✅",
       message:       `Service completed. Chair is now free.`,
       type:          "BOOKING",
@@ -1452,6 +1534,7 @@ export const completeService = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_COMPLETED_USER,
       title:         "Service Completed",
       message:       "Your service is complete. Thank you for booking with us!",
       type:          "BOOKING",
@@ -1497,7 +1580,7 @@ export const completeService = async (req, res) => {
     session.endSession();
 
     console.error("completeService error:", error);
-    return res.status(error.status || 500).json({
+    return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Service completion failed",
     });
@@ -1677,6 +1760,8 @@ export const cancelBooking = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CANCELLED,
+      variables:     { refundMessage: refundMsg },
       title:         "Booking Cancelled",
       message:       `Your booking has been cancelled.${refundMsg}`,
       type:          "BOOKING",
@@ -1755,7 +1840,7 @@ export const cancelBooking = async (req, res) => {
     }
 
     console.error("cancelBooking error:", error);
-    return res.status(error.status || 500).json({
+    return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Failed to cancel booking",
     });
@@ -1835,6 +1920,7 @@ export const markNoShow = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_NO_SHOW,
       title:         "Marked as No-Show",
       message:       "You were marked as a no-show for your booking. Contact the salon if this is a mistake.",
       type:          "BOOKING",
@@ -2167,6 +2253,7 @@ export const forceComplete = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_COMPLETED_USER,
       title:         "Service Completed",
       message:       "Your service is complete. Thank you for booking with us!",
       type:          "BOOKING",
@@ -2187,7 +2274,7 @@ export const forceComplete = async (req, res) => {
       await session.abortTransaction();
     }
     session.endSession();
-    return res.status(error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
+    return res.status(error.statusCode || error.status || 500).json({ success: false, message: error.message || "Failed to force complete" });
   }
 };
 
@@ -2271,6 +2358,7 @@ export const extendService = async (req, res) => {
     await NotificationService.send({
       recipientId:   updated.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_EXTENDED_USER,
       title:         "Service Extended",
       message:       "Your service has been extended by the salon.",
       type:          "BOOKING",
@@ -2283,6 +2371,7 @@ export const extendService = async (req, res) => {
     await NotificationService.send({
       recipientId:   updated.salonRef,
       recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_EXTENDED_SALON,
       title:         "Service Extended",
       message:       "Service extended successfully.",
       type:          "BOOKING",
@@ -2341,6 +2430,8 @@ export const resendReminder = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_REMINDER_MANUAL,
+      variables:     { serviceNames },
       title:         "Appointment Reminder",
       message:       `Reminder: your appointment for ${serviceNames} is coming up. Please head to the salon.`,
       type:          "BOOKING",
@@ -2554,6 +2645,7 @@ export const confirmNoShowCancellation = async (req, res) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CANCELLED_NOSHOW,
       title:         "Booking Cancelled",
       message:       "Your booking has been cancelled as confirmed over the call.",
       type:          "BOOKING",
@@ -2577,7 +2669,7 @@ export const confirmNoShowCancellation = async (req, res) => {
     session.endSession();
 
     console.error("confirmNoShowCancellation error:", error);
-    return res.status(error.status || 500).json({
+    return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Failed to confirm cancellation",
     });

@@ -3,6 +3,7 @@ import WalletLedger, {
   LEDGER_BUCKET,
   LEDGER_DIRECTION,
 } from "../models/WalletLedger.js";
+import { Errors } from "../utils/response.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 WALLET BALANCE SERVICE
@@ -37,25 +38,16 @@ const MAX_AMOUNT_IN_PAISE = 1_000_000_000_000;
 
 const integerOrThrow = (amountInPaise) => {
   if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
-    throw Object.assign(
-      new Error("amountInPaise must be a positive integer"),
-      { status: 400 }
-    );
+    throw Errors.badRequest("amountInPaise must be a positive integer");
   }
   if (amountInPaise > MAX_AMOUNT_IN_PAISE) {
-    throw Object.assign(
-      new Error(`amountInPaise exceeds the sanity ceiling (${MAX_AMOUNT_IN_PAISE})`),
-      { status: 400 }
-    );
+    throw Errors.badRequest(`amountInPaise exceeds the sanity ceiling (${MAX_AMOUNT_IN_PAISE})`);
   }
 };
 
 const salonIdOrThrow = (salonId) => {
   if (!salonId) {
-    throw Object.assign(
-      new Error("salonId is required"),
-      { status: 400 }
-    );
+    throw Errors.badRequest("salonId is required");
   }
 };
 
@@ -74,10 +66,7 @@ const salonIdOrThrow = (salonId) => {
  */
 const sessionOrThrow = (session) => {
   if (!session || typeof session.inTransaction !== "function" || !session.inTransaction()) {
-    throw Object.assign(
-      new Error("WalletBalanceService requires an active mongoose transaction session"),
-      { status: 500 }
-    );
+    throw Errors.internal("WalletBalanceService requires an active mongoose transaction session");
   }
 };
 
@@ -131,10 +120,7 @@ const applyLedgerEntry = async ({
   }[bucket];
 
   if (!bucketField) {
-    throw Object.assign(
-      new Error(`Unknown wallet bucket: ${bucket}`),
-      { status: 500 }
-    );
+    throw Errors.internal(`Unknown wallet bucket: ${bucket}`);
   }
 
   const delta = direction === LEDGER_DIRECTION.CREDIT ? amountInPaise : -amountInPaise;
@@ -167,10 +153,7 @@ const applyLedgerEntry = async ({
   );
 
   if (!wallet) {
-    throw Object.assign(
-      new Error(`Insufficient ${bucket} balance for this operation`),
-      { status: 400 }
-    );
+    throw Errors.badRequest(`Insufficient ${bucket} balance for this operation`);
   }
 
   const balanceAfter = {

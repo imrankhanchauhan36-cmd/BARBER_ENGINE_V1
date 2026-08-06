@@ -127,8 +127,12 @@ export const bookingSchemas = {
       .required()
       .messages({ "any.required": "bookingId is required" }),
 
+    // MOCK_RAZORPAY explicitly represents a test/mock payment only —
+    // never a real Razorpay payment. It exists solely so a real
+    // "RAZORPAY" value can never be routed through the dev signature
+    // bypass in booking.controller.js's verifyRazorpaySignature().
     paymentMethod: Joi.string()
-      .valid("RAZORPAY", "WALLET")
+      .valid("RAZORPAY", "WALLET", "MOCK_RAZORPAY")
       .default("RAZORPAY"),
 
     // Required only when paymentMethod is RAZORPAY (or omitted,

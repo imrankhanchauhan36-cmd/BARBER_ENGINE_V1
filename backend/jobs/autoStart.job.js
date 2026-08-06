@@ -62,6 +62,7 @@
 import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import NotificationService from "../services/NotificationService.js";
+import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
 import { emitToRoom } from "../socket/index.js";
@@ -125,6 +126,7 @@ const autoStartOneBooking = async (candidateId) => {
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.SERVICE_STARTED,
       title:         "Service Started",
       message:       "Your service has started. Sit back and relax!",
       type:          "BOOKING",
