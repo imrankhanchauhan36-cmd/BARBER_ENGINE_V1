@@ -1,50 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { canFreezeWallet } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
+import FinanceAPI from '../finance/api/finance.api'
 import SalonsAPI from './api/salons.api'
 
 // ─── Helpers ─────────────────────────────────────────────
 const v   = (val, fb = '—') => (val !== null && val !== undefined && val !== '') ? val : fb
 const dt  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'
-const dtm = (d) => d ? new Date(d).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'
-
-// ─── Dummy Fallback Data ──────────────────────────────────
-const DUMMY = {
-  services: [
-    { name: 'Haircut',       price: 150, duration: 30, bookings: 420 },
-    { name: 'Beard Styling', price: 100, duration: 20, bookings: 210 },
-    { name: 'Hair Color',    price: 500, duration: 60, bookings: 80  },
-    { name: 'Facial',        price: 300, duration: 45, bookings: 65  },
-    { name: 'Head Massage',  price: 200, duration: 30, bookings: 67  },
-  ],
-  staff: [
-    { name: 'Salon Owner',  role: 'Owner',   phone: '—', status: 'ACTIVE' },
-    { name: 'Ravi Kumar',   role: 'Stylist', phone: '—', status: 'ACTIVE' },
-  ],
-  gallery: [
-    { label: 'Shop Front',     emoji: '🏪', count: 3 },
-    { label: 'Styling Chairs', emoji: '💈', count: 4 },
-    { label: 'Service Area',   emoji: '✂️', count: 3 },
-  ],
-  documents: [
-    { name: 'GST Certificate', status: 'VERIFIED', uploadedAt: '—' },
-    { name: 'Shop License',    status: 'VERIFIED', uploadedAt: '—' },
-    { name: 'Owner Aadhaar',   status: 'VERIFIED', uploadedAt: '—' },
-    { name: 'Bank Account',    status: 'VERIFIED', uploadedAt: '—' },
-    { name: 'Shop Photos',     status: 'PENDING',  uploadedAt: '—' },
-  ],
-  recentBookings: [],
-  recentReviews:  [],
-  wallet: { balance: 0, totalEarned: 0, totalWithdrawn: 0, pendingPayout: 0 },
-  audit: [],
-  approvalHistory: [
-    { event: 'Salon Submitted',      date: null, done: true,  color: '#059669' },
-    { event: 'District Review',      date: null, done: false, color: '#D97706' },
-    { event: 'State Admin Approval', date: null, done: false, color: '#9E8E6E' },
-    { event: 'Salon Live',           date: null, done: false, color: '#9E8E6E' },
-  ],
-}
 
 // ─── Constants ───────────────────────────────────────────
 const STATUS_COLORS = {
@@ -135,6 +99,12 @@ export default function SalonDetailPage() {
   const [showSuspend, setShowSuspend] = useState(false)
   const [toast,       setToast]       = useState(null)
 
+  // Real wallet data (Finance module's confirmed-working wallet-by-salon
+  // endpoint) — lazy-loaded only when the Wallet tab is opened.
+  const [wallet,        setWallet]        = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [walletError,   setWalletError]   = useState(null)
+
   const showToast = (msg, color = '#059669') => {
     setToast({ msg, color })
     setTimeout(() => setToast(null), 3000)
@@ -155,10 +125,27 @@ export default function SalonDetailPage() {
 
   useEffect(() => { fetchSalon() }, [id])
 
-  const handleSuspend = (reason) => {
-    setSalon(s => ({ ...s, business: { ...s.business, isSuspended: true, suspendedReason: reason } }))
+  // Lazy-fetch real wallet data (Finance module) only when the Wallet
+  // tab is first opened — matches the lazy-tab-fetch pattern already
+  // used elsewhere (e.g. TransactionsPage's row-expand detail fetch).
+  useEffect(() => {
+    if (tab !== 'wallet' || !salon?.id || wallet || walletLoading) return
+    setWalletLoading(true); setWalletError(null)
+    FinanceAPI.getWalletDetail(salon.id)
+      .then(res => setWallet(res.data))
+      .catch(err => setWalletError(err.message || 'Failed to load wallet'))
+      .finally(() => setWalletLoading(false))
+  }, [tab, salon?.id, wallet, walletLoading])
+
+  // NOTE: no backend endpoint exists to suspend a salon yet — the
+  // Salon model has business.isSuspended/suspendedReason fields, but
+  // no route/controller writes to them. This must not fake a
+  // successful suspension (an admin could believe a problem salon
+  // was suspended when it's still fully live); report honestly
+  // instead. Local salon state is intentionally left unchanged.
+  const handleSuspend = () => {
     setShowSuspend(false)
-    showToast('⊘ Salon Suspended', '#DC2626')
+    showToast('⚠ Not available yet — no backend endpoint exists to suspend a salon', '#DC2626')
   }
 
   if (loading) return (
@@ -176,16 +163,32 @@ export default function SalonDetailPage() {
 
   if (!salon) return null
 
-  // ── Merge real + dummy ────────────────────────────────
-  const services        = salon.services        || DUMMY.services
-  const staff           = salon.staff?.list     || DUMMY.staff
-  const gallery         = salon.media?.gallery?.length > 0 ? salon.media.gallery : DUMMY.gallery
-  const documents       = salon.documents       || DUMMY.documents
-  const recentBookings  = salon.recentBookings  || DUMMY.recentBookings
-  const recentReviews   = salon.recentReviews   || DUMMY.recentReviews
-  const wallet          = salon.wallet          || DUMMY.wallet
-  const audit           = salon.audit           || DUMMY.audit
-  const approvalHistory = salon.approvalHistory || DUMMY.approvalHistory
+  // BACKEND GAP — none of these fields exist on GET /admin/salons/:id
+  // today (confirmed against controllers/salonDetail.controller.js).
+  // Previously this fell back to hardcoded fake rows (fabricated
+  // services/staff/documents) presented as if real; now it's a real
+  // empty list, and each tab below already has (or now has) an honest
+  // empty-state for it.
+  const services       = salon.services      || []
+  const staff          = salon.staff?.list   || []
+  const gallery         = salon.media?.gallery?.length > 0 ? salon.media.gallery : []
+  const documents       = salon.documents      || []
+  const recentBookings  = salon.recentBookings || []
+  const recentReviews   = salon.recentReviews  || []
+  const audit           = salon.audit          || []
+
+  // Approval timeline — derived only from real fields already present
+  // in the backend response (approval.status/approvedAt/approvedBy/
+  // rejectedAt/rejectedBy/rejectionReason, createdAt), not a fabricated
+  // fixed multi-tier workflow.
+  const approvalHistory = [
+    { event: 'Salon Submitted', date: salon.createdAt, done: true, color: '#059669' },
+    salon.approval?.status === 'APPROVED'
+      ? { event: `Approved${salon.approval.approvedBy?.name ? ` by ${salon.approval.approvedBy.name}` : ''}`, date: salon.approval.approvedAt, done: true, color: '#059669' }
+      : salon.approval?.status === 'REJECTED'
+      ? { event: `Rejected${salon.approval.rejectionReason ? `: ${salon.approval.rejectionReason}` : ''}`, date: salon.approval.rejectedAt, done: true, color: '#DC2626' }
+      : { event: `Status: ${v(salon.approval?.status, 'PENDING')}`, date: null, done: false, color: '#D97706' },
+  ]
 
   const isIndia = admin?.adminLevel === 'INDIA'
   const st      = STATUS_COLORS[salon.approval?.status] || STATUS_COLORS.PENDING
@@ -411,7 +414,9 @@ export default function SalonDetailPage() {
                 <span key={h} style={{ fontSize:'9px', fontWeight:800, color:'#9E8E6E', letterSpacing:'1px' }}>{h}</span>
               ))}
             </div>
-            {services.map((s, i) => (
+            {services.length === 0
+              ? <div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>No services added yet</div>
+              : services.map((s, i) => (
               <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', padding:'12px 16px', borderBottom:'1px solid #F0EAE0', alignItems:'center', gap:'8px', background:i%2===0?'#fff':'#FDFAF6' }}>
                 <span style={{ fontSize:'13px', fontWeight:600, color:'#1A1A2E' }}>{v(s.name)}</span>
                 <span style={{ fontSize:'13px', fontWeight:700, color:'#B8960C' }}>{s.price != null ? `₹${s.price}` : '—'}</span>
@@ -431,7 +436,9 @@ export default function SalonDetailPage() {
                 <span key={h} style={{ fontSize:'9px', fontWeight:800, color:'#9E8E6E', letterSpacing:'1px' }}>{h}</span>
               ))}
             </div>
-            {staff.map((m, i) => (
+            {staff.length === 0
+              ? <div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>No team members on file</div>
+              : staff.map((m, i) => (
               <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1.5fr 0.8fr', padding:'14px 16px', borderBottom:'1px solid #F0EAE0', alignItems:'center', gap:'8px', background:i%2===0?'#fff':'#FDFAF6' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                   <div style={{ width:'32px', height:'32px', background:'#1A1A2E', display:'flex', alignItems:'center', justifyContent:'center', color:'#B8960C', fontSize:'13px', fontWeight:800 }}>{(v(m.name,'?'))[0]}</div>
@@ -495,7 +502,14 @@ export default function SalonDetailPage() {
                 <span key={h} style={{ fontSize:'9px', fontWeight:800, color:'#9E8E6E', letterSpacing:'1px' }}>{h}</span>
               ))}
             </div>
-            {documents.map((doc, i) => {
+            {documents.length === 0
+              ? (
+                <div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>
+                  <div style={{ marginBottom:'10px' }}>KYC documents aren't returned by this screen — they're managed in the KYC module.</div>
+                  <button onClick={() => navigate('/app/kyc')} style={{ background:'#B8960C', color:'#0D1B2A', border:'none', padding:'8px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer' }}>VIEW IN KYC MODULE ▸</button>
+                </div>
+              )
+              : documents.map((doc, i) => {
               const ds = DOC_STATUS[doc.status] || DOC_STATUS.PENDING
               return (
                 <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', padding:'13px 16px', borderBottom:'1px solid #F0EAE0', alignItems:'center', gap:'8px', background:i%2===0?'#fff':'#FDFAF6' }}>
@@ -505,7 +519,8 @@ export default function SalonDetailPage() {
                   </div>
                   <span style={{ fontSize:'10px', fontWeight:800, background:ds.bg, color:ds.color, padding:'3px 8px', display:'inline-block' }}>{ds.label}</span>
                   <span style={{ fontSize:'11px', color:'#9E8E6E' }}>{v(doc.uploadedAt)}</span>
-                  <button style={{ background:'#B8960C', color:'#fff', border:'none', padding:'4px 10px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>VIEW</button>
+                  {/* NOTE: no backend endpoint exists to fetch/view a document file from this screen yet. */}
+                  <button onClick={() => showToast('⚠ Not available yet — no backend endpoint exists to view this document', '#DC2626')} style={{ background:'#B8960C', color:'#fff', border:'none', padding:'4px 10px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>VIEW</button>
                 </div>
               )
             })}
@@ -573,19 +588,27 @@ export default function SalonDetailPage() {
           </div>
         )}
 
-        {/* ══ WALLET ══ */}
+        {/* ══ WALLET — real data from Finance module's wallet-by-salon endpoint ══ */}
         {tab === 'wallet' && (
+          walletLoading ? (
+            <div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>Loading wallet...</div>
+          ) : walletError ? (
+            <div style={{ padding:'40px', textAlign:'center', color:'#DC2626' }}>{walletError}</div>
+          ) : !wallet ? (
+            <div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>No wallet found for this salon</div>
+          ) : (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' }}>
             <BCard>
               <BCardHeader title="Wallet Overview"/>
               <div style={{ padding:'14px' }}>
                 <div style={{ background:'#0D1B2A', padding:'20px', marginBottom:'14px', textAlign:'center', borderTop:'2px solid #B8960C' }}>
                   <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', letterSpacing:'1px', marginBottom:'8px' }}>CURRENT BALANCE</div>
-                  <div style={{ fontSize:'36px', fontWeight:800, color:'#B8960C' }}>{wallet.balance != null ? `₹${Number(wallet.balance).toLocaleString('en-IN')}` : '—'}</div>
+                  <div style={{ fontSize:'36px', fontWeight:800, color:'#B8960C' }}>₹{((wallet.availableBalanceInPaise ?? 0)/100).toLocaleString('en-IN')}</div>
                 </div>
-                <InfoRow label="Total Earned"    value={wallet.totalEarned    != null ? `₹${Number(wallet.totalEarned).toLocaleString('en-IN')}`    : '—'}/>
-                <InfoRow label="Total Withdrawn" value={wallet.totalWithdrawn != null ? `₹${Number(wallet.totalWithdrawn).toLocaleString('en-IN')}` : '—'}/>
-                <InfoRow label="Pending Payout"  value={wallet.pendingPayout  != null ? `₹${Number(wallet.pendingPayout).toLocaleString('en-IN')}`  : '—'} valueColor="#D97706"/>
+                <InfoRow label="Total Earned"    value={`₹${((wallet.lifetimeEarningsInPaise    ?? 0)/100).toLocaleString('en-IN')}`}/>
+                <InfoRow label="Total Withdrawn" value={`₹${((wallet.lifetimeWithdrawalsInPaise ?? 0)/100).toLocaleString('en-IN')}`}/>
+                <InfoRow label="Pending Payout"  value={`₹${((wallet.lockedBalanceInPaise        ?? 0)/100).toLocaleString('en-IN')}`} valueColor="#D97706"/>
+                <InfoRow label="Wallet Status"   value={wallet.status} valueColor={wallet.status==='ACTIVE'?'#059669':wallet.status==='FROZEN'?'#2563EB':'#DC2626'}/>
               </div>
             </BCard>
             <BCard>
@@ -594,11 +617,22 @@ export default function SalonDetailPage() {
                 <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', padding:'12px', marginBottom:'14px' }}>
                   <div style={{ fontSize:'11px', color:'#92400E', fontWeight:600 }}>⚠ Pending payout requires admin approval before transfer.</div>
                 </div>
-                <button style={{ width:'100%', background:'#B8960C', color:'#0D1B2A', border:'none', padding:'11px', fontSize:'12px', fontWeight:800, cursor:'pointer', marginBottom:'8px', letterSpacing:'0.5px' }}>✓ APPROVE PAYOUT</button>
-                <button style={{ width:'100%', background:'#FEF2F2', color:'#DC2626', border:'1px solid #DC2626', padding:'11px', fontSize:'12px', fontWeight:800, cursor:'pointer', letterSpacing:'0.5px' }}>⊘ FREEZE WALLET</button>
+                <button onClick={() => navigate(`/app/finance/payouts?salonId=${salon.id}`)} style={{ width:'100%', background:'#B8960C', color:'#0D1B2A', border:'none', padding:'11px', fontSize:'12px', fontWeight:800, cursor:'pointer', marginBottom:'8px', letterSpacing:'0.5px' }}>VIEW PAYOUT REQUESTS ▸</button>
+                {canFreezeWallet(admin?.adminLevel) && (wallet.status === 'ACTIVE' ? (
+                  <button onClick={async () => {
+                    try { await FinanceAPI.freezeWallet(wallet.id, { action:'FREEZE' }); showToast('❄ Wallet frozen', '#2563EB'); setWallet(null) }
+                    catch (err) { showToast(err.message || 'Freeze failed', '#DC2626') }
+                  }} style={{ width:'100%', background:'#FEF2F2', color:'#DC2626', border:'1px solid #DC2626', padding:'11px', fontSize:'12px', fontWeight:800, cursor:'pointer', letterSpacing:'0.5px' }}>⊘ FREEZE WALLET</button>
+                ) : (
+                  <button onClick={async () => {
+                    try { await FinanceAPI.freezeWallet(wallet.id, { action:'UNFREEZE' }); showToast('✓ Wallet unfrozen', '#059669'); setWallet(null) }
+                    catch (err) { showToast(err.message || 'Unfreeze failed', '#DC2626') }
+                  }} style={{ width:'100%', background:'#F0FDF4', color:'#059669', border:'1px solid #059669', padding:'11px', fontSize:'12px', fontWeight:800, cursor:'pointer', letterSpacing:'0.5px' }}>✓ UNFREEZE WALLET</button>
+                ))}
               </div>
             </BCard>
           </div>
+          )
         )}
 
         {/* ══ LOCATION ══ */}

@@ -6,6 +6,7 @@
 
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import BrandIcon from './BrandIcon'
 
 export default function ProtectedRoute({ children }) {
   const token      = useAuthStore(s => s.token)
@@ -19,13 +20,16 @@ export default function ProtectedRoute({ children }) {
         minHeight:   '100vh',
         background:  '#F0EAE0',
         display:     'flex',
+        flexDirection: 'column',
         alignItems:  'center',
         justifyContent: 'center',
+        gap:         '12px',
         fontFamily:  'Inter, sans-serif',
         color:       '#9E8E6E',
         fontSize:    '14px',
         letterSpacing: '0.5px',
       }}>
+        <BrandIcon size={40} />
         Loading...
       </div>
     )

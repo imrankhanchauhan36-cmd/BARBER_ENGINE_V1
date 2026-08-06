@@ -1,86 +1,22 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { canAssignDispute, canResolveDispute } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 
-const ADMIN_LEVELS = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canResolve   = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canAssign    = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
+// NOTE: see DisputesPage.jsx for why the previous local ADMIN_LEVELS
+// scheme (SUPER_ADMIN/INDIA_ADMIN/STATE_ADMIN/DISTRICT_ADMIN) was
+// wrong — it never matched real admin.adminLevel values (INDIA/
+// STATE/DISTRICT), so every permission check here silently evaluated
+// false/true incorrectly for every real admin.
+const canResolve = canResolveDispute
+const canAssign  = canAssignDispute
 
-const DISPUTES_DB = {
-  'DSP001': {
-    id:'DSP001', bookingId:'BK007', type:'NO_SHOW', raisedBy:'CUSTOMER',
-    status:'OPEN', priority:'HIGH', assignedTo:null,
-    resolvedAt:null, resolution:null,
-    state:'MH', district:'Mumbai', raisedAt:'2026-06-22',
-    customer:{ name:'Suresh Kumar', phone:'9890123456', email:'suresh.kumar@gmail.com', totalBookings:2 },
-    salon:{ id:'SAL007', name:'The Barber Shop', phone:'9812378456', district:'Mumbai', state:'MH' },
-    booking:{ service:'Haircut', amount:120, date:'2026-06-22', time:'04:00 PM', paymentMode:'UPI', status:'NO_SHOW' },
-    payment:{ txnId:'TXN007', amount:120, status:'FAILED', gateway:'UPI' },
-    description:'Customer claims they arrived on time but the salon was closed. No barber was present. Customer requests full refund.',
-    evidence:['Screenshot of booking confirmation', 'Photo of closed salon shutters', 'GPS location proof — arrived at 04:02 PM'],
-    timeline:[
-      { event:'Dispute Raised',      time:'2026-06-22 04:30 PM', by:'Customer', done:true,  color:'#DC2626' },
-      { event:'Auto-assigned to Queue',time:'2026-06-22 04:31 PM',by:'System',  done:true,  color:'#059669' },
-      { event:'Under Review',         time:'Pending',             by:'Admin',   done:false, color:'#D97706' },
-      { event:'Resolution',           time:'Pending',             by:'Admin',   done:false, color:'#9E8E6E' },
-    ],
-    audit:[
-      { date:'2026-06-22 04:31 PM', action:'Dispute auto-created — NO_SHOW booking BK007', by:'System'   },
-      { date:'2026-06-22 04:30 PM', action:'Dispute raised by customer',                   by:'Customer' },
-    ],
-  },
-  'DSP004': {
-    id:'DSP004', bookingId:'BK015', type:'FRAUD', raisedBy:'SYSTEM',
-    status:'RESOLVED', priority:'CRITICAL', assignedTo:'Super Admin',
-    resolvedAt:'2026-06-20', resolution:'Wallet frozen. Full refund of ₹120 processed to customer. Provider suspended pending investigation.',
-    state:'MH', district:'Mumbai', raisedAt:'2026-06-18',
-    customer:{ name:'Suresh Kumar', phone:'9890123456', email:'suresh.kumar@gmail.com', totalBookings:2 },
-    salon:{ id:'SAL007', name:'The Barber Shop', phone:'9812378456', district:'Mumbai', state:'MH' },
-    booking:{ service:'Haircut', amount:120, date:'2026-06-10', time:'03:00 PM', paymentMode:'UPI', status:'COMPLETED' },
-    payment:{ txnId:'TXN015', amount:120, status:'SETTLED', gateway:'UPI' },
-    description:'System detected multiple chargeback complaints from different customers for same salon. Pattern indicates potential fraud.',
-    evidence:['3 chargeback requests within 7 days', 'Pattern analysis report', 'Customer complaint emails'],
-    timeline:[
-      { event:'Fraud Pattern Detected', time:'2026-06-18 09:00 AM', by:'System',      done:true, color:'#DC2626' },
-      { event:'Dispute Created',        time:'2026-06-18 09:01 AM', by:'System',      done:true, color:'#DC2626' },
-      { event:'Assigned to Super Admin',time:'2026-06-18 09:05 AM', by:'System',      done:true, color:'#2563EB' },
-      { event:'Investigation Started',  time:'2026-06-18 10:00 AM', by:'Super Admin', done:true, color:'#D97706' },
-      { event:'Wallet Frozen',          time:'2026-06-19 11:00 AM', by:'Super Admin', done:true, color:'#DC2626' },
-      { event:'Dispute Resolved',       time:'2026-06-20 02:00 PM', by:'Super Admin', done:true, color:'#059669' },
-    ],
-    audit:[
-      { date:'2026-06-20 02:00 PM', action:'Dispute RESOLVED — Wallet frozen + Refund',  by:'Super Admin' },
-      { date:'2026-06-19 11:00 AM', action:'Provider wallet WL005 frozen',               by:'Super Admin' },
-      { date:'2026-06-18 10:00 AM', action:'Investigation started',                      by:'Super Admin' },
-      { date:'2026-06-18 09:01 AM', action:'Dispute auto-created — Fraud pattern',       by:'System'      },
-    ],
-  },
-  'DSP002': {
-    id:'DSP002', bookingId:'BK009', type:'REFUND_DELAY', raisedBy:'CUSTOMER',
-    status:'IN_REVIEW', priority:'MEDIUM', assignedTo:'India Admin',
-    resolvedAt:null, resolution:null,
-    state:'GJ', district:'Ahmedabad', raisedAt:'2026-06-21',
-    customer:{ name:'Karan Mehta', phone:'9812387654', email:'karan.mehta@gmail.com', totalBookings:8 },
-    salon:{ id:'SAL009', name:'Fade & Blade', phone:'9867890123', district:'Ahmedabad', state:'GJ' },
-    booking:{ service:'Beard Styling', amount:150, date:'2026-06-21', time:'05:00 PM', paymentMode:'UPI', status:'REFUNDED' },
-    payment:{ txnId:'TXN009', amount:150, status:'REFUNDED', gateway:'UPI' },
-    description:'Customer cancelled booking and refund was initiated but not credited even after 7 days. Customer requesting status update.',
-    evidence:['Refund initiation SMS', 'Bank statement showing no credit', 'Email thread with support'],
-    timeline:[
-      { event:'Booking Cancelled',   time:'2026-06-14 08:00 AM', by:'Customer',    done:true,  color:'#D97706' },
-      { event:'Refund Initiated',    time:'2026-06-14 08:05 AM', by:'System',      done:true,  color:'#059669' },
-      { event:'Dispute Raised',      time:'2026-06-21 10:00 AM', by:'Customer',    done:true,  color:'#DC2626' },
-      { event:'Assigned to Admin',   time:'2026-06-21 10:30 AM', by:'System',      done:true,  color:'#2563EB' },
-      { event:'Resolution',          time:'Pending',             by:'Admin',       done:false, color:'#9E8E6E' },
-    ],
-    audit:[
-      { date:'2026-06-21 10:30 AM', action:'Dispute assigned to India Admin',     by:'System'      },
-      { date:'2026-06-21 10:00 AM', action:'Dispute raised — Refund delay',       by:'Customer'    },
-      { date:'2026-06-14 08:05 AM', action:'Refund initiated via UPI — ₹150',    by:'System'      },
-    ],
-  },
-}
+// BACKEND GAP: no /admin/disputes endpoint exists anywhere in the backend
+// (confirmed — no model, route, or controller). There is no real dispute
+// record to look up, so every id resolves to the NotFound state below
+// rather than a fabricated record.
+const DISPUTES_DB = {}
 
 const STATUS_COLORS = {
   OPEN:      { bg:'#FEF2F2', color:'#991B1B' },
@@ -158,6 +94,7 @@ const NotFound = ({onBack}) => (
     <div style={{ background:'#fff', border:'2px solid #D4C9B0', borderTop:'2px solid #B8960C', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
       <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔍</div>
       <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Dispute Not Found</div>
+      <div style={{ fontSize:'12px', color:'#9E8E6E', marginBottom:'16px' }}>BACKEND GAP — Disputes has no backend implementation yet, so no dispute record can be loaded.</div>
       <button onClick={onBack} style={{ background:'#0D1B2A', color:'#B8960C', border:'none', padding:'8px 20px', fontSize:'12px', fontWeight:700, cursor:'pointer' }}>← GO BACK</button>
     </div>
   </div>
@@ -167,13 +104,26 @@ export default function DisputeDetailPage() {
   const { id }     = useParams()
   const navigate   = useNavigate()
   const admin      = useAuthStore(s=>s.admin)
-  const adminLevel = admin?.adminLevel||ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel = admin?.adminLevel||'INDIA'
   const hasResolve = canResolve(adminLevel)
   const hasAssign  = canAssign(adminLevel)
 
   const rawDispute = DISPUTES_DB[id]
-  if (!rawDispute) return <NotFound onBack={()=>navigate('/app/disputes')}/>
-  if (adminLevel===ADMIN_LEVELS.DISTRICT_ADMIN) return (
+
+  const [tab,          setTab]          = useState('overview')
+  const [toast,        setToast]        = useState(null)
+  const [resolveModal, setResolveModal] = useState(false)
+  // No real backend to persist to (see handleAssign/handleResolve
+  // below) — kept as state, not a plain const, so this can be swapped
+  // for a real fetched+updated record the moment a real endpoint
+  // exists, without restructuring this component again.
+  const [dispute]      = useState(rawDispute)
+
+  // Both early returns moved after all hooks above — they previously sat
+  // before the useState calls, a latent rules-of-hooks violation that
+  // ESLint now flags directly.
+  if (!dispute) return <NotFound onBack={()=>navigate('/app/disputes')}/>
+  if (adminLevel==='DISTRICT') return (
     <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
         <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
@@ -183,31 +133,27 @@ export default function DisputeDetailPage() {
     </div>
   )
 
-  const [tab,          setTab]          = useState('overview')
-  const [toast,        setToast]        = useState(null)
-  const [resolveModal, setResolveModal] = useState(false)
-  const [dispute,      setDispute]      = useState(rawDispute)
-
   const showToast = (msg,color) => { setToast({msg,color}); setTimeout(()=>setToast(null),3000) }
 
   const isOwnScope = () => {
-    if (adminLevel!==ADMIN_LEVELS.STATE_ADMIN) return true
+    if (adminLevel!=='STATE') return true
     if (!admin?.stateRef) return false
     return dispute.state===admin.stateRef
   }
 
+  // BACKEND GAP: no /admin/disputes endpoint exists anywhere in the
+  // backend. These actions used to silently mutate local React state
+  // (including fabricating an audit-log entry) and show a fake
+  // success toast — misleading, since nothing was actually recorded
+  // anywhere. Report honestly instead.
   const handleAssign = () => {
     if (!isOwnScope()) { showToast('⊘ Not your state', '#DC2626'); return }
-    const auditEntry = { date:new Date().toLocaleString('en-IN',{hour12:false}), action:`Dispute assigned to ${adminLevel}`, by:adminLevel }
-    setDispute(d=>({ ...d, status:'IN_REVIEW', assignedTo:adminLevel, audit:[auditEntry,...d.audit] }))
-    showToast('✓ Dispute assigned to you', '#2563EB')
+    showToast('⚠ Not available yet — no backend endpoint exists for disputes', '#DC2626')
   }
 
-  const handleResolve = (action, resolution) => {
+  const handleResolve = () => {
     if (!isOwnScope()) { showToast('⊘ Not your state', '#DC2626'); setResolveModal(false); return }
-    const auditEntry = { date:new Date().toLocaleString('en-IN',{hour12:false}), action:`Dispute ${action} — ${resolution.slice(0,40)}`, by:adminLevel }
-    setDispute(d=>({ ...d, status:action, resolvedAt:new Date().toISOString().split('T')[0], resolution, audit:[auditEntry,...d.audit] }))
-    showToast(`✓ Dispute ${action.toLowerCase()}`, '#059669')
+    showToast('⚠ Not available yet — no backend endpoint exists for disputes', '#DC2626')
     setResolveModal(false)
   }
 

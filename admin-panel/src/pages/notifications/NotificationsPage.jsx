@@ -1,26 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canBroadcastNotification, canExportNotifications, canSendTargetedNotification } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 
-const ADMIN_LEVELS  = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canBulkSend   = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN].includes(l)
-const canTargeted   = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canExport     = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN].includes(l)
+// No admin-facing notification broadcast/campaign backend exists today
+// (confirmed: notification.routes.js is OWNER-only, userNotification.routes.js
+// is USER-only — neither exposes an admin campaign list/compose/retry/schedule
+// API). These are reserved permission predicates for when that backend ships;
+// see adminRoles.js.
+const canBulkSend = canBroadcastNotification
+const canTargeted = canSendTargetedNotification
+const canExport   = canExportNotifications
 
 // Char limits per channel
 const CHAR_LIMITS = { PUSH:200, SMS:160, EMAIL:1000, IN_APP:300 }
-
-const NOTIF_DATA = [
-  { id:'NTF001', title:'New Booking Confirmation',    body:'Your booking at Salman Salmani is confirmed for 10:00 AM.',channel:'PUSH',   target:'ALL_USERS',   state:null, status:'SENT',      sentAt:'2026-06-23 10:00', sentBy:'Amit Verma',   reach:12840, opened:8420, delivered:12600, failed:240,  clicked:3200, scheduledAt:null, draft:false },
-  { id:'NTF002', title:'KYC Verification Reminder',  body:'Complete your KYC to unlock full features.',             channel:'IN_APP', target:'PROVIDERS',   state:null, status:'SENT',      sentAt:'2026-06-23 09:00', sentBy:'Super Admin',  reach:284,   opened:210,  delivered:284,   failed:0,    clicked:140,  scheduledAt:null, draft:false },
-  { id:'NTF003', title:'Weekend Offer — 20% OFF',    body:'Get 20% off on all haircut services this weekend!',      channel:'PUSH',   target:'STATE',       state:'UP', status:'SCHEDULED', sentAt:null,              sentBy:'Rajesh Kumar', reach:4820,  opened:0,    delivered:0,     failed:0,    clicked:0,    scheduledAt:'2026-06-25 09:00', draft:false },
-  { id:'NTF004', title:'System Maintenance Alert',   body:'Platform will be down for maintenance 2:00-4:00 AM.',    channel:'EMAIL',  target:'ALL',         state:null, status:'SENT',      sentAt:'2026-06-22 08:00', sentBy:'Super Admin',  reach:13124, opened:9800, delivered:13000, failed:124,  clicked:0,    scheduledAt:null, draft:false },
-  { id:'NTF005', title:'New Salon Near You',         body:'A new top-rated salon has opened in your area!',         channel:'PUSH',   target:'STATE',       state:'MH', status:'FAILED',    sentAt:'2026-06-21 03:00', sentBy:'Priya Desai',  reach:5200,  opened:0,    delivered:1200,  failed:4000, clicked:0,    scheduledAt:null, draft:false },
-  { id:'NTF006', title:'Payment Received',           body:'₹450 has been credited to your salon wallet.',           channel:'SMS',    target:'PROVIDERS',   state:null, status:'SENT',      sentAt:'2026-06-21 12:00', sentBy:'Amit Verma',   reach:842,   opened:820,  delivered:842,   failed:0,    clicked:0,    scheduledAt:null, draft:false },
-  { id:'NTF007', title:'Rate Your Last Visit',       body:'How was your experience? Leave a review.',               channel:'PUSH',   target:'ALL_USERS',   state:null, status:'DRAFT',     sentAt:null,              sentBy:'Amit Verma',   reach:0,     opened:0,    delivered:0,     failed:0,    clicked:0,    scheduledAt:null, draft:true  },
-  { id:'NTF008', title:'Dispute Resolved',           body:'Your dispute DSP002 has been resolved. Check details.',  channel:'IN_APP', target:'ALL_USERS',   state:null, status:'SENT',      sentAt:'2026-06-20 04:00', sentBy:'Super Admin',  reach:1,     opened:1,    delivered:1,     failed:0,    clicked:1,    scheduledAt:null, draft:false },
-]
 
 const STATUS_COLORS = {
   SENT:      { bg:'#D1FAE5', color:'#065F46' },
@@ -37,7 +31,6 @@ const CHANNEL_COLORS = {
 const STATUSES  = ['ALL','SENT','SCHEDULED','FAILED','DRAFT']
 const CHANNELS  = ['ALL','PUSH','SMS','EMAIL','IN_APP']
 const TARGETS   = ['ALL','ALL_USERS','PROVIDERS','STATE']
-const SENT_BY   = ['All Admins',...new Set(NOTIF_DATA.map(n=>n.sentBy))] // ✅ Fix 5: Sent By filter
 
 const BCard = ({ children, style={} }) => (
   <div style={{ background:'#fff', border:'1px solid #D4C9B0', borderTop:'2px solid #B8960C', ...style }}>{children}</div>
@@ -247,30 +240,20 @@ function DetailDrawer({ notif, onClose, onRetry, onEditSchedule, onCancelSchedul
 export default function NotificationsPage() {
   const navigate   = useNavigate()
   const admin      = useAuthStore(s=>s.admin)
-  const adminLevel = admin?.adminLevel||ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel = admin?.adminLevel || 'DISTRICT'
   const hasBulk    = canBulkSend(adminLevel)
   const hasTarget  = canTargeted(adminLevel)
   const hasExport  = canExport(adminLevel)
 
-  if (!hasTarget) {
-    return (
-      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
-          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
-          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
-          <div style={{ fontSize:'13px', color:'#9E8E6E', marginBottom:'16px' }}>DISTRICT_ADMIN cannot access Notifications.</div>
-          <button onClick={()=>navigate(-1)} style={{ background:'#0D1B2A', color:'#B8960C', border:'none', padding:'8px 20px', fontSize:'12px', fontWeight:700, cursor:'pointer' }}>← GO BACK</button>
-        </div>
-      </div>
-    )
-  }
-
-  const [notifs,    setNotifs]    = useState(NOTIF_DATA)
+  // No admin notification list/compose/retry/schedule backend exists (see
+  // note above) — there is nothing real to seed this with, so it starts
+  // empty rather than showing fabricated rows.
+  const [notifs]    = useState([])
   const [search,    setSearch]    = useState('')
   const [statusF,   setStatusF]   = useState('ALL')
   const [channelF,  setChannelF]  = useState('ALL')
   const [targetF,   setTargetF]   = useState('ALL')
-  const [sentByF,   setSentByF]   = useState('All Admins')   // ✅ Fix 5
+  const [sentByF,   setSentByF]   = useState('All Admins')
   const [page,      setPage]      = useState(1)
   const [toast,     setToast]     = useState(null)
   const [compose,   setCompose]   = useState(false)
@@ -279,54 +262,30 @@ export default function NotificationsPage() {
 
   const showToast = (msg,color) => { setToast({msg,color}); setTimeout(()=>setToast(null),3000) }
 
-  const handleSend = (form) => {
-    const n = {
-      id:`NTF${String(notifs.length+1).padStart(3,'0')}`,
-      title:form.title, body:form.body, channel:form.channel,
-      target:form.target, state:form.state||null,
-      status:form.scheduledAt?'SCHEDULED':'SENT',
-      sentAt:form.scheduledAt?null:new Date().toLocaleString('en-IN',{hour12:false}),
-      sentBy:admin?.name||adminLevel,
-      scheduledAt:form.scheduledAt||null,
-      reach:Math.floor(Math.random()*10000+500), opened:0, delivered:0, failed:0, clicked:0, draft:false,
-    }
-    setNotifs(prev=>[n,...prev])
-    setCompose(false)
-    showToast(form.scheduledAt?'⏰ Notification scheduled':'✓ Notification sent', form.scheduledAt?'#2563EB':'#059669')
-  }
+  const notifyBackendGap = () => showToast('⚠ Not available yet — notification broadcast backend is not implemented', '#DC2626')
 
-  const handleDraft = (form) => {
-    const n = {
-      id:`NTF${String(notifs.length+1).padStart(3,'0')}`,
-      title:form.title, body:form.body, channel:form.channel,
-      target:form.target, state:form.state||null,
-      status:'DRAFT', sentAt:null, sentBy:admin?.name||adminLevel,
-      scheduledAt:null, reach:0, opened:0, delivered:0, failed:0, clicked:0, draft:true,
-    }
-    setNotifs(prev=>[n,...prev])
-    setCompose(false)
-    showToast('📋 Draft saved', '#374151')
-  }
+  // None of these mutate real data — there is no backend endpoint to send,
+  // draft, retry, or (re)schedule an admin notification campaign, so every
+  // action here is an honest no-op instead of a locally-faked success.
+  const handleSend           = () => { setCompose(false); notifyBackendGap() }
+  const handleDraft          = () => { setCompose(false); notifyBackendGap() }
+  const handleRetry          = () => { setDrawer(null); notifyBackendGap() }
+  const handleEditSchedule   = () => notifyBackendGap()
+  const handleCancelSchedule = () => { setDrawer(null); notifyBackendGap() }
 
-  // ✅ Fix 2: Retry
-  const handleRetry = (n) => {
-    setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,status:'SENT',sentAt:new Date().toLocaleString('en-IN',{hour12:false}),delivered:x.reach,failed:0}:x))
-    setDrawer(null)
-    showToast(`↻ Retrying ${n.id}...`, '#2563EB')
-  }
+  const sentByOptions = ['All Admins', ...new Set(notifs.map(n=>n.sentBy))]
 
-  // ✅ Fix 3: Edit/Cancel Schedule
-  const handleEditSchedule = (n) => {
-    const newTime = prompt('New scheduled time (YYYY-MM-DD HH:MM):',n.scheduledAt)
-    if (newTime) {
-      setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,scheduledAt:newTime}:x))
-      showToast('⏰ Schedule updated', '#D97706')
-    }
-  }
-  const handleCancelSchedule = (n) => {
-    setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,status:'DRAFT',scheduledAt:null,draft:true}:x))
-    setDrawer(null)
-    showToast('✕ Schedule cancelled — moved to Draft', '#DC2626')
+  if (!hasTarget) {
+    return (
+      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
+          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
+          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
+          <div style={{ fontSize:'13px', color:'#9E8E6E', marginBottom:'16px' }}>{adminLevel} does not have access to Notifications.</div>
+          <button onClick={()=>navigate(-1)} style={{ background:'#0D1B2A', color:'#B8960C', border:'none', padding:'8px 20px', fontSize:'12px', fontWeight:700, cursor:'pointer' }}>← GO BACK</button>
+        </div>
+      </div>
+    )
   }
 
   const filtered = notifs.filter(n=>{
@@ -335,7 +294,7 @@ export default function NotificationsPage() {
     const matchStatus  = statusF==='ALL'||n.status===statusF
     const matchChannel = channelF==='ALL'||n.channel===channelF
     const matchTarget  = targetF==='ALL'||n.target===targetF
-    const matchSentBy  = sentByF==='All Admins'||n.sentBy===sentByF   // ✅ Fix 5
+    const matchSentBy  = sentByF==='All Admins'||n.sentBy===sentByF
     return matchSearch&&matchStatus&&matchChannel&&matchTarget&&matchSentBy
   })
 
@@ -366,7 +325,7 @@ export default function NotificationsPage() {
           {!hasBulk && hasTarget && <span style={{ fontSize:'10px', color:'rgba(255,255,255,0.3)', fontStyle:'italic' }}>Targeted send only</span>}
         </div>
         <div style={{ display:'flex', gap:'8px' }}>
-          {hasExport && <button style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
+          {hasExport && <button onClick={notifyBackendGap} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
           {hasTarget && (
             <button onClick={()=>setCompose(true)} style={{ background:'#B8960C', border:'none', color:'#0D1B2A', padding:'6px 14px', fontSize:'10px', fontWeight:800, cursor:'pointer' }}>
               + {hasBulk?'COMPOSE':'TARGETED SEND'}
@@ -376,6 +335,15 @@ export default function NotificationsPage() {
       </div>
 
       <div style={{ padding:'14px 20px' }}>
+
+        {/* BACKEND GAP — no admin notification broadcast/campaign API exists yet.
+            notification.routes.js is OWNER-only and userNotification.routes.js is
+            USER-only; neither exposes a cross-platform admin campaign list, compose,
+            retry, or scheduling endpoint. Everything below is real UI wired to
+            honest no-ops, not fabricated data. */}
+        <div style={{ marginBottom:'12px', padding:'10px 14px', background:'#FEF2F2', border:'1px solid #FEE2E2', fontSize:'12px', color:'#991B1B', fontWeight:600 }}>
+          ⚠ BACKEND GAP — Admin notification broadcast/campaign system is not implemented yet. This screen shows real (empty) state; Compose, Retry, Schedule, and Export are wired to an honest "not available" message until a backend endpoint exists.
+        </div>
 
         {/* Summary Strip */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'1px', background:'#D4C9B0', border:'1px solid #D4C9B0', marginBottom:'12px' }}>
@@ -424,7 +392,7 @@ export default function NotificationsPage() {
               { val:statusF,  set:v=>{setStatusF(v);setPage(1)},  opts:STATUSES },
               { val:channelF, set:v=>{setChannelF(v);setPage(1)}, opts:CHANNELS },
               { val:targetF,  set:v=>{setTargetF(v);setPage(1)},  opts:TARGETS  },
-              { val:sentByF,  set:v=>{setSentByF(v);setPage(1)},  opts:SENT_BY  }, // ✅ Fix 5
+              { val:sentByF,  set:v=>{setSentByF(v);setPage(1)},  opts:sentByOptions },
             ].map((f,i)=>(
               <select key={i} value={f.val} onChange={e=>f.set(e.target.value)}
                 style={{ border:'1px solid #D4C9B0', padding:'5px 8px', fontSize:'11px', color:'#6B5E3E', background:'#FDFAF6', cursor:'pointer', fontFamily:FONTS.body, outline:'none' }}>

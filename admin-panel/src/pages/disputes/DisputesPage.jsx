@@ -1,23 +1,24 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canAssignDispute, canExport, canResolveDispute } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 
-const ADMIN_LEVELS  = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canResolve    = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canAssign     = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canExport     = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
+// NOTE: this file previously defined its own ADMIN_LEVELS scheme
+// (SUPER_ADMIN/INDIA_ADMIN/STATE_ADMIN/DISTRICT_ADMIN) that did not
+// match the real system (admin.adminLevel is always INDIA/STATE/
+// DISTRICT — confirmed via config/adminRoles.js and every other
+// admin-panel module). That meant canResolve/canAssign/canExport
+// silently evaluated false for every real admin, and the
+// DISTRICT-admin lockout below never actually triggered. Now using
+// the same real, shared permission helpers every other module uses.
+const canResolve = canResolveDispute
+const canAssign  = canAssignDispute
 
-const DISPUTES_DATA = [
-  { id:'DSP001', bookingId:'BK007', type:'NO_SHOW',       raisedBy:'CUSTOMER', customer:'Suresh Kumar', salon:'The Barber Shop', amount:120,  state:'MH', district:'Mumbai',      raisedAt:'2026-06-22', status:'OPEN',       assignedTo:null,        resolvedAt:null,        resolution:null,    priority:'HIGH'   },
-  { id:'DSP002', bookingId:'BK009', type:'REFUND_DELAY',  raisedBy:'CUSTOMER', customer:'Karan Mehta',  salon:'Fade & Blade',   amount:150,  state:'GJ', district:'Ahmedabad',   raisedAt:'2026-06-21', status:'IN_REVIEW',  assignedTo:'India Admin',resolvedAt:null,        resolution:null,    priority:'MEDIUM' },
-  { id:'DSP003', bookingId:'BK004', type:'SERVICE_QUALITY',raisedBy:'CUSTOMER',customer:'Deepak Gupta', salon:'Glamour Zone',   amount:150,  state:'UP', district:'Agra',        raisedAt:'2026-06-20', status:'OPEN',       assignedTo:null,        resolvedAt:null,        resolution:null,    priority:'LOW'    },
-  { id:'DSP004', bookingId:'BK015', type:'FRAUD',         raisedBy:'SYSTEM',   customer:'Suresh Kumar', salon:'The Barber Shop', amount:120,  state:'MH', district:'Mumbai',      raisedAt:'2026-06-18', status:'RESOLVED',   assignedTo:'Super Admin',resolvedAt:'2026-06-20',resolution:'Wallet frozen. Refund processed.', priority:'CRITICAL'},
-  { id:'DSP005', bookingId:'BK021', type:'OVERCHARGE',    raisedBy:'CUSTOMER', customer:'Vikas Singh',  salon:'Style Studio',   amount:500,  state:'UP', district:'Lucknow',     raisedAt:'2026-06-20', status:'IN_REVIEW',  assignedTo:'India Admin',resolvedAt:null,        resolution:null,    priority:'HIGH'   },
-  { id:'DSP006', bookingId:'BK031', type:'NO_SHOW',       raisedBy:'PROVIDER', customer:'Raj Sharma',   salon:'Hair Masters',   amount:300,  state:'UP', district:'Kanpur',      raisedAt:'2026-06-19', status:'RESOLVED',   assignedTo:'India Admin',resolvedAt:'2026-06-21',resolution:'No show confirmed. Refund denied.', priority:'MEDIUM'},
-  { id:'DSP007', bookingId:'BK042', type:'REFUND_DELAY',  raisedBy:'CUSTOMER', customer:'Priya Patel',  salon:'Glow Beauty',    amount:800,  state:'RJ', district:'Jaipur',      raisedAt:'2026-06-22', status:'OPEN',       assignedTo:null,        resolvedAt:null,        resolution:null,    priority:'MEDIUM' },
-  { id:'DSP008', bookingId:'BK055', type:'SERVICE_QUALITY',raisedBy:'CUSTOMER',customer:'Sunita Das',   salon:'Bella Beauty',   amount:400,  state:'KA', district:'Bengaluru',   raisedAt:'2026-06-21', status:'CLOSED',     assignedTo:'State Admin',resolvedAt:'2026-06-22',resolution:'Complaint not substantiated.',    priority:'LOW'    },
-]
+// BACKEND GAP: no /admin/disputes endpoint exists anywhere in the backend
+// (confirmed — no model, route, or controller). There is no real data to
+// seed this list with, so it starts empty rather than showing fabricated
+// dispute records.
 
 const STATUS_COLORS = {
   OPEN:      { bg:'#FEF2F2', color:'#991B1B' },
@@ -39,7 +40,7 @@ const TYPE_LABELS = {
   OVERCHARGE:     'Overcharge',
 }
 
-const STATES   = ['All States', ...new Set(DISPUTES_DATA.map(d=>d.state))]
+const STATES   = ['All States']
 const STATUSES = ['ALL','OPEN','IN_REVIEW','RESOLVED','CLOSED']
 const TYPES    = ['ALL','NO_SHOW','REFUND_DELAY','SERVICE_QUALITY','FRAUD','OVERCHARGE']
 const PRIORITIES = ['ALL','CRITICAL','HIGH','MEDIUM','LOW']
@@ -101,26 +102,12 @@ const BCardHeader = ({ title, action }) => (
 export default function DisputesPage() {
   const navigate    = useNavigate()
   const admin       = useAuthStore(s=>s.admin)
-  const adminLevel  = admin?.adminLevel||ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel  = admin?.adminLevel||'INDIA'
   const hasResolve  = canResolve(adminLevel)
   const hasAssign   = canAssign(adminLevel)
   const hasExport   = canExport(adminLevel)
 
-  const scope = adminLevel===ADMIN_LEVELS.STATE_ADMIN?'YOUR STATE':'PAN INDIA'
-
-  // ✅ Fix 3 — DISTRICT_ADMIN access denied
-  if (adminLevel===ADMIN_LEVELS.DISTRICT_ADMIN) {
-    return (
-      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
-          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
-          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
-          <div style={{ fontSize:'13px', color:'#9E8E6E' }}>DISTRICT_ADMIN does not have access to Disputes module.</div>
-          <div style={{ fontSize:'11px', color:'#DC2626', fontWeight:600, marginTop:'8px' }}>Required: SUPER_ADMIN / INDIA_ADMIN / STATE_ADMIN</div>
-        </div>
-      </div>
-    )
-  }
+  const scope = adminLevel==='STATE'?'YOUR STATE':'PAN INDIA'
 
   const [search,       setSearch]       = useState('')
   const [status,       setStatus]       = useState('ALL')
@@ -130,36 +117,44 @@ export default function DisputesPage() {
   const [page,         setPage]         = useState(1)
   const [toast,        setToast]        = useState(null)
   const [resolveModal, setResolveModal] = useState(null)
-  const [disputes,     setDisputes]     = useState(DISPUTES_DATA)
+  // No real backend to fetch from (see handleAssign/handleResolve
+  // below) — kept as state (not a plain const) so this can be swapped
+  // for a real setDisputes(...) the moment a real endpoint exists,
+  // without restructuring this component again.
+  const [disputes]     = useState([])
   const PER_PAGE = 8
 
   const showToast = (msg,color) => { setToast({msg,color}); setTimeout(()=>setToast(null),3000) }
 
   // ✅ Fix 2 — Scope guard helper
   const isOwnScope = (d) => {
-    if (adminLevel!==ADMIN_LEVELS.STATE_ADMIN) return true
+    if (adminLevel!=='STATE') return true
     if (!admin?.stateRef) return false
     return d.state===admin.stateRef
   }
 
+  // BACKEND GAP: no /admin/disputes endpoint exists anywhere in the
+  // backend (confirmed — no model, route, or controller). This page
+  // is fully mock data. These actions used to silently mutate local
+  // React state and show a fake success toast, which would mislead
+  // an admin into believing a real dispute was assigned/resolved.
+  // Report honestly instead — no state mutation, no fake success.
   const handleAssign = (d) => {
     if (!isOwnScope(d)) { showToast('⊘ Access denied — Not your state', '#DC2626'); return }
-    setDisputes(prev=>prev.map(dp=>dp.id===d.id?{ ...dp, status:'IN_REVIEW', assignedTo:adminLevel }:dp))
-    showToast(`✓ ${d.id} assigned to you`, '#2563EB')
+    showToast('⚠ Not available yet — no backend endpoint exists for disputes', '#DC2626')
   }
-  const handleResolve = (action, resolution) => {
+  const handleResolve = () => {
     const d = resolveModal
     if (!isOwnScope(d)) { showToast('⊘ Access denied — Not your state', '#DC2626'); setResolveModal(null); return }
-    setDisputes(prev=>prev.map(dp=>dp.id===d.id?{ ...dp, status:action, resolvedAt:new Date().toISOString().split('T')[0], resolution }:dp))
-    showToast(`✓ Dispute ${action.toLowerCase()} — ${d.id}`, '#059669')
+    showToast('⚠ Not available yet — no backend endpoint exists for disputes', '#DC2626')
     setResolveModal(null)
   }
 
-  const scopedDisputes = adminLevel===ADMIN_LEVELS.STATE_ADMIN && admin?.stateRef
+  const scopedDisputes = adminLevel==='STATE' && admin?.stateRef
     ? disputes.filter(d=>d.state===admin.stateRef)
     : disputes
 
-  const stateOptions = adminLevel===ADMIN_LEVELS.STATE_ADMIN && admin?.stateRef
+  const stateOptions = adminLevel==='STATE' && admin?.stateRef
     ? ['All States', admin.stateRef]
     : STATES
 
@@ -185,6 +180,22 @@ export default function DisputesPage() {
   }
   const criticalCount = scopedDisputes.filter(d=>d.priority==='CRITICAL'&&d.status==='OPEN').length
 
+  // DISTRICT admin access denied — moved after all hooks above (was
+  // previously an early return before them, a latent rules-of-hooks
+  // violation that ESLint now flags directly).
+  if (adminLevel==='DISTRICT') {
+    return (
+      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
+          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
+          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
+          <div style={{ fontSize:'13px', color:'#9E8E6E' }}>DISTRICT admins do not have access to the Disputes module.</div>
+          <div style={{ fontSize:'11px', color:'#DC2626', fontWeight:600, marginTop:'8px' }}>Required: INDIA / STATE</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh' }}>
 
@@ -202,11 +213,18 @@ export default function DisputesPage() {
           {criticalCount>0 && <span style={{ background:'#DC2626', color:'#fff', fontSize:'10px', fontWeight:800, padding:'2px 8px' }}>🔴 {criticalCount} CRITICAL</span>}
         </div>
         <div style={{ display:'flex', gap:'8px' }}>
-          {hasExport && <button style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
+          {hasExport && <button onClick={()=>showToast('Export — Coming Soon', '#D97706')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
         </div>
       </div>
 
       <div style={{ padding:'14px 20px' }}>
+
+        {/* BACKEND GAP — no /admin/disputes endpoint exists anywhere in the
+            backend (no model, route, or controller). This screen shows real
+            (empty) state, not fabricated dispute records. */}
+        <div style={{ marginBottom:'12px', padding:'10px 14px', background:'#FEF2F2', border:'1px solid #FEE2E2', fontSize:'12px', color:'#991B1B', fontWeight:600 }}>
+          ⚠ BACKEND GAP — Disputes has no backend implementation yet (no model, route, or controller). This screen reflects real (empty) state until a backend endpoint exists.
+        </div>
 
         {/* Summary Strip */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'1px', background:'#D4C9B0', border:'1px solid #D4C9B0', marginBottom:'12px' }}>
@@ -279,7 +297,7 @@ export default function DisputesPage() {
           </div>
 
           {paginated.length===0
-            ?<div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>No disputes found</div>
+            ?<div style={{ padding:'40px', textAlign:'center', color:'#9E8E6E' }}>No disputes found — backend not implemented yet</div>
             :paginated.map((d,i)=>{
               const sc=STATUS_COLORS[d.status]||STATUS_COLORS.OPEN
               const pc=PRIORITY_COLORS[d.priority]||PRIORITY_COLORS.LOW

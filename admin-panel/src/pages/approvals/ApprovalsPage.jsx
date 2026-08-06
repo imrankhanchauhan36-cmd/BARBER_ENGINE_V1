@@ -11,7 +11,6 @@ const dt  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', 
 // ─── Permission helpers ───────────────────────────────────
 const canApprove   = (level) => ['INDIA', 'STATE'].includes(level)
 const canRecommend = (level) => level === 'DISTRICT'
-const canReject    = ()      => true
 
 // ─── Constants ────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -25,11 +24,6 @@ const CAT_COLORS = {
   MEN_ONLY:   { bg: '#EFF6FF', color: '#1D4ED8' },
   WOMEN_ONLY: { bg: '#FDF2F8', color: '#9D174D' },
   UNISEX:     { bg: '#F5F3FF', color: '#6D28D9' },
-}
-const DOC_STATUS = {
-  VERIFIED: { color: '#059669', label: 'VERIFIED' },
-  PENDING:  { color: '#D97706', label: 'PENDING'  },
-  REJECTED: { color: '#DC2626', label: 'REJECTED' },
 }
 
 // ─── Components ──────────────────────────────────────────

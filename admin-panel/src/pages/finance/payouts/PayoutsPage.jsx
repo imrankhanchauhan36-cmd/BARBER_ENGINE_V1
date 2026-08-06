@@ -6,20 +6,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canApprovePayout, canExport, canRejectPayout, canViewPayouts } from '../../../config/adminRoles'
 import { FONTS } from '../../../config/brand'
 import useAuthStore from '../../../store/authStore'
 import FinanceAPI from '../api/finance.api'
 
-const ADMIN_LEVELS = {
-  SUPER_ADMIN:    'SUPER_ADMIN',
-  INDIA_ADMIN:    'INDIA_ADMIN',
-  STATE_ADMIN:    'STATE_ADMIN',
-  DISTRICT_ADMIN: 'DISTRICT_ADMIN',
-}
-const canView    = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canApprove = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
-const canReject  = canApprove
-const canExport  = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN].includes(l)
+// Real, shared permission helpers (see adminRoles.js) replacing this file's
+// previous local ADMIN_LEVELS scheme (SUPER_ADMIN/INDIA_ADMIN/STATE_ADMIN/
+// DISTRICT_ADMIN), which never matched real admin.adminLevel values
+// (INDIA/STATE/DISTRICT) — canView() always evaluated false, so every real
+// admin saw "Access Denied" on this page regardless of actual permission.
+const canView    = canViewPayouts
+const canApprove = canApprovePayout
+const canReject  = canRejectPayout
 
 const p2r = (v) => ((v ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 const fmt = (v) => '₹' + p2r(v)
@@ -103,20 +102,8 @@ const Row = ({ label, value, mono=false, color='#1A1A2E' }) => (
 export default function PayoutsPage() {
   const navigate   = useNavigate()
   const admin      = useAuthStore(s => s.admin)
-  const adminLevel = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
-
-  if (!canView(adminLevel)) {
-    return (
-      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
-          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
-          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
-          <div style={{ fontSize:'13px', color:'#9E8E6E' }}>{adminLevel} does not have access to Payouts.</div>
-          <button onClick={() => navigate(-1)} style={{ marginTop:'16px', background:'#1A1A2E', color:'#fff', border:'none', padding:'8px 16px', fontSize:'12px', fontWeight:700, cursor:'pointer' }}>← Go Back</button>
-        </div>
-      </div>
-    )
-  }
+  const adminLevel = admin?.adminLevel || 'DISTRICT'
+  const hasView    = canView(adminLevel)
 
   const [payouts,       setPayouts]       = useState([])
   const [summary,       setSummary]       = useState(null)
@@ -142,7 +129,7 @@ export default function PayoutsPage() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  const scopeLabel = adminLevel === ADMIN_LEVELS.STATE_ADMIN && admin?.stateRef ? `SCOPED: ${admin.stateRef}` : null
+  const scopeLabel = adminLevel === 'STATE' && admin?.stateRef ? `SCOPED: ${admin.stateRef}` : null
 
   const fetchPayouts = useCallback(async () => {
     try {
@@ -252,6 +239,19 @@ export default function PayoutsPage() {
     showToast(`Exported ${filtered.length} rows (current view)`, '#1D4ED8')
   }
 
+  if (!hasView) {
+    return (
+      <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ background:'#fff', border:'2px solid #DC2626', padding:'40px', textAlign:'center', maxWidth:'400px' }}>
+          <div style={{ fontSize:'40px', marginBottom:'16px' }}>🔒</div>
+          <div style={{ fontSize:'16px', fontWeight:800, color:'#1A1A2E', marginBottom:'8px' }}>Access Denied</div>
+          <div style={{ fontSize:'13px', color:'#9E8E6E' }}>{adminLevel} does not have access to Payouts.</div>
+          <button onClick={() => navigate(-1)} style={{ marginTop:'16px', background:'#1A1A2E', color:'#fff', border:'none', padding:'8px 16px', fontSize:'12px', fontWeight:700, cursor:'pointer' }}>← Go Back</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ fontFamily:FONTS.body, background:'#F0EAE0', minHeight:'100vh' }}>
 
@@ -279,7 +279,7 @@ export default function PayoutsPage() {
 
       <div style={{ padding:'14px 20px' }}>
 
-        {adminLevel === ADMIN_LEVELS.STATE_ADMIN && admin?.stateRef && (
+        {adminLevel === 'STATE' && admin?.stateRef && (
           <div style={{ marginBottom:'12px', padding:'10px 14px', background:'#EFF6FF', border:'1px solid #BFDBFE', fontSize:'12px', color:'#1D4ED8', fontWeight:600 }}>
             📍 You are viewing payouts scoped to your territory: <strong>{admin.stateRef}</strong>
           </div>
@@ -414,7 +414,7 @@ export default function PayoutsPage() {
         </BCard>
 
         <div style={{ marginTop:'10px', padding:'10px 14px', background:'#FFFBEB', border:'1px solid #FDE68A', fontSize:'11px', color:'#92400E', fontWeight:600 }}>
-          ⚠ {canApprove(adminLevel) ? 'You have APPROVE and REJECT permissions. All wallet movements are recorded in the Wallet Ledger.' : 'You have VIEW ONLY access. Contact an INDIA_ADMIN or SUPER_ADMIN to approve payouts.'}
+          ⚠ {canApprove(adminLevel) ? 'You have APPROVE and REJECT permissions. All wallet movements are recorded in the Wallet Ledger.' : 'You have VIEW ONLY access. Contact an INDIA admin to approve payouts.'}
         </div>
       </div>
 
@@ -560,7 +560,7 @@ export default function PayoutsPage() {
 
                 {!canApprove(adminLevel) && (
                   <div style={{ marginTop:'16px', padding:'10px 12px', background:'#EFF6FF', border:'1px solid #BFDBFE', fontSize:'10px', color:'#1D4ED8', fontWeight:600 }}>
-                    👁 View Only — Contact an INDIA_ADMIN or SUPER_ADMIN to approve.
+                    👁 View Only — Contact an INDIA admin to approve.
                   </div>
                 )}
               </div>

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canExport } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 import FinanceAPI from './api/finance.api'
-
-const ADMIN_LEVELS = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canExport    = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
 
 const fmt  = (v) => '₹' + ((v ?? 0)/100).toLocaleString('en-IN', { minimumFractionDigits:0, maximumFractionDigits:2 })
 const fmtN = (v) => (v ?? 0).toLocaleString('en-IN')
@@ -45,11 +43,11 @@ const SimpleBarChart = ({ data }) => {
 export default function FinanceAnalyticsPage() {
   const navigate   = useNavigate()
   const admin      = useAuthStore(s => s.admin)
-  const adminLevel = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel = admin?.adminLevel || 'DISTRICT'
   const hasExport  = canExport(adminLevel)
 
-  const scope = adminLevel === ADMIN_LEVELS.STATE_ADMIN    ? 'YOUR STATE'
-              : adminLevel === ADMIN_LEVELS.DISTRICT_ADMIN ? 'YOUR DISTRICT'
+  const scope = adminLevel === 'STATE'    ? 'YOUR STATE'
+              : adminLevel === 'DISTRICT' ? 'YOUR DISTRICT'
               : 'PAN INDIA'
 
   const [summary,  setSummary]  = useState(null)
@@ -195,7 +193,7 @@ export default function FinanceAnalyticsPage() {
           <button onClick={() => navigate('/app/finance/wallets')}      style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.5)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>WALLETS ▸</button>
           <button onClick={() => navigate('/app/finance/payouts')}      style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.5)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>PAYOUTS ▸</button>
           <button onClick={handleRefreshAll} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↻ REFRESH</button>
-          {hasExport && <button onClick={() => showToast('Export triggered', '#1D4ED8')} style={{ background:'rgba(184,150,12,0.15)', border:'1px solid rgba(184,150,12,0.4)', color:'#B8960C', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
+          {hasExport && <button onClick={() => showToast('Export — Coming Soon', '#D97706')} style={{ background:'rgba(184,150,12,0.15)', border:'1px solid rgba(184,150,12,0.4)', color:'#B8960C', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
         </div>
       </div>
 

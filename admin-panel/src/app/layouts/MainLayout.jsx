@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { COLORS, FONTS } from '../../config/brand'
+import { BRAND, COLORS, FONTS } from '../../config/brand'
 import ENV from '../../config/env'
 import useAuthStore from '../../store/authStore'
+import BrandIcon from '../../components/shared/BrandIcon'
 
 const GROUPS = [
   { title: null, items: [
@@ -96,17 +97,15 @@ export default function MainLayout() {
           <div style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid rgba(184,150,12,0.15)' }}>
             <div style={{
               width: '38px', height: '38px',
-              background: '#B8960C',
+              background: '#FFFFFF',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
-              <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
-                <path d="M8 10H40L10 38H42" stroke="#0A1520" strokeWidth="4.5" strokeLinecap="square" strokeLinejoin="miter"/>
-              </svg>
+              <BrandIcon size={26} />
             </div>
             <div>
-              <div style={{ color: '#FFFFFF', fontWeight: 800, fontSize: '15px', letterSpacing: '3px', fontFamily: FONTS.heading }}>ZEMISH</div>
-              <div style={{ color: '#B8960C', fontSize: '8px', letterSpacing: '2px', fontWeight: 700, marginTop: '2px' }}>NATIONAL COMMAND CENTER</div>
+              <div style={{ color: '#FFFFFF', fontWeight: 800, fontSize: '15px', letterSpacing: '3px', fontFamily: FONTS.heading }}>{BRAND.name.toUpperCase()}</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '8px', letterSpacing: '2px', fontWeight: 700, marginTop: '2px' }}>{BRAND.adminTagline.toUpperCase()}</div>
             </div>
           </div>
 

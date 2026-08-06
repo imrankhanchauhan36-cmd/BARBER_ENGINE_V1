@@ -7,7 +7,6 @@ import ApprovalsAPI from './api/approvals.api'
 // ─── Helpers ─────────────────────────────────────────────
 const v   = (val, fb = '—') => (val !== null && val !== undefined && val !== '') ? val : fb
 const dt  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'
-const dtm = (d) => d ? new Date(d).toLocaleString('en-IN') : '—'
 
 // ─── Constants ────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -145,7 +144,15 @@ export default function ApprovalDetailPage() {
   }
 
   const handleConfirm = () => {
-    if (confirm === 'APPROVE') handleApprove()
+    // "Recommend" = approve, for a DISTRICT admin — the backend's
+    // updateSalonStatus already scopes DISTRICT approval to their own
+    // district, so this is the same real endpoint/action as APPROVE,
+    // just the label DISTRICT admins see. Matches ApprovalsPage.jsx's
+    // existing "recommend = approve for DISTRICT" handling. Previously
+    // this fell into the `else` branch below and called handleReject()
+    // instead — a real bug that could silently reject a salon a DISTRICT
+    // admin was trying to recommend.
+    if (confirm === 'APPROVE' || confirm === 'RECOMMEND') handleApprove()
     else handleReject()
   }
 

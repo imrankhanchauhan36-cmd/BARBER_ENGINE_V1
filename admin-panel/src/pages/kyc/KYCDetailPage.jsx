@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { canApproveKYC, canRejectKYC, canVerifyBank as canVerifyBankRole, canViewPII as canViewPIIRole } from '../../config/adminRoles'
+import { canApproveKYC, canRejectKYC, canVerifyAadhaar as canVerifyAadhaarRole, canVerifyBank as canVerifyBankRole, canVerifyPAN as canVerifyPANRole, canViewPII as canViewPIIRole } from '../../config/adminRoles'
 import { FONTS } from '../../config/brand'
 import useAuthStore from '../../store/authStore'
 import KYCAPI from './api/kyc.api'
@@ -231,6 +231,95 @@ function VerifyBankModal({ kyc, onConfirm, onCancel, processing }) {
   )
 }
 
+// ─── Verify PAN Modal ─────────────────────────────────────
+// PATCH .../verify-pan requires panNumber (validated server-side
+// against ^[A-Z]{5}[0-9]{4}[A-Z]{1}$) — mirrors VerifyBankModal's
+// exact pattern/styling. nameOnPAN is optional, matching the
+// backend handler's own `nameOnPAN?.trim() || null`.
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
+
+function VerifyPANModal({ kyc, onConfirm, onCancel, processing }) {
+  const [panNumber, setPanNumber] = useState('')
+  const [nameOnPAN, setNameOnPAN] = useState(kyc.owner?.name || '')
+
+  const valid = PAN_REGEX.test(panNumber.trim().toUpperCase())
+
+  const fieldStyle = { width:'100%', border:'1px solid #D4C9B0', padding:'8px 10px', fontSize:'13px', fontFamily:FONTS.body, outline:'none', marginBottom:'12px', boxSizing:'border-box' }
+  const labelStyle = { fontSize:'10px', color:'#9E8E6E', fontWeight:800, letterSpacing:'1px', display:'block', marginBottom:'6px' }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'440px', border:'2px solid #059669' }}>
+        <div style={{ background:'#065F46', padding:'14px 18px', borderBottom:'2px solid #059669' }}>
+          <div style={{ color:'#fff', fontWeight:800, fontSize:'13px', letterSpacing:'1px' }}>✓ VERIFY PAN</div>
+          <div style={{ color:'rgba(255,255,255,0.6)', fontSize:'10px', marginTop:'2px' }}>{v(kyc.owner?.name)} — {kyc.id}</div>
+        </div>
+        <div style={{ padding:'20px 18px' }}>
+          <div style={{ background:'#F0FDF4', border:'1px solid #D1FAE5', padding:'10px', marginBottom:'14px', fontSize:'11px', color:'#065F46', fontWeight:600 }}>
+            ℹ Enter the PAN number exactly as it appears on the uploaded document.
+          </div>
+
+          <label style={labelStyle}>PAN NUMBER</label>
+          <input value={panNumber} onChange={e => setPanNumber(e.target.value.toUpperCase())} style={fieldStyle} placeholder="ABCDE1234F" maxLength={10}/>
+
+          <label style={labelStyle}>NAME ON PAN (OPTIONAL)</label>
+          <input value={nameOnPAN} onChange={e => setNameOnPAN(e.target.value)} style={fieldStyle} placeholder="As per PAN card"/>
+
+          <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end', marginTop:'4px' }}>
+            <button onClick={onCancel} style={{ background:'#fff', border:'1px solid #D4C9B0', color:'#6B5E3E', padding:'8px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer' }}>CANCEL</button>
+            <button
+              onClick={() => valid && onConfirm({ panNumber: panNumber.trim().toUpperCase(), nameOnPAN: nameOnPAN.trim() || undefined })}
+              disabled={!valid || processing}
+              style={{ background:valid?'#059669':'#F5F0E8', border:'none', color:valid?'#fff':'#C4B49A', padding:'8px 20px', fontSize:'11px', fontWeight:800, cursor:valid?'pointer':'not-allowed', opacity:processing?0.7:1 }}>
+              {processing ? 'VERIFYING...' : '✓ VERIFY PAN'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Verify Aadhaar Modal ─────────────────────────────────
+// PATCH .../verify-aadhaar requires last4 (exactly 4 digits, matching
+// the backend's ^\d{4}$ check) — mirrors VerifyBankModal's pattern.
+function VerifyAadhaarModal({ kyc, onConfirm, onCancel, processing }) {
+  const [last4, setLast4] = useState('')
+  const valid = /^\d{4}$/.test(last4.trim())
+
+  const fieldStyle = { width:'100%', border:'1px solid #D4C9B0', padding:'8px 10px', fontSize:'13px', fontFamily:FONTS.body, outline:'none', marginBottom:'12px', boxSizing:'border-box' }
+  const labelStyle = { fontSize:'10px', color:'#9E8E6E', fontWeight:800, letterSpacing:'1px', display:'block', marginBottom:'6px' }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'#fff', width:'440px', border:'2px solid #059669' }}>
+        <div style={{ background:'#065F46', padding:'14px 18px', borderBottom:'2px solid #059669' }}>
+          <div style={{ color:'#fff', fontWeight:800, fontSize:'13px', letterSpacing:'1px' }}>✓ VERIFY AADHAAR</div>
+          <div style={{ color:'rgba(255,255,255,0.6)', fontSize:'10px', marginTop:'2px' }}>{v(kyc.owner?.name)} — {kyc.id}</div>
+        </div>
+        <div style={{ padding:'20px 18px' }}>
+          <div style={{ background:'#F0FDF4', border:'1px solid #D1FAE5', padding:'10px', marginBottom:'14px', fontSize:'11px', color:'#065F46', fontWeight:600 }}>
+            ℹ Enter the last 4 digits of the Aadhaar number as it appears on the uploaded document.
+          </div>
+
+          <label style={labelStyle}>LAST 4 DIGITS</label>
+          <input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g, '').slice(0,4))} style={fieldStyle} placeholder="1234" maxLength={4} inputMode="numeric"/>
+
+          <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end', marginTop:'4px' }}>
+            <button onClick={onCancel} style={{ background:'#fff', border:'1px solid #D4C9B0', color:'#6B5E3E', padding:'8px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer' }}>CANCEL</button>
+            <button
+              onClick={() => valid && onConfirm({ last4: last4.trim() })}
+              disabled={!valid || processing}
+              style={{ background:valid?'#059669':'#F5F0E8', border:'none', color:valid?'#fff':'#C4B49A', padding:'8px 20px', fontSize:'11px', fontWeight:800, cursor:valid?'pointer':'not-allowed', opacity:processing?0.7:1 }}>
+              {processing ? 'VERIFYING...' : '✓ VERIFY AADHAAR'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function KYCDetailPage() {
   const { id }     = useParams()
@@ -238,20 +327,24 @@ export default function KYCDetailPage() {
   const admin      = useAuthStore(s => s.admin)
   const adminLevel = admin?.adminLevel || 'INDIA'
 
-  const hasApprove    = canApproveKYC(adminLevel)
-  const hasReject     = canRejectKYC(adminLevel)
-  const hasVerifyBank = canVerifyBankRole(adminLevel)
-  const hasPII        = canViewPIIRole(adminLevel)
+  const hasApprove        = canApproveKYC(adminLevel)
+  const hasReject         = canRejectKYC(adminLevel)
+  const hasVerifyBank     = canVerifyBankRole(adminLevel)
+  const hasVerifyPAN      = canVerifyPANRole(adminLevel)
+  const hasVerifyAadhaar  = canVerifyAadhaarRole(adminLevel)
+  const hasPII            = canViewPIIRole(adminLevel)
 
-  const [kyc,             setKyc]            = useState(null)
-  const [loading,         setLoading]        = useState(true)
-  const [error,           setError]          = useState(null)
-  const [processing,      setProcessing]     = useState(false)
-  const [tab,             setTab]            = useState('overview')
-  const [toast,           setToast]          = useState(null)
-  const [rejectModal,     setRejectModal]    = useState(false)
-  const [reuploadModal,   setReuploadModal]  = useState(false)
-  const [verifyBankModal, setVerifyBankModal]= useState(false)
+  const [kyc,                 setKyc]                = useState(null)
+  const [loading,             setLoading]            = useState(true)
+  const [error,               setError]              = useState(null)
+  const [processing,          setProcessing]         = useState(false)
+  const [tab,                 setTab]                = useState('overview')
+  const [toast,               setToast]              = useState(null)
+  const [rejectModal,         setRejectModal]        = useState(false)
+  const [reuploadModal,       setReuploadModal]      = useState(false)
+  const [verifyBankModal,     setVerifyBankModal]    = useState(false)
+  const [verifyPANModal,      setVerifyPANModal]     = useState(false)
+  const [verifyAadhaarModal,  setVerifyAadhaarModal] = useState(false)
 
   const showToast = (msg, color = '#059669') => {
     setToast({ msg, color })
@@ -325,6 +418,39 @@ export default function KYCDetailPage() {
       // Real backend message surfaced verbatim (e.g. invalid IFSC
       // format, invalid account number length) — never replaced with
       // a guessed client-side string.
+      showToast(`⚠ ${err.message}`, '#DC2626')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleVerifyPAN = async (body) => {
+    setProcessing(true)
+    try {
+      const res = await KYCAPI.verifyPAN(id, body)
+      // Backend can respond 200 with success:false (e.g. provider
+      // mismatch from the verification service) — surface that
+      // distinctly from a network/validation failure.
+      const ok = res.data?.panVerified ?? true
+      showToast(ok ? '✓ PAN verified' : `⚠ ${res.message || 'PAN verification failed'}`, ok ? '#059669' : '#D97706')
+      setVerifyPANModal(false)
+      fetchKYC()
+    } catch (err) {
+      showToast(`⚠ ${err.message}`, '#DC2626')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleVerifyAadhaar = async (body) => {
+    setProcessing(true)
+    try {
+      const res = await KYCAPI.verifyAadhaar(id, body)
+      const ok = res.data?.aadhaarVerified ?? true
+      showToast(ok ? '✓ Aadhaar verified' : `⚠ ${res.message || 'Aadhaar verification failed'}`, ok ? '#059669' : '#D97706')
+      setVerifyAadhaarModal(false)
+      fetchKYC()
+    } catch (err) {
       showToast(`⚠ ${err.message}`, '#DC2626')
     } finally {
       setProcessing(false)
@@ -557,7 +683,16 @@ export default function KYCDetailPage() {
                 { key:'manualReview', label:'Manual Review', level:7 },
               ].map(item => {
                 const field = vf[item.key] || {}
-                const isBankRow = item.key === 'bank'
+                // PAN, Aadhaar, and Bank each have a real, dedicated
+                // backend verify action (PATCH .../verify-pan,
+                // .../verify-aadhaar, .../verify-bank). OCR/Face/Manual
+                // Review have no such endpoint yet — no button for
+                // those, per the same rule.
+                const verifyAction =
+                  item.key === 'pan'     ? { open: () => setVerifyPANModal(true),     has: hasVerifyPAN,     label: 'VERIFY PAN',     permLabel: 'verify-pan' } :
+                  item.key === 'aadhaar' ? { open: () => setVerifyAadhaarModal(true), has: hasVerifyAadhaar, label: 'VERIFY AADHAAR', permLabel: 'verify-aadhaar' } :
+                  item.key === 'bank'    ? { open: () => setVerifyBankModal(true),    has: hasVerifyBank,    label: 'VERIFY BANK',    permLabel: 'verify-bank' } :
+                  null
                 return (
                   <div key={item.key} style={{ borderBottom:'1px solid #F0EAE0' }}>
                     <div style={{ display:'grid', gridTemplateColumns:'0.5fr 1.5fr 1fr 1fr 1fr 1fr', padding:'10px 14px', alignItems:'center', gap:'8px' }}>
@@ -570,20 +705,15 @@ export default function KYCDetailPage() {
                       <span style={{ fontSize:'10px', color:'#9E8E6E' }}>{dt(field.verifiedAt)}</span>
                       <span style={{ fontSize:'10px', color:'#6B5E3E' }}>{v(field.remarks)}</span>
                     </div>
-                    {/* Bank is the one leg with a real, dedicated backend
-                        verify action (PATCH .../verify-bank) — every other
-                        row above is either OTP-driven or set as a side
-                        effect of Approve/Reject, so no separate button
-                        exists (or should exist) for them. */}
-                    {isBankRow && !field.verified && (
+                    {verifyAction && !field.verified && (
                       <div style={{ padding:'0 14px 12px', display:'flex', justifyContent:'flex-end' }}>
-                        {hasVerifyBank ? (
-                          <button onClick={() => setVerifyBankModal(true)}
+                        {verifyAction.has ? (
+                          <button onClick={verifyAction.open}
                             style={{ background:'#059669', color:'#fff', border:'none', padding:'6px 14px', fontSize:'10px', fontWeight:800, cursor:'pointer' }}>
-                            ✓ VERIFY BANK
+                            ✓ {verifyAction.label}
                           </button>
                         ) : (
-                          <span style={{ fontSize:'10px', color:'#9E8E6E' }}>No verify-bank permission</span>
+                          <span style={{ fontSize:'10px', color:'#9E8E6E' }}>No {verifyAction.permLabel} permission</span>
                         )}
                       </div>
                     )}
@@ -673,6 +803,12 @@ export default function KYCDetailPage() {
       )}
       {verifyBankModal && (
         <VerifyBankModal kyc={kyc} onConfirm={handleVerifyBank} onCancel={() => setVerifyBankModal(false)} processing={processing}/>
+      )}
+      {verifyPANModal && (
+        <VerifyPANModal kyc={kyc} onConfirm={handleVerifyPAN} onCancel={() => setVerifyPANModal(false)} processing={processing}/>
+      )}
+      {verifyAadhaarModal && (
+        <VerifyAadhaarModal kyc={kyc} onConfirm={handleVerifyAadhaar} onCancel={() => setVerifyAadhaarModal(false)} processing={processing}/>
       )}
     </div>
   )

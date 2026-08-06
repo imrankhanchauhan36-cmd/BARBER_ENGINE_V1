@@ -117,13 +117,15 @@ export default function SalonEditPage() {
   const navigate = useNavigate()
   const admin    = useAuthStore(s => s.admin)
 
-  const isIndia  = admin?.adminLevel === 'INDIA'
   const canEdit  = ['INDIA','STATE'].includes(admin?.adminLevel)
 
   // ── State ──
   const [salon,         setSalon]         = useState(null)
   const [loading,       setLoading]       = useState(true)
-  const [saving,        setSaving]        = useState(false)
+  // No real async save exists yet (see handleSave below) — kept as
+  // state (not a literal) so the modal's "SAVING..." branch and prop
+  // stay wired for when a real save call is added.
+  const [saving]        = useState(false)
   const [error,         setError]         = useState(null)
   const [tab,           setTab]           = useState('basic')
   const [isDirty,       setIsDirty]       = useState(false)
@@ -198,22 +200,18 @@ export default function SalonEditPage() {
     setShowConfirm(true)
   }
 
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await SalonsAPI.updateStatus(id, {
-        basic, amenities, timings,
-      })
-      setIsDirty(false)
-      setShowConfirm(false)
-      showToast('✓ Changes saved successfully', '#059669')
-      setTimeout(() => navigate(`/app/salons/${id}`), 1500)
-    } catch (err) {
-      setShowConfirm(false)
-      showToast(`⚠ Save failed: ${err.message}`, '#DC2626')
-    } finally {
-      setSaving(false)
-    }
+  // NOTE: there is no backend endpoint that accepts a salon profile
+  // edit (basic/amenities/timings). PATCH /admin/salons/:id/status
+  // exists but only accepts an approval-status change (APPROVED/
+  // REJECTED) — calling it with this form's payload would silently
+  // fail with a misleading "Invalid status" error. Until a real
+  // "update salon profile" endpoint exists, this honestly reports
+  // that the save cannot happen, instead of pretending it did or
+  // surfacing a confusing unrelated error. isDirty is intentionally
+  // left true — nothing was actually persisted.
+  const handleSave = () => {
+    setShowConfirm(false)
+    showToast('⚠ Not available yet — no backend endpoint exists for editing salon profile details', '#DC2626')
   }
 
   const handleDiscard = () => {

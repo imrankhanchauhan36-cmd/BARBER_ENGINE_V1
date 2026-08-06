@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { BRAND, COLORS, FONTS, SHADOW } from '../../config/brand'
 import ENV from '../../config/env'
 import useAuthStore from '../../store/authStore'
+import BrandIcon from '../../components/shared/BrandIcon'
 
 export default function LoginPage() {
   const navigate   = useNavigate()
@@ -102,13 +103,12 @@ export default function LoginPage() {
         <div style={{ ...s.left, background: COLORS.navy }}>
           <div style={s.leftContent}>
             <div style={{ ...s.logoBox, borderColor: COLORS.goldBorder }}>
-              <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
-                <path d="M8 10H40L10 38H42" stroke={COLORS.gold} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <BrandIcon size={44} />
             </div>
             <h1 style={{ ...s.brand, color: COLORS.textWhite, fontFamily: FONTS.heading }}>
               {BRAND.name.toUpperCase()}
             </h1>
+            <p style={{ ...s.adminTagline, color: COLORS.textWhiteMuted }}>{BRAND.adminTagline}</p>
             <div style={{ ...s.goldLine, background: COLORS.gold }} />
             <p style={{ ...s.tagline, color: COLORS.textWhiteSub }}>{BRAND.tagline}</p>
             <div style={s.statsRow}>
@@ -240,6 +240,7 @@ const s = {
   leftContent: { display:'flex', flexDirection:'column', alignItems:'flex-start' },
   logoBox:     { width:'80px', height:'80px', border:'1.5px solid', borderRadius:'4px', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'24px', background:'rgba(255,255,255,0.05)', backdropFilter:'blur(12px)' },
   brand:       { fontSize:'32px', fontWeight:800, letterSpacing:'4px', margin:'0 0 12px' },
+  adminTagline:{ fontSize:'12px', fontWeight:400, letterSpacing:'0.8px', margin:'-6px 0 16px' },
   goldLine:    { width:'40px', height:'1px', marginBottom:'16px' },
   tagline:     { fontSize:'13px', lineHeight:1.7, margin:'0 0 36px', fontWeight:400 },
   statsRow:    { display:'flex', alignItems:'center' },

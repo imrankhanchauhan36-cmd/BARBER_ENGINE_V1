@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FONTS } from '../../../config/brand'
-import useAuthStore from '../../../store/authStore'
 import FinanceAPI from '../api/finance.api'
-
-const ADMIN_LEVELS = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
 
 const fmt = (v) => '₹' + ((v ?? 0)/100).toLocaleString('en-IN', { minimumFractionDigits:0, maximumFractionDigits:2 })
 
@@ -27,15 +24,6 @@ const METHOD_CONFIG = {
 const BCard = ({ children, style={} }) => (
   <div style={{ background:'#fff', border:'1px solid #D4C9B0', borderTop:'2px solid #B8960C', ...style }}>{children}</div>
 )
-const BCardHeader = ({ title, action }) => (
-  <div style={{ padding:'10px 14px', borderBottom:'1px solid #E8DFD0', display:'flex', justifyContent:'space-between', alignItems:'center', background:'#FDFAF6' }}>
-    <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-      <div style={{ width:'3px', height:'14px', background:'#B8960C' }}/>
-      <span style={{ fontSize:'12px', fontWeight:700, color:'#1A1A2E', letterSpacing:'0.5px', textTransform:'uppercase' }}>{title}</span>
-    </div>
-    {action}
-  </div>
-)
 // value can be a plain string/number OR a React element (e.g. a badge).
 // The isElement branch renders it as-is, without forcing text-only styles onto it.
 const DetailRow = ({ label, value, mono=false, color='#1A1A2E' }) => {
@@ -55,8 +43,6 @@ const DetailRow = ({ label, value, mono=false, color='#1A1A2E' }) => {
 export default function TransactionDetailPage() {
   const { id: transactionId } = useParams()
   const navigate   = useNavigate()
-  const admin      = useAuthStore(s => s.admin)
-  const adminLevel = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
 
   const [txn,       setTxn]       = useState(null)
   const [loading,   setLoading]   = useState(true)

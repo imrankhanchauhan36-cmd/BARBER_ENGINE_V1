@@ -6,18 +6,19 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canExport, canFreezeWallet } from '../../../config/adminRoles'
 import { FONTS } from '../../../config/brand'
 import useAuthStore from '../../../store/authStore'
 import FinanceAPI from '../api/finance.api'
 
-const ADMIN_LEVELS = {
-  SUPER_ADMIN:    'SUPER_ADMIN',
-  INDIA_ADMIN:    'INDIA_ADMIN',
-  STATE_ADMIN:    'STATE_ADMIN',
-  DISTRICT_ADMIN: 'DISTRICT_ADMIN',
-}
-const canFreeze  = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN].includes(l)
-const canExport  = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
+// NOTE: this file previously defined its own ADMIN_LEVELS scheme
+// (SUPER_ADMIN/INDIA_ADMIN/STATE_ADMIN/DISTRICT_ADMIN) that never
+// matched the real system (admin.adminLevel is always INDIA/STATE/
+// DISTRICT). That meant canFreeze/canExport silently evaluated false
+// for every real admin — the Freeze/Block/Unblock/Export buttons
+// never rendered for anyone. Now using the real, shared permission
+// helpers every other module uses.
+const canFreeze = canFreezeWallet
 
 const p2r = (v) => ((v ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 
@@ -51,12 +52,12 @@ const BCardHeader = ({ title, action }) => (
 export default function WalletsPage() {
   const navigate   = useNavigate()
   const admin      = useAuthStore(s => s.admin)
-  const adminLevel = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel = admin?.adminLevel || 'DISTRICT'
   const hasFreeze  = canFreeze(adminLevel)
   const hasExport  = canExport(adminLevel)
 
-  const scope = adminLevel === ADMIN_LEVELS.STATE_ADMIN    ? 'YOUR STATE'
-              : adminLevel === ADMIN_LEVELS.DISTRICT_ADMIN ? 'YOUR DISTRICT'
+  const scope = adminLevel === 'STATE'    ? 'YOUR STATE'
+              : adminLevel === 'DISTRICT' ? 'YOUR DISTRICT'
               : 'PAN INDIA'
 
   const [wallets,       setWallets]       = useState([])
@@ -156,7 +157,7 @@ export default function WalletsPage() {
         <div style={{ display:'flex', gap:'8px' }}>
           <button onClick={() => navigate('/app/finance/transactions')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.5)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>TRANSACTIONS ▸</button>
           <button onClick={() => navigate('/app/finance/payouts')} style={{ background:'rgba(184,150,12,0.15)', border:'1px solid rgba(184,150,12,0.4)', color:'#B8960C', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>PAYOUTS ▸</button>
-          {hasExport && <button style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
+          {hasExport && <button onClick={() => showToast('Export — Coming Soon', '#D97706')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.15)', color:'rgba(255,255,255,0.6)', padding:'6px 12px', fontSize:'10px', fontWeight:700, cursor:'pointer' }}>↓ EXPORT</button>}
         </div>
       </div>
 
@@ -306,7 +307,7 @@ export default function WalletsPage() {
 
         {!hasFreeze && (
           <div style={{ marginTop:'10px', padding:'10px 14px', background:'#FEF2F2', border:'1px solid #FEE2E2', fontSize:'11px', color:'#991B1B', fontWeight:600 }}>
-            ⊘ {adminLevel} — View Only. Freeze and Block actions require INDIA_ADMIN or SUPER_ADMIN.
+            ⊘ {adminLevel} — View Only. Freeze and Block actions require INDIA admin level.
           </div>
         )}
       </div>

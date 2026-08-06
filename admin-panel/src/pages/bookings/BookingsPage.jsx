@@ -6,7 +6,6 @@ import BookingsAPI from './api/bookings.api'
 
 // ─── Helpers ─────────────────────────────────────────────
 const v  = (val, fb = '—') => (val !== null && val !== undefined && val !== '') ? val : fb
-const dt = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const tm = (d) => {
   if (!d) return '—'
   const date = d instanceof Date ? d : new Date(d)

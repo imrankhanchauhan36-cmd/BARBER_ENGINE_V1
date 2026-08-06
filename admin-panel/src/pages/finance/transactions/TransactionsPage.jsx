@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canExport } from '../../../config/adminRoles'
 import { FONTS } from '../../../config/brand'
 import useAuthStore from '../../../store/authStore'
 import FinanceAPI from '../api/finance.api'
-
-const ADMIN_LEVELS = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canExport    = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN, ADMIN_LEVELS.STATE_ADMIN].includes(l)
 
 const fmt  = (v) => '₹' + ((v ?? 0)/100).toLocaleString('en-IN', { minimumFractionDigits:0, maximumFractionDigits:2 })
 
@@ -100,11 +98,11 @@ const DetailRow = ({ label, value, mono=false, color='#1A1A2E' }) => (
 export default function TransactionsPage() {
   const navigate   = useNavigate()
   const admin      = useAuthStore(s => s.admin)
-  const adminLevel = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel = admin?.adminLevel || 'DISTRICT'
   const hasExport  = canExport(adminLevel)
 
-  const scope = adminLevel === ADMIN_LEVELS.STATE_ADMIN    ? 'YOUR STATE'
-              : adminLevel === ADMIN_LEVELS.DISTRICT_ADMIN ? 'YOUR DISTRICT'
+  const scope = adminLevel === 'STATE'    ? 'YOUR STATE'
+              : adminLevel === 'DISTRICT' ? 'YOUR DISTRICT'
               : 'PAN INDIA'
 
   // ── State ─────────────────────────────────────────────

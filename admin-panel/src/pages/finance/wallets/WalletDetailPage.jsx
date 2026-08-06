@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { canFreezeWallet } from '../../../config/adminRoles'
 import { FONTS } from '../../../config/brand'
 import useAuthStore from '../../../store/authStore'
 import FinanceAPI from '../api/finance.api'
 
-const ADMIN_LEVELS = { SUPER_ADMIN:'SUPER_ADMIN', INDIA_ADMIN:'INDIA_ADMIN', STATE_ADMIN:'STATE_ADMIN', DISTRICT_ADMIN:'DISTRICT_ADMIN' }
-const canFreeze = (l) => [ADMIN_LEVELS.SUPER_ADMIN, ADMIN_LEVELS.INDIA_ADMIN].includes(l)
+const canFreeze = canFreezeWallet
 
 const fmt  = (v) => '₹' + ((v ?? 0)/100).toLocaleString('en-IN', { minimumFractionDigits:0, maximumFractionDigits:2 })
 
@@ -70,7 +70,7 @@ export default function WalletDetailPage() {
   const { id: salonId } = useParams()
   const navigate    = useNavigate()
   const admin       = useAuthStore(s => s.admin)
-  const adminLevel  = admin?.adminLevel || ADMIN_LEVELS.SUPER_ADMIN
+  const adminLevel  = admin?.adminLevel || 'DISTRICT'
   const hasFreeze   = canFreeze(adminLevel)
 
   // ── Wallet state ──────────────────────────────────────

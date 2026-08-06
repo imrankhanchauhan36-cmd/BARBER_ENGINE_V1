@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BRAND, COLORS, FONTS } from '../../config/brand'
+import BrandIcon from '../../components/shared/BrandIcon'
 
 export default function SplashScreen() {
   const navigate = useNavigate()
@@ -21,14 +22,16 @@ export default function SplashScreen() {
       {/* Center */}
       <div style={s.center}>
         <div style={{ ...s.logoBox, borderColor: COLORS.goldBorder, background: 'rgba(255,255,255,0.45)' }}>
-          <svg width="52" height="52" viewBox="0 0 48 48" fill="none">
-            <path d="M8 10H40L10 38H42" stroke={COLORS.gold} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <BrandIcon size={52} />
         </div>
 
         <h1 style={{ ...s.brand, color: COLORS.navy, fontFamily: FONTS.heading }}>
           {BRAND.name.toUpperCase()}
         </h1>
+
+        <p style={{ ...s.adminTagline, color: COLORS.textMuted, fontFamily: FONTS.body }}>
+          {BRAND.adminTagline}
+        </p>
 
         <div style={{ ...s.divider, background: COLORS.gold }} />
 
@@ -111,6 +114,12 @@ const s = {
     fontWeight: 800,
     letterSpacing: '4px',
     margin: 0,
+  },
+  adminTagline: {
+    fontSize: '14px',
+    fontWeight: 400,
+    letterSpacing: '1px',
+    margin: '8px 0 0',
   },
   divider: {
     width: '60px',

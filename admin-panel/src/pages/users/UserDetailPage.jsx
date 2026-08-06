@@ -7,7 +7,6 @@ import UsersAPI from './api/users.api'
 // ─── Helpers ─────────────────────────────────────────────
 const v   = (val, fb = '—') => (val !== null && val !== undefined && val !== '') ? val : fb
 const dt  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'
-const dtm = (d) => d ? new Date(d).toLocaleString('en-IN') : '—'
 
 const maskPhone = (p='') => p && p.length >= 4 ? p.slice(0,2)+'******'+p.slice(-2) : '******'
 const maskEmail = (e='') => {

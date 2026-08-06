@@ -5,6 +5,13 @@
 
 export const BRAND = {
   name:    'Zemish',
+  // Short brand-lockup subtitle — rendered directly under the "ZEMISH"
+  // wordmark on Splash/Login/Sidebar (separate text element, not baked
+  // into the logo artwork). Distinct from `tagline` below, which is
+  // older marketing copy shown further down those screens. Matches the
+  // brandTagline pattern used in user-app/salon-app, with Admin Panel's
+  // own role-specific wording.
+  adminTagline: 'Admin Console',
   tagline: "Powering India's Beauty & Grooming Network",
   sub:     'NATIONAL COMMAND CENTER',
   version: 'ZEMISH ADMIN v1.0.0',
