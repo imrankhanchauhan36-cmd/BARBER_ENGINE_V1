@@ -157,7 +157,7 @@ export default function LoginPage() {
                   </svg>
                   <input
                     style={{ ...s.input, border: `1px solid ${COLORS.border}`, background: COLORS.surfaceAlt, color: COLORS.text }}
-                    type="email" placeholder="admin@barberapp.com"
+                    type="email" placeholder="admin@zemish.in"
                     value={email} onChange={e => setEmail(e.target.value)} required
                   />
                 </div>

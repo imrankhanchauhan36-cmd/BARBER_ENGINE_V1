@@ -29,8 +29,16 @@ export default function ProtectedRoute({ children }) {
         fontSize:    '14px',
         letterSpacing: '0.5px',
       }}>
-        <BrandIcon size={40} />
+        <div style={{ animation: 'brandPulse 1.4s ease-in-out infinite' }}>
+          <BrandIcon size={40} />
+        </div>
         Loading...
+        <style>{`
+          @keyframes brandPulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.45; }
+          }
+        `}</style>
       </div>
     )
   }
