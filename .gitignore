@@ -48,3 +48,6 @@ user-app/
 salon-app/
 .claude/
 postman/
+
+# Admin Panel has its own Git repository
+/admin-panel/
