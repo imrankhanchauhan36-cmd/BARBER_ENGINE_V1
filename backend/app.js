@@ -8,7 +8,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import helmet from "helmet";
 import hpp from "hpp";
 
-import redis from "./config/redis.js";
+import redis, { isRedisReady } from "./config/redis.js";
 
 // 🛣️ Routes
 import ownerKycRoutes from "./modules/kyc/routes/ownerKyc.routes.js"; // ← NEW — Phase 6C owner KYC submission
@@ -152,7 +152,7 @@ app.get("/health", async (req, res) => {
   let redisStatus = "disconnected";
 
   try {
-    if (redis.status === "ready") {
+    if (isRedisReady()) {
       redisStatus = "connected";
     }
   } catch {}

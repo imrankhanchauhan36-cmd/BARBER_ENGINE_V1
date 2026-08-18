@@ -33,38 +33,6 @@ redis.on("error",  (err) => console.error("❌ Redis Connection Error:", err.mes
 redis.on("reconnecting",() => console.warn("🔄 Redis Reconnecting..."));
 
 //////////////////////////////////////////////////////////////
-// ❤️ HEALTH CHECK ROUTE
-// Used by Kubernetes, PM2, load balancers, and uptime monitors.
-// Returns REAL live state — nothing hardcoded.
-//////////////////////////////////////////////////////////////
-
-app.get("/health", (req, res) => {
-  return res.status(200).json({
-    status:      "OK",
-    service:     "BARBER_ENGINE_V1",
-    environment: process.env.NODE_ENV || "development",
-
-    // IMPROVEMENT-3: real DB state — not hardcoded "connected"
-    mongodb:     mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-
-    redis:       redis.isReady ? "connected" : "disconnected",
-    uptime:      process.uptime(),
-    timestamp:   new Date().toISOString(),
-
-    // Background job status — visible to monitoring dashboards
-    // and uptime checks without needing to inspect process logs.
-    jobs: {
-      holdExpiry:      "running",
-      customerArrival: "running",
-      serviceOverdue:  "running",
-      autoComplete:    "running",
-      reminder:        "running",
-      autoStart:       "running",
-    },
-  });
-});
-
-//////////////////////////////////////////////////////////////
 // 🔑 STEP 4: PORT CONFIGURATION
 //////////////////////////////////////////////////////////////
 
