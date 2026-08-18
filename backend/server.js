@@ -47,7 +47,7 @@ app.get("/health", (req, res) => {
     // IMPROVEMENT-3: real DB state — not hardcoded "connected"
     mongodb:     mongoose.connection.readyState === 1 ? "connected" : "disconnected",
 
-    redis:       redis.status || "unknown",
+    redis:       redis.isReady ? "connected" : "disconnected",
     uptime:      process.uptime(),
     timestamp:   new Date().toISOString(),
 
