@@ -6,12 +6,55 @@
 
 import mongoose from "mongoose";
 import PayoutRequest from "../models/PayoutRequest.js";
+import Salon from "../models/Salon.js";
 import SalonEarnings from "../models/SalonEarnings.js";
 import Transaction from "../models/Transaction.js";
 import WalletLedger from "../models/WalletLedger.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 const p2 = (v) => Math.round(v ?? 0) / 100;
+
+/**
+ * Admin geographic scope, applied to every finance query below.
+ * Same convention already used in admin.controller.js / adminUser.controller.js /
+ * adminStaff.controller.js / modules/kyc/controllers/adminKyc.controller.js:
+ *   INDIA    → unrestricted (returns { unrestricted: true })
+ *   STATE    → only salons whose location.territory.stateRef matches admin.stateRef
+ *   DISTRICT → only salons whose location.territory.districtRef matches admin.districtRef
+ *   anything else (missing/unrecognized adminLevel) → fail closed, zero salons
+ */
+const resolveAdminFinanceScope = async (admin) => {
+  if (admin?.adminLevel === "INDIA") return { unrestricted: true };
+
+  const salonFilter = { isDeleted: { $ne: true } };
+  if (admin?.adminLevel === "STATE") {
+    salonFilter["location.territory.stateRef"] = admin.stateRef;
+  } else if (admin?.adminLevel === "DISTRICT") {
+    salonFilter["location.territory.districtRef"] = admin.districtRef;
+  } else {
+    return { unrestricted: false, salonIds: [] };
+  }
+
+  const salons = await Salon.find(salonFilter).select("_id").lean();
+  return { unrestricted: false, salonIds: salons.map((s) => s._id) };
+};
+
+/**
+ * For endpoints that take a single :salonId / resolve one target salon —
+ * verifies that salon is inside the admin's authorized territory. Never
+ * trusts the client-supplied ID as authorization by itself.
+ */
+const isSalonWithinScope = (admin, salon) => {
+  if (!salon) return false;
+  if (admin?.adminLevel === "INDIA") return true;
+  if (admin?.adminLevel === "STATE") {
+    return salon.location?.territory?.stateRef?.toString() === admin.stateRef?.toString();
+  }
+  if (admin?.adminLevel === "DISTRICT") {
+    return salon.location?.territory?.districtRef?.toString() === admin.districtRef?.toString();
+  }
+  return false;
+};
 
 // ✅ Safe date parser — throws on invalid strings like "abc"
 // Throw pattern is cleaner than returning undefined + caller null-check
@@ -29,9 +72,23 @@ const parseDate = (str, fieldName) => {
  */
 export const getFinanceSummary = async (req, res, next) => {
   try {
+    const scope = await resolveAdminFinanceScope(req.user);
+    if (!scope.unrestricted && scope.salonIds.length === 0) {
+      return successResponse(res, {
+        message: "Finance summary fetched",
+        data: {
+          wallets: { count: 0, totalAvailableInPaise: 0, totalAvailableInRupees: 0, totalPendingInPaise: 0, totalPendingInRupees: 0, totalLockedInPaise: 0, totalLockedInRupees: 0, totalProcessingInPaise: 0, totalProcessingInRupees: 0, lifetimeEarningsInPaise: 0, lifetimeEarningsInRupees: 0, lifetimePayoutsInPaise: 0, lifetimePayoutsInRupees: 0 },
+          payouts: { pendingCount: 0, processingCount: 0, paidCount: 0, rejectedCount: 0, totalPaidInPaise: 0, totalPaidInRupees: 0, totalRequestedInPaise: 0, totalRequestedInRupees: 0 },
+          transactions: { totalBookings: 0, paidBookings: 0, successRate: 0, totalRevenueInPaise: 0, totalRevenueInRupees: 0, totalCommissionInPaise: 0, totalCommissionInRupees: 0, avgBookingValueInPaise: 0, avgBookingValueInRupees: 0 },
+        },
+      });
+    }
+    const salonMatch = scope.unrestricted ? {} : { salonId: { $in: scope.salonIds } };
+
     const [walletAgg, payoutAgg, txnAgg] = await Promise.all([
-      SalonEarnings.aggregate([{
-        $group: {
+      SalonEarnings.aggregate([
+        { $match: salonMatch },
+        { $group: {
           _id:                          null,
           totalAvailableInPaise:        { $sum: "$availableBalanceInPaise"    },
           totalPendingInPaise:          { $sum: "$pendingBalanceInPaise"      },
@@ -42,8 +99,9 @@ export const getFinanceSummary = async (req, res, next) => {
           walletCount:                  { $sum: 1 },
         },
       }]),
-      PayoutRequest.aggregate([{
-        $group: {
+      PayoutRequest.aggregate([
+        { $match: salonMatch },
+        { $group: {
           _id:                   null,
           totalPaidInPaise:      { $sum: { $cond: [{ $eq: ["$status","PAID"]       }, "$amountInPaise", 0] } },
           totalRequestedInPaise: { $sum: { $cond: [{ $eq: ["$status","REQUESTED"]  }, "$amountInPaise", 0] } },
@@ -53,8 +111,9 @@ export const getFinanceSummary = async (req, res, next) => {
           rejectedCount:         { $sum: { $cond: [{ $eq: ["$status","REJECTED"]   }, 1, 0] } },
         },
       }]),
-      Transaction.aggregate([{
-        $group: {
+      Transaction.aggregate([
+        { $match: salonMatch },
+        { $group: {
           _id:                 null,
           totalRevenueInPaise: { $sum: { $cond: [{ $eq: ["$status","PAID"] }, "$amount", 0] } },
           totalBookings:       { $sum: 1 },
@@ -145,6 +204,9 @@ export const listWallets = async (req, res, next) => {
     const walletFilter = {};
     if (walletStatus && walletStatus !== 'ALL') walletFilter.status = walletStatus;
 
+    const scope = await resolveAdminFinanceScope(req.user);
+    if (!scope.unrestricted) walletFilter.salonId = { $in: scope.salonIds };
+
     const [wallets, total] = await Promise.all([
       SalonEarnings.find(walletFilter)
         .populate("salonId", "basicInfo.shopName basicInfo.phone location.address")
@@ -206,8 +268,19 @@ export const listTransactions = async (req, res, next) => {
 
     const filter = {};
     if (status !== "ALL") filter.status = status;
+
+    // The client-supplied salonId is never trusted as authorization by
+    // itself — it only narrows the query further within whatever the
+    // admin's own scope already allows.
+    const scope = await resolveAdminFinanceScope(req.user);
     if (salonId && mongoose.Types.ObjectId.isValid(salonId)) {
-      filter.salonId = salonId;
+      if (scope.unrestricted || scope.salonIds.some((id) => id.toString() === salonId)) {
+        filter.salonId = salonId;
+      } else {
+        filter.salonId = { $in: [] }; // requested salon is out of scope — force empty result
+      }
+    } else if (!scope.unrestricted) {
+      filter.salonId = { $in: scope.salonIds };
     }
     // ✅ Date range filter with validation
     if (from || to) {
@@ -285,6 +358,14 @@ export const getWalletDetail = async (req, res, next) => {
   }
 
   try {
+    const salon = await Salon.findOne({ _id: salonId, isDeleted: { $ne: true } })
+      .select("location.territory.stateRef location.territory.districtRef")
+      .lean();
+    if (!salon) return next(Errors.notFound("Salon not found"));
+    if (!isSalonWithinScope(req.user, salon)) {
+      return next(Errors.forbidden("Out of your authorized scope"));
+    }
+
     const w = await SalonEarnings.findOne({ salonId })
       .populate("salonId", "basicInfo.shopName basicInfo.phone location.address")
       .lean();
@@ -337,6 +418,14 @@ export const getSalonLedger = async (req, res, next) => {
     // ✅ Fix 2 — consistent error helper
     if (!mongoose.Types.ObjectId.isValid(salonId)) {
       return next(Errors.badRequest("Invalid salonId"));
+    }
+
+    const targetSalon = await Salon.findOne({ _id: salonId, isDeleted: { $ne: true } })
+      .select("location.territory.stateRef location.territory.districtRef")
+      .lean();
+    if (!targetSalon) return next(Errors.notFound("Salon not found"));
+    if (!isSalonWithinScope(req.user, targetSalon)) {
+      return next(Errors.forbidden("Out of your authorized scope"));
     }
 
     // ✅ Fix 1 — parseInt radix 10
@@ -472,12 +561,15 @@ export const getTransaction = async (req, res, next) => {
     }
 
     const t = await Transaction.findById(id)
-      .populate("salonId",   "basicInfo.shopName basicInfo.phone location.address")
+      .populate("salonId",   "basicInfo.shopName basicInfo.phone location.address location.territory.stateRef location.territory.districtRef")
       .populate("userId",    "name phone")
       .populate("bookingId", "_id")
       .lean();
 
     if (!t) return next(Errors.notFound("Transaction not found"));
+    if (!isSalonWithinScope(req.user, t.salonId)) {
+      return next(Errors.forbidden("Out of your authorized scope"));
+    }
 
     return successResponse(res, {
       message: "Transaction fetched",
@@ -549,12 +641,16 @@ export const getRevenueTrend = async (req, res, next) => {
     // and today is July → range starts Feb 1st, so Feb..Jul = 6 months.
     const rangeStart = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1);
 
+    const scope = await resolveAdminFinanceScope(req.user);
+    const matchStage = {
+      status:    "PAID",
+      createdAt: { $gte: rangeStart },
+    };
+    if (!scope.unrestricted) matchStage.salonId = { $in: scope.salonIds };
+
     const agg = await Transaction.aggregate([
       {
-        $match: {
-          status:    "PAID",
-          createdAt: { $gte: rangeStart },
-        },
+        $match: matchStage,
       },
       {
         $group: {
@@ -614,7 +710,10 @@ export const getRevenueTrend = async (req, res, next) => {
  */
 export const getStatePerformance = async (req, res, next) => {
   try {
-    const agg = await Transaction.aggregate([
+    const scope = await resolveAdminFinanceScope(req.user);
+    const pipeline = [];
+    if (!scope.unrestricted) pipeline.push({ $match: { salonId: { $in: scope.salonIds } } });
+    pipeline.push(
       {
         $lookup: {
           from:         "salons",
@@ -660,7 +759,9 @@ export const getStatePerformance = async (req, res, next) => {
         },
       },
       { $sort: { volumeInPaise: -1 } },
-    ]);
+    );
+
+    const agg = await Transaction.aggregate(pipeline);
 
     return successResponse(res, {
       message: "State performance fetched",
@@ -686,8 +787,12 @@ export const getTopSalons = async (req, res, next) => {
   try {
     const limitNum = Math.min(Math.max(parseInt(req.query.limit ?? 10, 10), 1), 50);
 
+    const scope = await resolveAdminFinanceScope(req.user);
+    const topSalonsMatch = { status: "PAID" };
+    if (!scope.unrestricted) topSalonsMatch.salonId = { $in: scope.salonIds };
+
     const agg = await Transaction.aggregate([
-      { $match: { status: "PAID" } },
+      { $match: topSalonsMatch },
       {
         $group: {
           _id:             "$salonId",

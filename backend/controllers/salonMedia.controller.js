@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+import Salon from "../models/Salon.js";
 import SalonMedia from "../models/SalonMedia.js";
 
 const MIN_IMAGES = 3;
@@ -15,6 +17,24 @@ export const addSalonMedia = async (req, res) => {
         success: false,
         message: "salonId and url required",
       });
+    }
+
+    // 🔒 OWNERSHIP CHECK — the supplied salonId must belong to req.user._id.
+    // Same convention as savePhotos() in salon.onboarding.controller.js.
+    if (!mongoose.Types.ObjectId.isValid(salonId)) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    const salon = await Salon.findOne({ _id: salonId, isDeleted: { $ne: true } })
+      .select("ownerId")
+      .lean();
+
+    if (!salon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    if (salon.ownerId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not your salon" });
     }
 
     // 🔒 MAX LIMIT CHECK

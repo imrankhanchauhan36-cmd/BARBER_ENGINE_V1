@@ -65,6 +65,7 @@ import { Server }  from "socket.io";
 import jwt         from "jsonwebtoken";
 import mongoose    from "mongoose";
 import Booking from "../models/Booking.js";
+import User    from "../models/User.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -104,7 +105,9 @@ const extractToken = (socket) => {
  * Returns null on any failure — never throws.
  */
 const verifyToken = (token) => {
-  const secret = process.env.JWT_SECRET;
+  // Same secret + fallback convention as middlewares/auth.middleware.js —
+  // access tokens are signed with JWT_ACCESS_SECRET (services/token.service.js).
+  const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
   if (!token || !secret) {
     console.warn("[Socket] Missing token or secret");
     return null;
@@ -149,7 +152,7 @@ const checkSyncRateLimit = (socket) => {
  * Populates socket.data with verified identity.
  * Rejects unauthenticated connections immediately.
  */
-const authMiddleware = (socket, next) => {
+const authMiddleware = async (socket, next) => {
   const token   = extractToken(socket);
   const payload = verifyToken(token);
 
@@ -158,8 +161,35 @@ const authMiddleware = (socket, next) => {
     return next(new Error("AUTH_FAILED"));
   }
 
+  const userId = payload._id || payload.id || payload.userId;
+  if (!userId) {
+    return next(new Error("AUTH_FAILED"));
+  }
+
+  // Same guarantee REST protect() enforces before granting access: a
+  // stale tokenVersion (post logout-all) or a suspended/deleted account
+  // must not connect, even with a cryptographically-valid, unexpired
+  // JWT. One indexed lookup per connection (not per event) — no
+  // refresh-token round trip, since the socket handshake has no cookie
+  // flow to do a real verifySession() with.
+  let user;
+  try {
+    user = await User.findById(userId).select("tokenVersion isActive isDeleted");
+  } catch (err) {
+    console.warn("[Socket] User lookup failed during auth:", err.message);
+    return next(new Error("AUTH_FAILED"));
+  }
+
+  if (!user || !user.isActive || user.isDeleted) {
+    return next(new Error("AUTH_FAILED"));
+  }
+
+  if (Number(payload.tokenVersion ?? 0) !== Number(user.tokenVersion ?? 0)) {
+    return next(new Error("AUTH_FAILED"));
+  }
+
   // Populate verified identity — available throughout the session
-  socket.data.userId   = payload._id   || payload.id || payload.userId;
+  socket.data.userId   = userId;
   socket.data.role     = payload.role  || "USER";  // USER | OWNER | ADMIN
   socket.data.salonId  = payload.salonId || null;  // set for OWNER tokens
   socket.data.verified = true;
@@ -180,9 +210,24 @@ const authMiddleware = (socket, next) => {
  */
 export const initSocket = (httpServer) => {
 
+  // Same allowlist convention as app.js's Express CORS (CORS_ORIGIN,
+  // comma-separated) — kept as an independent local copy rather than
+  // importing from app.js, so this file doesn't depend on it.
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",")
+    : [];
+
   const io = new Server(httpServer, {
     cors: {
-      origin:      "*",
+      origin: (origin, callback) => {
+        // No Origin header (native mobile clients, server-to-server) —
+        // same allowance app.js's Express CORS already makes.
+        if (!origin) return callback(null, true);
+        if (process.env.NODE_ENV !== "production") return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        console.warn(`🚫 [Socket] CORS blocked: ${origin}`);
+        return callback(new Error("Not allowed by CORS"));
+      },
       methods:     ["GET", "POST"],
       credentials: false,
     },

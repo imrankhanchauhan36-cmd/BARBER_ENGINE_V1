@@ -25,6 +25,53 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 const p2        = (v)  => Math.round(v ?? 0) / 100;
 
 /**
+ * Admin geographic scope for payouts. Same convention verified in
+ * controllers/adminFinance.controller.js (F2) / admin.controller.js /
+ * adminBooking.controller.js — kept as an independent local copy here
+ * rather than importing from adminFinance.controller.js, matching how
+ * every admin controller in this codebase owns its own copy.
+ *   INDIA    → unrestricted
+ *   STATE    → only salons whose location.territory.stateRef matches admin.stateRef
+ *   DISTRICT → only salons whose location.territory.districtRef matches admin.districtRef
+ *              (route currently blocks DISTRICT from reaching any of these
+ *              endpoints at all — kept here anyway so this never silently
+ *              falls open if that route gate is ever loosened later)
+ *   anything else → fail closed, zero salons
+ */
+const resolveAdminPayoutScope = async (admin) => {
+  if (admin?.adminLevel === "INDIA") return { unrestricted: true };
+
+  const salonFilter = { isDeleted: { $ne: true } };
+  if (admin?.adminLevel === "STATE") {
+    salonFilter["location.territory.stateRef"] = admin.stateRef;
+  } else if (admin?.adminLevel === "DISTRICT") {
+    salonFilter["location.territory.districtRef"] = admin.districtRef;
+  } else {
+    return { unrestricted: false, salonIds: [] };
+  }
+
+  const salons = await Salon.find(salonFilter).select("_id").lean();
+  return { unrestricted: false, salonIds: salons.map((s) => s._id) };
+};
+
+/**
+ * For a single resolved target salon — verifies it's inside the admin's
+ * authorized territory. Never trusts the client-supplied payout/salon ID
+ * as authorization by itself.
+ */
+const isSalonWithinPayoutScope = (admin, salon) => {
+  if (!salon) return false;
+  if (admin?.adminLevel === "INDIA") return true;
+  if (admin?.adminLevel === "STATE") {
+    return salon.location?.territory?.stateRef?.toString() === admin.stateRef?.toString();
+  }
+  if (admin?.adminLevel === "DISTRICT") {
+    return salon.location?.territory?.districtRef?.toString() === admin.districtRef?.toString();
+  }
+  return false;
+};
+
+/**
  * PATCH /api/payouts/admin/approve/:id
  *
  * Flow: REQUESTED(LOCKED) → PROCESSING → PAID
@@ -51,6 +98,14 @@ export const approvePayout = async (req, res, next) => {
     if (!payout) {
       await session.abortTransaction();
       return next(Errors.notFound("Payout request not found"));
+    }
+
+    const targetSalon = await Salon.findOne({ _id: payout.salonId, isDeleted: { $ne: true } })
+      .select("location.territory.stateRef location.territory.districtRef")
+      .lean();
+    if (!targetSalon || !isSalonWithinPayoutScope(req.user, targetSalon)) {
+      await session.abortTransaction();
+      return next(Errors.forbidden("Out of your authorized scope"));
     }
 
     if (payout.status !== PAYOUT_STATUS.REQUESTED) {
@@ -135,6 +190,14 @@ export const rejectPayout = async (req, res, next) => {
       return next(Errors.notFound("Payout request not found"));
     }
 
+    const targetSalon = await Salon.findOne({ _id: payout.salonId, isDeleted: { $ne: true } })
+      .select("location.territory.stateRef location.territory.districtRef")
+      .lean();
+    if (!targetSalon || !isSalonWithinPayoutScope(req.user, targetSalon)) {
+      await session.abortTransaction();
+      return next(Errors.forbidden("Out of your authorized scope"));
+    }
+
     if (payout.status !== PAYOUT_STATUS.REQUESTED) {
       await session.abortTransaction();
       return next(Errors.conflict(`Cannot reject — current status is ${payout.status}`));
@@ -204,8 +267,12 @@ export const rejectPayout = async (req, res, next) => {
  */
 export const getPayoutSummary = async (req, res, next) => {
   try {
-    const [agg] = await PayoutRequest.aggregate([{
-      $group: {
+    const scope = await resolveAdminPayoutScope(req.user);
+    const matchStage = scope.unrestricted ? {} : { salonId: { $in: scope.salonIds } };
+
+    const [agg] = await PayoutRequest.aggregate([
+      { $match: matchStage },
+      { $group: {
         _id:                    null,
         total:                  { $sum: 1 },
         requested:              { $sum: { $cond: [{ $eq: ["$status","REQUESTED"]  }, 1, 0] } },
@@ -267,6 +334,9 @@ export const listPayouts = async (req, res, next) => {
 
     const filter = {};
     if (status !== "ALL") filter.status = status;
+
+    const scope = await resolveAdminPayoutScope(req.user);
+    if (!scope.unrestricted) filter.salonId = { $in: scope.salonIds };
 
     const [payouts, total] = await Promise.all([
       PayoutRequest.find(filter)
@@ -343,9 +413,13 @@ export const getPayoutDetail = async (req, res, next) => {
     if (!payout) return next(Errors.notFound("Payout request not found"));
 
     const salon = await Salon.findById(payout.salonId)
-      .select("basicInfo.shopName location.address location.territory.cityRef ownerId")
+      .select("basicInfo.shopName location.address location.territory.cityRef location.territory.stateRef location.territory.districtRef ownerId")
       .populate("location.territory.cityRef", "name")
       .lean();
+
+    if (!isSalonWithinPayoutScope(req.user, salon)) {
+      return next(Errors.forbidden("Out of your authorized scope"));
+    }
 
     const [owner, kyc, wallet] = await Promise.all([
       salon?.ownerId ? User.findById(salon.ownerId).select("name phone email").lean() : null,

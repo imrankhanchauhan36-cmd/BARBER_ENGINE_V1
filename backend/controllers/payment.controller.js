@@ -192,6 +192,12 @@ export const getPaymentStatus = async (req, res) => {
 //////////////////////////////////////////////////////////////
 
 export const mockPayment = async (req, res) => {
+  // Same production gate as mockVerifyTopup (controllers/wallet.controller.js) —
+  // a mock/fake-success payment endpoint must never be reachable in production.
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ success: false, message: "Not found" });
+  }
+
   try {
     const { amount } = req.body;
 
