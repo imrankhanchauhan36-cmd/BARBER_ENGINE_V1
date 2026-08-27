@@ -14,9 +14,19 @@
  *
  * ROOMS
  * ─────
- *   salon:{salonId}   — owner dashboard, chair grid, booking list
- *   user:{userId}     — customer app, booking status updates
- *   admin             — platform-level monitoring (optional)
+ *   salon:{salonId}       — owner dashboard, chair grid, booking list
+ *   user:{userId}         — customer app, booking status updates;
+ *                           also every AGENT's own room (agents are
+ *                           User documents too) for ticket events
+ *                           scoped to "assigned to me"
+ *   admin                 — platform-level monitoring (optional)
+ *   supportAdmin          — Phase F.3.8: SUPPORT_ADMIN role, global
+ *                           Support ticket lifecycle visibility
+ *   supportTeam:{teamId}  — Phase F.3.8: joined by an AGENT who leads
+ *                           that SupportTeam (SupportTeam.teamLeadRef),
+ *                           resolved once at connection time via the
+ *                           same query adminSupport.controller.js's
+ *                           resolveAdminScope() already uses
  *
  * AUTH
  * ────
@@ -52,6 +62,28 @@
  *   sync:response          — reply to sync:request (reconnect recovery)
  *   error:auth             — authentication failure (client should re-login)
  *
+ *   Phase F.3.8 — Support ticket lifecycle (emitted from
+ *   supportTicket.service.js / the Support controllers, never from
+ *   here — this file only owns rooms/auth, not Support business
+ *   events):
+ *   support:ticket:created       — user room only
+ *   support:ticket:statusChanged — user room + (when relevant)
+ *                                  supportTeam/supportAdmin rooms
+ *   support:ticket:assigned      — assigned agent's own user room +
+ *                                  supportTeam + supportAdmin (never
+ *                                  the customer — agent identity is
+ *                                  internal data)
+ *   support:ticket:reassigned    — old + new agent's own user rooms +
+ *                                  supportTeam + supportAdmin
+ *   support:ticket:unassigned    — previous agent's own user room +
+ *                                  supportTeam + supportAdmin
+ *   support:message:new          — user room (customer-visible replies
+ *                                  only — never an INTERNAL note)
+ *   support:ticket:internalNote  — assigned agent + supportTeam +
+ *                                  supportAdmin ONLY, never the
+ *                                  customer's user room under any
+ *                                  circumstance
+ *
  * EVENTS RECEIVED BY SERVER ← CLIENT
  * ────────────────────────────────────
  *   sync:request { bookingId, lastKnownStatus }
@@ -66,6 +98,7 @@ import jwt         from "jsonwebtoken";
 import mongoose    from "mongoose";
 import Booking from "../models/Booking.js";
 import User    from "../models/User.js";
+import SupportTeam from "../modules/support/models/SupportTeam.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -254,7 +287,7 @@ export const initSocket = (httpServer) => {
   // 🔌 CONNECTION HANDLER
   //////////////////////////////////////////////////////////////
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     const { userId, role, salonId } = socket.data;
 
     //////////////////////////////////////////////////////////
@@ -271,6 +304,36 @@ export const initSocket = (httpServer) => {
 
     if (role === "ADMIN") {
       socket.join("admin");
+    }
+
+    // Phase F.3.8 — Support platform rooms. SUPPORT_ADMIN is a
+    // distinct role from ADMIN (confirmed during F.3.7's audit — two
+    // separate role checks, not a fallthrough of the block above).
+    // A plain token-payload check, same zero-cost pattern as the
+    // ADMIN branch — no DB read.
+    if (role === "SUPPORT_ADMIN") {
+      socket.join("supportAdmin");
+    }
+
+    // Team Lead is derived, never a role (F.3.7 decision #5) — the
+    // only role that can ever lead a SupportTeam is AGENT, so this
+    // query only runs for AGENT-role sockets, never unconditionally
+    // for every connection. Same query adminSupport.controller.js's
+    // resolveAdminScope() already runs per-request; here it runs once
+    // per socket connection instead. A lookup failure must never
+    // block the connection — same fail-open philosophy already used
+    // for sync:request's presence reads elsewhere in this file.
+    if (role === "AGENT") {
+      try {
+        const ledTeams = await SupportTeam.find({ teamLeadRef: userId, isDeleted: false })
+          .select("_id")
+          .lean();
+        for (const team of ledTeams) {
+          socket.join(`supportTeam:${team._id}`);
+        }
+      } catch (err) {
+        console.warn("[Socket] SupportTeam lead lookup failed (non-critical):", err.message);
+      }
     }
 
     console.info(

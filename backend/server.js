@@ -10,6 +10,7 @@ import { startCustomerArrivalJob } from "./jobs/customerArrival.job.js";
 import { startHoldExpiryJob } from "./jobs/holdExpiry.job.js";
 import { startReminderJob } from "./jobs/reminder.job.js";
 import { startServiceOverdueJob } from "./jobs/serviceOverdue.job.js";
+import { startSlaScannerJob } from "./jobs/slaScanner.job.js"; // ← Phase G Step 10 — wires up the Step 6-8 SLA scanner/escalation/notification chain, previously file-only
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -142,6 +143,23 @@ const reminderJob = startReminderJob();
 const autoStartJob = startAutoStartJob(io);
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7h: START SLA SCANNER BACKGROUND JOB (Phase G Step 10)
+//
+// Periodically discovers SupportTicket records whose first-response
+// or resolution SLA has newly reached WARNING/BREACHED, persists each
+// newly detected event exactly once (Step 6), escalates newly-
+// detected breaches (Step 7), and delivers the IN_APP notification +
+// Socket.IO event for all three (Step 8). The job file itself has
+// existed since Step 6 but was never registered here — this is the
+// only change needed to make Steps 6-8 actually run in a live
+// environment; no logic in jobs/slaScanner.job.js changed.
+// Needs `io` for its Socket.IO emits, same as serviceOverdueJob/
+// holdExpiryJob above.
+//////////////////////////////////////////////////////////////
+
+const slaScannerJob = startSlaScannerJob(io);
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -152,7 +170,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -200,6 +218,9 @@ const shutdown = async (signal) => {
 
       autoStartJob.stop();
       console.log("✅ Auto start job stopped");
+
+      slaScannerJob.stop();
+      console.log("✅ SLA scanner job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

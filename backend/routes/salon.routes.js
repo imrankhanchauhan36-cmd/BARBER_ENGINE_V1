@@ -9,7 +9,7 @@ import {
   rejectSalon,
 } from "../controllers/salon.controller.js";
 
-import { getMySalon, getDashboardStats, getLiveSchedule, getWallet } from "../controllers/salon.me.controller.js";
+import { getMySalon, getDashboardStats, getLiveSchedule, getWallet, updateChairPhoto, updateBasicInfo } from "../controllers/salon.me.controller.js";
 import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
 import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 
@@ -60,6 +60,13 @@ ownerRouter.patch("/holidays/:date", setHolidayOverride);
 // Mounted at /api/salon/owner/chairs/availability — inherits
 // protect + requireRole("OWNER") from this router.
 ownerRouter.use("/chairs/availability", chairAvailabilityRoutes);
+
+// Chair Photo — additive, sets the existing (previously write-less) Chair.photo field
+ownerRouter.patch("/chairs/:chairId/photo", updateChairPhoto);
+
+// Edit Profile — post-approval-safe basicInfo editor (NOT the onboarding endpoint;
+// never touches approval.status/onboarding.step/location.geo, no upsert)
+ownerRouter.patch("/basic-info", updateBasicInfo);
 
 
 //////////////////////////////////////////////////////

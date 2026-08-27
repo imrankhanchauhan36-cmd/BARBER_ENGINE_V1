@@ -36,12 +36,19 @@ import uploadRoutes from "./routes/upload.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
 import wishlistRoutes from "./routes/wishlist.routes.js";
+import supportCustomerRoutes from "./modules/support/routes/supportCustomer.routes.js"; // ← NEW — Phase C Support Core
+import supportAgentRoutes from "./modules/support/routes/agentSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
+import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
+import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
+import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
+import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 
 
 
 // 🛠️ Middlewares
 import { protect } from "./middlewares/auth.middleware.js";
 import { onboardingBypass } from "./middlewares/onboardingBypass.middleware.js";
+import { errorHandler } from "./middlewares/errorHandler.js"; // ← NEW — Phase C: mounted globally, replaces the inline handler below
 
 const app = express();
 
@@ -126,6 +133,7 @@ app.use(
       "Authorization",
       "X-Refresh-Token",
       "X-Request-Id",
+      "Idempotency-Key",
     ],
   })
 );
@@ -171,6 +179,15 @@ app.get("/health", async (req, res) => {
 ///////////////////////////////////////////////////////////
 app.use("/api/auth", authRoutes);
 app.use("/api/admin-auth", adminAuthRoutes);
+// Phase F.3.9 fix — must be mounted here, alongside the other public
+// login surfaces, and BEFORE the generic app.use("/api", protect, ...)
+// mount further below (SUPPORT ROUTES section). That generic mount
+// matches any /api/* path and runs `protect` unconditionally; mounted
+// after it (as originally placed), /login and /refresh — which must
+// work with no Bearer token — were being rejected by it before ever
+// reaching supportAuthRoutes. No protect/onboardingBypass here — same
+// as /api/auth and /api/admin-auth above.
+app.use("/api/support/auth", supportAuthRoutes);
 app.use("/api/user", userRoutes);
 
 
@@ -215,6 +232,28 @@ app.use("/api/customers",  protect, onboardingBypass, customerRoutes);
 app.use("/api/upload", uploadRoutes);
 
 ///////////////////////////////////////////////////////////
+// SUPPORT ROUTES — Phase C customer/salon-owner-facing; Phase F.3.7
+// adds the AGENT and SUPPORT_ADMIN (+ team-lead-scoped) surfaces —
+// same protect/onboardingBypass wrapper, same mount convention.
+// (/api/support/auth is mounted earlier, with the other public auth
+// routes — see PUBLIC ROUTES section above.)
+///////////////////////////////////////////////////////////
+app.use("/api/support/customer", protect, onboardingBypass, supportCustomerRoutes);
+app.use("/api/support/agent", protect, onboardingBypass, supportAgentRoutes);
+// Mounted BEFORE the broader /api/support/admin prefix, deliberately —
+// /api/support/admin/sla-policies would otherwise first enter
+// supportAdminRoutes (whose own routes are all /tickets*), which
+// happens to fall through via Express Router's own no-match next()
+// behavior, but relying on that fall-through is exactly the class of
+// route-order fragility already found and fixed once in this project
+// (the F.3.9 /api/support/auth defect) — registering the more
+// specific prefix first avoids depending on it at all.
+app.use("/api/support/admin/sla-policies", protect, onboardingBypass, slaPolicyRoutes);
+// Same defensive reasoning as sla-policies above — Phase G Step 9.
+app.use("/api/support/admin/categories", protect, onboardingBypass, adminCategoryRoutes);
+app.use("/api/support/admin", protect, onboardingBypass, supportAdminRoutes);
+
+///////////////////////////////////////////////////////////
 // ADMIN ROUTES
 ///////////////////////////////////////////////////////////
 app.use("/api/admin", protect, adminRoutes);
@@ -237,22 +276,14 @@ app.use((req, res) => {
 });
 
 ///////////////////////////////////////////////////////////
-// ERROR HANDLER
+// ERROR HANDLER — mounted globally (Phase C prerequisite, per the
+// Phase B freeze review). Replaces the previous inline handler;
+// covers every existing route the same way it covers new Support
+// routes — AppError, Mongoose validation/duplicate-key/cast errors,
+// JWT errors, and Joi errors are now translated consistently instead
+// of falling through to a generic 500.
 ///////////////////////////////////////////////////////////
-app.use((err, req, res, next) => {
-  console.error(
-    JSON.stringify({
-      requestId: req.requestId,
-      error: err.message,
-    })
-  );
-
-  res.status(err.statusCode || 500).json({
-    success: false,
-    message: err.message || "Internal Server Error",
-    requestId: req.requestId,
-  });
-});
+app.use(errorHandler);
 
 
 export default app;

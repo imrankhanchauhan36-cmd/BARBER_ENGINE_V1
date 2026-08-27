@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import Chair from "../models/Chair.js";
 import District from "../models/District.js";
@@ -26,7 +27,7 @@ export const getMySalon = async (req, res) => {
 
     const salon = await Salon.findOne(
       { ownerId },
-      { _id: 1, onboarding: 1, approval: 1, basicInfo: 1, location: 1, assignedAdmin: 1 }
+      { _id: 1, onboarding: 1, approval: 1, basicInfo: 1, location: 1, assignedAdmin: 1, media: 1 }
     ).lean();
 
     if (!salon) {
@@ -64,6 +65,7 @@ export const getMySalon = async (req, res) => {
           rejectedAt:      salon.approval?.rejectedAt ?? null,
         },
         basicInfo:      salon.basicInfo ?? null,
+        media:          salon.media ?? null,
         location: {
           ...(salon.location ?? {}),
           districtName,
@@ -191,7 +193,7 @@ export const getDashboardStats = async (req, res) => {
       }),
 
       Chair.find({ salonId, isDeleted: false, isActive: true })
-        .select("name position type")
+        .select("name position photo")
         .sort({ position: 1 })
         .lean(),
 
@@ -454,5 +456,210 @@ export const getWallet = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to fetch wallet" });
+  }
+};
+
+/**
+ * =========================================================
+ * PATCH /api/salon/owner/chairs/:chairId/photo
+ *
+ * Additive only — Chair.photo already existed in the schema
+ * (models/Chair.js, frozen v4, NOTE 2) but had no write path.
+ * This is the first endpoint that sets it. Ownership check
+ * mirrors addSalonMedia() in salonMedia.controller.js.
+ * =========================================================
+ */
+export const updateChairPhoto = async (req, res) => {
+  try {
+    const ownerId = req.user?._id;
+    const { chairId } = req.params;
+    const { url, publicId } = req.body;
+
+    if (!ownerId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(chairId)) {
+      return res.status(404).json({ success: false, message: "Chair not found" });
+    }
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, message: "Photo url is required" });
+    }
+
+    const salon = await Salon.findOne({ ownerId }).select("_id").lean();
+    if (!salon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    const chair = await Chair.findOne({ _id: chairId, isDeleted: false });
+    if (!chair) {
+      return res.status(404).json({ success: false, message: "Chair not found" });
+    }
+
+    if (chair.salonId?.toString() !== salon._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not your chair" });
+    }
+
+    chair.photo = { url, publicId: publicId || null };
+    chair.updatedBy = ownerId;
+    await chair.save();
+
+    return res.json({ success: true, photo: chair.photo });
+  } catch (err) {
+    console.error("UPDATE CHAIR PHOTO ERROR:", err);
+    return res.status(500).json({ success: false, message: "Could not update chair photo" });
+  }
+};
+
+/**
+ * =========================================================
+ * PATCH /api/salon/owner/basic-info
+ *
+ * Post-approval-safe profile editor. This is deliberately a
+ * SEPARATE endpoint from saveBasicInfo() (the onboarding-only
+ * handler in salon.onboarding.controller.js) — that one
+ * unconditionally resets approval.status to DRAFT, zeroes
+ * location.geo.coordinates, and upserts. This endpoint never
+ * references approval/onboarding/location.geo/ownerId, never
+ * upserts, and rejects invalid input with 400 instead of
+ * silently coercing it to a default.
+ * =========================================================
+ */
+const EDITABLE_CATEGORY    = ["MEN_ONLY", "WOMEN_ONLY", "UNISEX"];
+const EDITABLE_TIER        = ["STANDARD", "PREMIUM", "LUXURY"];
+const EDITABLE_SETUP_TYPE  = ["PROPER_SHOP", "OPEN_SETUP"];
+const EDITABLE_PRIVACY     = ["SEPARATE", "MIXED"];
+const EDITABLE_EXPERIENCE  = ["LESS_THAN_1", "1_TO_3", "3_TO_5", "5_PLUS", "10_PLUS", null];
+const EDITABLE_AMENITY_KEYS = ["hasAC", "hasParking", "hasWifi", "waitingArea", "restroom"];
+
+export const updateBasicInfo = async (req, res) => {
+  try {
+    const ownerId = req.user?._id;
+
+    if (!ownerId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const {
+      shopName,
+      category,
+      tagline,
+      since,
+      experience,
+      whatsapp,
+      tier,
+      setupType,
+      privacySetup,
+      amenities,
+      brandName,
+      branchCode,
+    } = req.body;
+
+    if (typeof shopName !== "string" || shopName.trim().length < 3) {
+      return res.status(400).json({ success: false, message: "Shop name must be at least 3 characters" });
+    }
+    const cleanShopName = shopName.trim();
+    if (cleanShopName.length > 120) {
+      return res.status(400).json({ success: false, message: "Shop name must be 120 characters or fewer" });
+    }
+
+    if (!EDITABLE_CATEGORY.includes(category)) {
+      return res.status(400).json({ success: false, message: "Invalid category" });
+    }
+    if (!EDITABLE_TIER.includes(tier)) {
+      return res.status(400).json({ success: false, message: "Invalid tier" });
+    }
+    if (!EDITABLE_SETUP_TYPE.includes(setupType)) {
+      return res.status(400).json({ success: false, message: "Invalid setup type" });
+    }
+    if (!EDITABLE_PRIVACY.includes(privacySetup)) {
+      return res.status(400).json({ success: false, message: "Invalid privacy setup" });
+    }
+
+    const cleanExperience = experience === undefined ? null : experience;
+    if (!EDITABLE_EXPERIENCE.includes(cleanExperience)) {
+      return res.status(400).json({ success: false, message: "Invalid experience value" });
+    }
+
+    const currentYear = new Date().getFullYear();
+    const cleanSince = (since === undefined || since === null || since === "") ? null : Number(since);
+    if (cleanSince !== null && (!Number.isFinite(cleanSince) || cleanSince < 1950 || cleanSince > currentYear)) {
+      return res.status(400).json({ success: false, message: `Since must be a year between 1950 and ${currentYear}` });
+    }
+
+    const cleanWhatsapp = (whatsapp === undefined || whatsapp === null || whatsapp === "") ? null : String(whatsapp).trim();
+    if (cleanWhatsapp !== null && !/^\d{10}$/.test(cleanWhatsapp)) {
+      return res.status(400).json({ success: false, message: "WhatsApp number must be exactly 10 digits" });
+    }
+
+    const cleanTagline = (tagline === undefined || tagline === null || tagline === "") ? null : String(tagline).trim();
+    if (cleanTagline !== null && cleanTagline.length > 200) {
+      return res.status(400).json({ success: false, message: "Tagline must be 200 characters or fewer" });
+    }
+
+    const cleanBrandName = (brandName === undefined || brandName === null || brandName === "") ? null : String(brandName).trim();
+    if (cleanBrandName !== null && cleanBrandName.length > 100) {
+      return res.status(400).json({ success: false, message: "Brand name must be 100 characters or fewer" });
+    }
+
+    const cleanBranchCode = (branchCode === undefined || branchCode === null || branchCode === "") ? null : String(branchCode).trim();
+    if (cleanBranchCode !== null && cleanBranchCode.length > 30) {
+      return res.status(400).json({ success: false, message: "Branch code must be 30 characters or fewer" });
+    }
+
+    if (amenities !== undefined && (typeof amenities !== "object" || amenities === null || Array.isArray(amenities))) {
+      return res.status(400).json({ success: false, message: "Invalid amenities" });
+    }
+    const cleanAmenities = {};
+    for (const key of EDITABLE_AMENITY_KEYS) {
+      const value = amenities?.[key] ?? false;
+      if (typeof value !== "boolean") {
+        return res.status(400).json({ success: false, message: `Amenity "${key}" must be true or false` });
+      }
+      cleanAmenities[key] = value;
+    }
+
+    const salon = await Salon.findOne({ ownerId }).select("_id");
+    if (!salon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
+
+    const updatePayload = {
+      "basicInfo.shopName": cleanShopName,
+      "basicInfo.category": category,
+      "basicInfo.tagline": cleanTagline,
+      "basicInfo.since": cleanSince,
+      "basicInfo.experience": cleanExperience,
+      "basicInfo.whatsapp": cleanWhatsapp,
+      "basicInfo.tier": tier,
+      "basicInfo.setupType": setupType,
+      "basicInfo.privacySetup": privacySetup,
+      "basicInfo.amenities.hasAC": cleanAmenities.hasAC,
+      "basicInfo.amenities.hasParking": cleanAmenities.hasParking,
+      "basicInfo.amenities.hasWifi": cleanAmenities.hasWifi,
+      "basicInfo.amenities.waitingArea": cleanAmenities.waitingArea,
+      "basicInfo.amenities.restroom": cleanAmenities.restroom,
+      "basicInfo.brandName": cleanBrandName,
+      "basicInfo.branchCode": cleanBranchCode,
+    };
+
+    const updated = await Salon.findOneAndUpdate(
+      { ownerId },
+      { $set: updatePayload },
+      { new: true, runValidators: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: {
+        basicInfo: updated.basicInfo,
+      },
+    });
+
+  } catch (err) {
+    console.error("UPDATE_BASIC_INFO_ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message || "Failed to update profile" });
   }
 };

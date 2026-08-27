@@ -56,6 +56,26 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   // Salon
   SALON_APPROVED: "SALON_APPROVED", // reserved — no caller yet
   SALON_REJECTED: "SALON_REJECTED", // reserved — no caller yet
+
+  // Support (Phase D — Ticket + Conversation + Message Engine).
+  // Only SUPPORT_TICKET_STATUS_CHANGED has a caller — ticket-created
+  // and message-received are deliberately not wired as notifications
+  // (the recipient is always the actor who just performed that exact
+  // action; every other reserved key above follows the same
+  // no-caller-yet convention).
+  SUPPORT_TICKET_STATUS_CHANGED: "SUPPORT_TICKET_STATUS_CHANGED",
+  SUPPORT_TICKET_CREATED:        "SUPPORT_TICKET_CREATED",   // reserved — no caller yet
+  SUPPORT_MESSAGE_RECEIVED:      "SUPPORT_MESSAGE_RECEIVED", // reserved — no caller yet
+
+  // SLA (Phase G Step 8) — three events distinguishing warning/
+  // breach/escalation, each carrying dimension (FIRST_RESPONSE vs
+  // RESOLUTION) in `variables`/`meta` rather than as separate keys,
+  // matching the same one-key-plus-payload-detail convention already
+  // used by SUPPORT_TICKET_STATUS_CHANGED (one key, `variables.status`
+  // distinguishes the specific status).
+  SLA_WARNING:   "SLA_WARNING",
+  SLA_BREACHED:  "SLA_BREACHED",
+  SLA_ESCALATED: "SLA_ESCALATED",
 });
 
 export const NOTIFICATION_EVENTS_VALUES = Object.values(NOTIFICATION_EVENTS);
