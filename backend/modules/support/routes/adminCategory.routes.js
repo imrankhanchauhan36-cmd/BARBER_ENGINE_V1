@@ -28,12 +28,16 @@
  */
 
 import express from "express";
-import { requireRole } from "../../../middlewares/role.middleware.js";
+import { requireSupportAccess } from "../../../middlewares/supportAccess.middleware.js";
 import { listCategoriesHandler } from "../controllers/supportTicket.controller.js";
 
 const router = express.Router();
 
-router.use(requireRole("SUPPORT_ADMIN"));
+// requireSupportAccess("SUPPORT_ADMIN") preserves the exact prior
+// behavior for SUPPORT_ADMIN, plus additionally allows the single
+// India-level main-console Admin (role:"ADMIN", adminLevel:"INDIA") —
+// see supportAccess.middleware.js.
+router.use(requireSupportAccess("SUPPORT_ADMIN"));
 
 router.get("/", listCategoriesHandler);
 

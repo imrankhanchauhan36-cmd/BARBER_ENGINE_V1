@@ -40,8 +40,21 @@ import { resolveTicketVerification } from "../services/verification/verification
 import { recordSupportAuditEvent } from "../services/supportAudit.service.js";
 import { issueRefundForCancelledBooking } from "../../../services/RefundExecutionService.js";
 
+// The single India-level main-console Admin (role:"ADMIN",
+// adminLevel:"INDIA" — the same DB-uniquely-constrained top tier
+// requireSupportAccess already recognizes at the route level) is the
+// top-level Support administrator and gets the exact same unrestricted
+// admin treatment as SUPPORT_ADMIN everywhere in this file — global
+// scope, not team-lead scope, and tagged ACTOR_TYPE.ADMIN in the audit
+// trail. STATE/DISTRICT admins never reach this file at all: they
+// already fail requireSupportAccess("AGENT","SUPPORT_ADMIN") at the
+// route level (adminSupport.routes.js) before any handler here runs.
+function isSupportAdminTier(req) {
+  return req.user.role === "SUPPORT_ADMIN" || (req.user.role === "ADMIN" && req.user.adminLevel === "INDIA");
+}
+
 async function resolveAdminScope(req) {
-  if (req.user.role === "SUPPORT_ADMIN") {
+  if (isSupportAdminTier(req)) {
     return null; // global scope
   }
   const teams = await SupportTeam.find({ teamLeadRef: req.user._id, isDeleted: false }).select("_id").lean();
@@ -52,13 +65,13 @@ async function resolveAdminScope(req) {
 }
 
 function assertIsSupportAdmin(req) {
-  if (req.user.role !== "SUPPORT_ADMIN") {
+  if (!isSupportAdminTier(req)) {
     throw Errors.forbidden("Only SUPPORT_ADMIN may perform this action");
   }
 }
 
 function resolveActorType(req) {
-  return req.user.role === "SUPPORT_ADMIN" ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.AGENT;
+  return isSupportAdminTier(req) ? ACTOR_TYPE.ADMIN : ACTOR_TYPE.AGENT;
 }
 
 // Phase F.3.7 audit §11 — identical table to agentSupport.controller.js;

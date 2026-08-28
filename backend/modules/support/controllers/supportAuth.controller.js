@@ -168,7 +168,20 @@ export const supportRefresh = async (req, res, next) => {
 
     const result = await rotateSession(rawToken, req);
 
-    if (!result || !SUPPORT_ROLES.includes(result.user?.role)) {
+    // SUPPORT_ROLES covers the existing AGENT/SUPPORT_ADMIN case,
+    // unchanged. The India-level main-console Admin (role:"ADMIN",
+    // adminLevel:"INDIA" — the single, DB-uniquely-constrained top
+    // tier, see User.js's partial unique index on {role,adminLevel})
+    // is additionally allowed to bridge into a Support session here,
+    // reusing the SAME shared refreshToken cookie their existing
+    // /api/admin-auth/login session already set — no second login, no
+    // new token/cookie system. supportLogin (email+password) is
+    // deliberately NOT changed — an India Admin still cannot
+    // authenticate directly at /support-login.
+    const isSupportRole = !!result && SUPPORT_ROLES.includes(result.user?.role);
+    const isIndiaAdmin = !!result && result.user?.role === "ADMIN" && result.user?.adminLevel === "INDIA";
+
+    if (!isSupportRole && !isIndiaAdmin) {
       res.clearCookie("refreshToken", getClearRefreshCookieOptions());
       return next(Errors.unauthorized("Session expired. Please log in again."));
     }

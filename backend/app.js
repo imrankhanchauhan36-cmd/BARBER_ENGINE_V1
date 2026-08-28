@@ -42,6 +42,8 @@ import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"
 import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
+import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
+import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
 
 
 
@@ -251,6 +253,9 @@ app.use("/api/support/agent", protect, onboardingBypass, supportAgentRoutes);
 app.use("/api/support/admin/sla-policies", protect, onboardingBypass, slaPolicyRoutes);
 // Same defensive reasoning as sla-policies above — Phase G Step 9.
 app.use("/api/support/admin/categories", protect, onboardingBypass, adminCategoryRoutes);
+// Same defensive reasoning as sla-policies/categories above — Phase H Step 7.
+app.use("/api/support/admin/agents", protect, onboardingBypass, adminAgentRoutes);
+app.use("/api/support/admin/teams", protect, onboardingBypass, adminTeamRoutes);
 app.use("/api/support/admin", protect, onboardingBypass, supportAdminRoutes);
 
 ///////////////////////////////////////////////////////////

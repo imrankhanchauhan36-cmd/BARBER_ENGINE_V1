@@ -15,7 +15,7 @@
 
 import express from "express";
 import { idempotency } from "../../../middlewares/idempotency.middleware.js";
-import { requireRole } from "../../../middlewares/role.middleware.js";
+import { requireSupportAccess } from "../../../middlewares/supportAccess.middleware.js";
 import { validate } from "../../../middlewares/validate.middleware.js";
 import {
   listAdminTicketsHandler,
@@ -34,7 +34,12 @@ import { supportInternalSchemas } from "../validators/supportInternal.validator.
 
 const router = express.Router();
 
-router.use(requireRole("AGENT", "SUPPORT_ADMIN"));
+// requireSupportAccess("AGENT","SUPPORT_ADMIN") preserves the exact
+// prior behavior (including the team-lead-scoped AGENT case resolved
+// downstream in adminSupport.controller.js), plus additionally allows
+// the single India-level main-console Admin (role:"ADMIN",
+// adminLevel:"INDIA") — see supportAccess.middleware.js.
+router.use(requireSupportAccess("AGENT", "SUPPORT_ADMIN"));
 
 router.get("/tickets", listAdminTicketsHandler);
 router.get("/tickets/:id", getAdminTicketHandler);
