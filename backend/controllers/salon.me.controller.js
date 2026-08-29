@@ -10,6 +10,7 @@ import Service from "../models/Service.js"; // ✅ NEW
 import Staff from "../models/Staff.js";
 import State from "../models/State.js";
 import Transaction from "../models/Transaction.js";
+import { resolveScheduleDate } from "../utils/dateRange.helpers.js";
 
 
 /**
@@ -360,21 +361,42 @@ export const getLiveSchedule = async (req, res) => {
     if (!salon) return res.status(404).json({ success: false, message: "Salon not found" });
 
     const salonId = salon._id;
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
-    const [chairs, bookings] = await Promise.all([
+    // Single selected IST calendar day — defaults to today when
+    // ?date= is absent (byte-identical to the previous behavior for
+    // every existing caller). Never a multi-day/range concept — see
+    // resolveScheduleDate()'s own header for why this is deliberately
+    // NOT built on Business Performance's range resolver.
+    const resolved = resolveScheduleDate(req.query.date);
+    if (resolved.error) {
+      return res.status(400).json({ success: false, message: resolved.error });
+    }
+    const { startUtc, endUtc, resolvedDate } = resolved;
+
+    const [chairs, bookings, cancelledCount] = await Promise.all([
       Chair.find({ salonId, isDeleted: false, isActive: true })
         .select("name position").sort({ position: 1 }).lean(),
       Booking.find({
         salonRef: salonId,
         status: { $in: ["CONFIRMED", "ONGOING", "COMPLETED"] },
-        startTime: { $gte: todayStart, $lte: todayEnd }
+        startTime: { $gte: startUtc, $lte: endUtc }
       })
-        .populate("userRef", "name phone")
+        .populate("userRef", "name phone profilePhoto")
         .populate("serviceRefs", "name duration price")
         .populate("chairRef", "name position")
         .sort({ startTime: 1 }).lean(),
+      // Additive, bounded count only (no documents loaded) — the
+      // operational chair-based list above deliberately never includes
+      // CANCELLED bookings (unchanged), but the Schedule summary cards
+      // still need a real count rather than a permanently-zero one.
+      // Same indexed shape as the query above ({salonRef,startTime}
+      // prefix of the existing {salonRef:1,startTime:1,endTime:1}
+      // index) — no new index required.
+      Booking.countDocuments({
+        salonRef: salonId,
+        status: "CANCELLED",
+        startTime: { $gte: startUtc, $lte: endUtc },
+      }),
     ]);
 
     const schedule = chairs.map(chair => ({
@@ -388,6 +410,11 @@ export const getLiveSchedule = async (req, res) => {
           endTime:   b.endTime,
           customer:  b.userRef?.name || "Customer",
           phone:     b.userRef?.phone || "",
+          // Additive only — existing User.profilePhoto field, already
+          // used elsewhere (BookingReadService.js, customer.controller.js).
+          // null when unset; frontend's existing Avatar component already
+          // falls back to initials in that case, unchanged.
+          customerPhoto: b.userRef?.profilePhoto || null,
           service:   b.serviceRefs?.map(s => s.name).join(", ") || "",
           status:    b.status,
           // b.amount is the legacy/optional display field (Booking.js:247-254,
@@ -412,7 +439,14 @@ export const getLiveSchedule = async (req, res) => {
         })),
     }));
 
-    return res.status(200).json({ success: true, data: schedule });
+    // `date` is additive — the exact IST calendar day actually applied
+    // (defaults to today), so the frontend can display it without
+    // separately recomputing "today" client-side. Every existing
+    // consumer that only reads `success`/`data` is unaffected.
+    // cancelledCount is additive, same as `date` above — a real count
+    // for the selected day, never the cancelled bookings themselves
+    // (those still never appear in `data`, unchanged operational view).
+    return res.status(200).json({ success: true, data: schedule, date: resolvedDate, cancelledCount });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to fetch live schedule" });
   }

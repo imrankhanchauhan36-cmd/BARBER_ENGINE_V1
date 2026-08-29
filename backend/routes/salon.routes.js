@@ -10,6 +10,7 @@ import {
 } from "../controllers/salon.controller.js";
 
 import { getMySalon, getDashboardStats, getLiveSchedule, getWallet, updateChairPhoto, updateBasicInfo } from "../controllers/salon.me.controller.js";
+import { getBusinessPerformance } from "../controllers/salon.performance.controller.js";
 import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
 import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 
@@ -36,6 +37,12 @@ ownerRouter.use(requireRole("OWNER"));
 ownerRouter.get("/me", getMySalon);
 
 ownerRouter.get("/dashboard", getDashboardStats);
+
+// Business Performance — Date Range Selector (Phase 2). New, additive,
+// isolated endpoint — does not modify or share a code path with
+// getDashboardStats() above. Inherits protect + requireRole("OWNER")
+// from this router, same as every other ownerRouter route.
+ownerRouter.get("/performance", getBusinessPerformance);
 
 
 // ✅ FIXED → use POST (not GET)
