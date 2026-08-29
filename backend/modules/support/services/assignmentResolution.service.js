@@ -62,6 +62,27 @@ const MAX_CANDIDATE_ATTEMPTS = 5; // bounded retry, mirrors createTicket's own M
 
 const presenceKey = (agentId) => `support:agent:presence:${agentId}`;
 
+// Bounded safety valve for sweepQueuedTicketsForAgent(), matching the
+// exact "MAX_ITERATIONS_PER_RUN" idiom already used by
+// jobs/slaScanner.job.js — a catch-up sweep triggered by one agent
+// coming online must never turn into an unbounded scan of every
+// QUEUED ticket in the system.
+const MAX_SWEEP_TICKETS = 20;
+
+// Presence is a live, self-reported signal (Phase F §11) — a TTL is a
+// safety net against a crashed/closed agent tab leaving a stale
+// AVAILABLE key forever; letting it expire back to the fail-safe
+// OFFLINE default (getAgentPresence's own missing-key behavior) is
+// strictly safer than no TTL at all. 12h comfortably covers a full
+// shift without requiring the client to re-heartbeat.
+const PRESENCE_TTL_SECONDS = 12 * 60 * 60;
+
+const PRESENCE_SETTABLE_VALUES = new Set([
+  AGENT_AVAILABILITY_STATUS.AVAILABLE,
+  AGENT_AVAILABILITY_STATUS.BUSY,
+  AGENT_AVAILABILITY_STATUS.OFFLINE,
+]);
+
 /**
  * Hard filters 1,3,4,5,7 (team membership, not deleted, category,
  * language, not ON_LEAVE/DISABLED) applied in memory over an
@@ -142,6 +163,118 @@ export async function getAgentPresence(agentIds) {
   );
 
   return presence;
+}
+
+/**
+ * Phase F.4 — the missing self-service half of the presence layer.
+ * getAgentPresence() above has always been able to READ this Redis
+ * key; nothing anywhere ever WROTE it in production (the only writer
+ * in the whole codebase was scripts/seedSupportTestConfig.js, a
+ * regression-test fixture) — confirmed by a repo-wide grep before
+ * writing this function, not assumed. Every real agent therefore
+ * defaulted to OFFLINE forever, so rankEligibleAgents() filtered every
+ * candidate out on every ticket, regardless of how correctly team/
+ * category/routing/coverage/capacity were configured. This is the
+ * confirmed root cause of tickets landing with a resolved TEAM but a
+ * permanently blank AGENT.
+ *
+ * Mirrors the value into SupportAgentProfile.availabilityStatus too —
+ * durable, so the Admin Agents list (supportAgent.service.js's
+ * listAgents/getAgentById, which already reads this exact field)
+ * reflects reality instead of the create-time OFFLINE default forever.
+ * This does NOT change the ranking engine itself: rankEligibleAgents()
+ * still reads live Redis presence exclusively, unmodified — this
+ * mirror is a read-model convenience only, never a second source of
+ * truth for assignment eligibility.
+ */
+export async function setAgentPresence({ agentId, status }) {
+  if (!PRESENCE_SETTABLE_VALUES.has(status)) {
+    throw new Error(`Invalid presence status: ${status}`);
+  }
+
+  if (status === AGENT_AVAILABILITY_STATUS.OFFLINE) {
+    await redis.del(presenceKey(agentId));
+  } else {
+    await redis.set(presenceKey(agentId), status, { EX: PRESENCE_TTL_SECONDS });
+  }
+
+  await SupportAgentProfile.updateOne({ userRef: agentId, isDeleted: false }, { $set: { availabilityStatus: status } });
+
+  return { status };
+}
+
+/**
+ * Read-only counterpart for the UI's own initial hydration (so a
+ * reloaded page shows the agent's actual current toggle state instead
+ * of always starting blank). Deliberately reuses getAgentPresence's
+ * own fail-safe-to-OFFLINE behavior for a missing/expired key — never
+ * reports AVAILABLE from a stale source the ranking engine itself
+ * wouldn't trust.
+ */
+export async function getMyPresenceStatus(agentId) {
+  const presence = await getAgentPresence([agentId]);
+  return presence.get(String(agentId)) || AGENT_AVAILABILITY_STATUS.OFFLINE;
+}
+
+/**
+ * Phase F.4 — catch-up sweep. Escalation's own handoffToAgent() already
+ * retries resolveAssignment() once, at the moment of escalation
+ * (assignmentResolution.service.js's existing behavior, unmodified).
+ * If nobody was AVAILABLE at that exact moment, the ticket is correctly
+ * left QUEUED with its resolved team/queue preserved and no further
+ * automatic retry ever happens — until now. Called (best-effort,
+ * non-blocking) exactly when an agent transitions TO AVAILABLE: the one
+ * moment new capacity has genuinely just appeared. Never reimplements
+ * eligibility/ranking — every candidate ticket still goes through the
+ * exact same resolveAssignment() every other caller uses, so the
+ * just-arrived agent is simply one more candidate in that engine's own
+ * least-loaded ranking, not a guaranteed recipient.
+ *
+ * Scoped to QUEUED tickets whose currentAssignment.teamRef already
+ * matches one of this agent's teams and whose agentRef is still null —
+ * exactly the NO_AGENT_AVAILABLE outcome shape setUnassignedCurrent
+ * Assignment() leaves behind. A ticket with no team resolved at all
+ * (NO_TEAM_RESOLVED — a routing/coverage configuration gap, not a
+ * presence gap) is out of scope here, same as routeAndAssignTicket's
+ * own division of responsibility.
+ */
+export async function sweepQueuedTicketsForAgent({ agentUserId }) {
+  const profile = await SupportAgentProfile.findOne({ userRef: agentUserId, isDeleted: false })
+    .select("teamRefs")
+    .lean();
+  if (!profile || !Array.isArray(profile.teamRefs) || profile.teamRefs.length === 0) {
+    return { attempted: 0, assigned: 0 };
+  }
+
+  const candidates = await SupportTicket.find({
+    isDeleted: false,
+    status: TICKET_STATUS.QUEUED,
+    "currentAssignment.teamRef": { $in: profile.teamRefs },
+    "currentAssignment.agentRef": null,
+  })
+    .select("_id currentAssignment")
+    .sort({ createdAt: 1 })
+    .limit(MAX_SWEEP_TICKETS)
+    .lean();
+
+  let assigned = 0;
+  for (const candidate of candidates) {
+    try {
+      const result = await resolveAssignment({
+        ticketId: candidate._id,
+        targetQueueRef: candidate.currentAssignment?.queueRef ?? null,
+        targetTeamRef: candidate.currentAssignment?.teamRef,
+      });
+      if (result.reason === "ASSIGNED") assigned += 1;
+    } catch (err) {
+      logger.warn("[assignmentResolution] sweep assignment attempt failed (non-critical)", {
+        ticketId: String(candidate._id),
+        error: err.message,
+      });
+    }
+  }
+
+  return { attempted: candidates.length, assigned };
 }
 
 /**

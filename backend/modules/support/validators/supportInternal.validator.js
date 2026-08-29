@@ -38,6 +38,14 @@ export const supportInternalSchemas = {
   // empty-schema convention as `start`/`assign` above.
   waitForUser: Joi.object({}).unknown(false),
 
+  // POST /admin/tickets/:id/link-booking — retroactively attach a
+  // real, already-existing Booking. Ownership re-verification happens
+  // server-side in linkBookingToTicket(); this schema only checks
+  // shape.
+  linkBooking: Joi.object({
+    bookingId: objectId.required().messages({ "any.required": "bookingId is required" }),
+  }).unknown(false),
+
   reassign: Joi.object({
     newAgentRef: objectId.required().messages({ "any.required": "newAgentRef is required" }),
     reason: Joi.string().trim().max(500).allow(null).optional(),
@@ -93,6 +101,18 @@ export const supportInternalSchemas = {
     durationSeconds: Joi.number().integer().min(0).allow(null).default(null),
     outcome: Joi.string().valid("RESOLVED", "FOLLOW_UP_REQUIRED", "ESCALATED", "CUSTOMER_UNREACHABLE", "WRONG_NUMBER", "OTHER").allow(null).default(null),
     outcomeNotes: Joi.string().trim().max(2000).allow(null, "").default(null),
+  }).unknown(false),
+
+  // PATCH /agent/presence — Phase F.4, self-service live presence
+  // toggle. ON_LEAVE/DISABLED are deliberately excluded — those remain
+  // durable, admin-set states (SupportAgentProfile.availabilityStatus
+  // via updateAgentProfile), not something an agent free-toggles
+  // moment-to-moment.
+  presence: Joi.object({
+    status: Joi.string().valid("AVAILABLE", "BUSY", "OFFLINE").required().messages({
+      "any.required": "status is required",
+      "any.only": "status must be one of AVAILABLE, BUSY, OFFLINE",
+    }),
   }).unknown(false),
 
   callOutcome: Joi.object({

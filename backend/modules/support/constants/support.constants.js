@@ -132,6 +132,13 @@ export const AUDIT_ACTION = Object.freeze({
   NO_AGENT_AVAILABLE: "NO_AGENT_AVAILABLE",
   COMPLETED: "COMPLETED",
 
+  // Retroactive linking of a real, already-existing Booking to a
+  // ticket that was filed with no relatedBookingRef (e.g. "payment
+  // deducted but booking not confirmed" — the customer had no booking
+  // id to supply at creation time). Never a status change, so distinct
+  // from STATUS_CHANGED.
+  BOOKING_LINKED: "BOOKING_LINKED",
+
   // Added Phase H Step 7 (H.4) — the first real business-mutating
   // Support action (ISSUE_REFUND). REFUND_DENIED covers both a
   // request blocked by the fresh verification gate and one that

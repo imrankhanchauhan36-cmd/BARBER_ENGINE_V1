@@ -21,6 +21,7 @@ import {
   addCustomerMessage,
   createTicket,
   getMyTicketDetail,
+  getMyTicketBookingInfo,
   listActiveCategories,
   listMyTickets,
   reopenTicket,
@@ -98,6 +99,23 @@ export const getMyTicketHandler = async (req, res, next) => {
       message: "Ticket fetched successfully",
       data: { ticket, messages },
       pagination: messagesPagination,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Real booking/payment context only — never fabricated. See
+// getMyTicketBookingInfo()'s own header for exactly what this can and
+// cannot report.
+export const getMyTicketBookingInfoHandler = async (req, res, next) => {
+  try {
+    const requesterId = req.user._id;
+    const bookingInfo = await getMyTicketBookingInfo({ requesterId, ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Booking information fetched successfully",
+      data: { bookingInfo },
     });
   } catch (err) {
     return next(err);

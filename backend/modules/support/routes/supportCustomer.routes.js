@@ -20,6 +20,7 @@ import {
   addMyTicketMessage,
   createMyTicket,
   getMyTicketHandler,
+  getMyTicketBookingInfoHandler,
   listCategoriesHandler,
   listMyTicketsHandler,
   reopenMyTicket,
@@ -40,6 +41,8 @@ router.get("/categories", listCategoriesHandler);
 router.post("/tickets", idempotency, validate(supportSchemas.createTicket), createMyTicket);
 router.get("/tickets", listMyTicketsHandler);
 router.get("/tickets/:id", getMyTicketHandler);
+// Real booking/payment context for a ticket — read-only, GET, no body.
+router.get("/tickets/:id/booking-info", getMyTicketBookingInfoHandler);
 router.post("/tickets/:id/messages", idempotency, validate(supportSchemas.addMessage), addMyTicketMessage);
 router.post("/tickets/:id/reopen", idempotency, validate(supportSchemas.reopenTicket), reopenMyTicket);
 

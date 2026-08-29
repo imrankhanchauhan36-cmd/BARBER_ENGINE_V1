@@ -51,6 +51,7 @@ import {
   reassignTicket,
 } from "./assignmentResolution.service.js";
 import { resolveEffectiveSlaPolicy } from "./slaPolicy.service.js";
+import { resolveBookingContext } from "./verification/bookingVerification.service.js";
 
 const MAX_TICKET_NUMBER_ATTEMPTS = 3;
 
@@ -966,6 +967,79 @@ export async function getMyTicketDetail({ requesterId, ticketId, query = {} }) {
   return { ticket, messages, messagesPagination };
 }
 
+/**
+ * Customer-facing, read-only booking/payment context for a ticket —
+ * the answer to "if this ticket is about a booking/payment, what is
+ * the REAL current state, and is there a real Booking ID?" Never
+ * fabricates: bookingId is only ever the real Booking._id, only ever
+ * returned when `ticket.relatedBookingRef` actually points at a real,
+ * ownership-verified booking. A ticket with no linked booking always
+ * reports `hasBooking: false` — it never guesses or matches a booking
+ * by any other signal (subject text, timing, etc).
+ *
+ * Reuses resolveBookingContext() (verification/bookingVerification.
+ * service.js) — the exact same ownership-verified booking lookup the
+ * agent/admin-facing Verification Resolver already uses — rather than
+ * re-querying Booking directly, so this can never drift from what an
+ * agent investigating the same ticket already sees. Deliberately does
+ * NOT go through resolveTicketVerification() (that resolver is scoped
+ * to AGENT/SUPPORT_ADMIN actors and its `allowedActions` — e.g.
+ * ISSUE_REFUND — must never be surfaced to a customer as something
+ * they can trigger); this is its own minimal, customer-safe subset.
+ *
+ * `applicable` tells the caller whether a "Booking Information" UI
+ * section is relevant for this ticket at all (its category is
+ * classified BOOKING/PAYMENT, or it already has a real linked
+ * booking) — a ticket about an unrelated topic (e.g. a password
+ * question) should show no such section, not an empty one.
+ */
+export async function getMyTicketBookingInfo({ requesterId, ticketId }) {
+  if (!mongoose.isValidObjectId(ticketId)) throw Errors.notFound("Ticket not found");
+
+  const ticket = await SupportTicket.findOne({ _id: ticketId, isDeleted: false })
+    .select("requesterRef requesterType categoryRef relatedBookingRef")
+    .lean();
+  if (!ticket) throw Errors.notFound("Ticket not found");
+  if (ticket.requesterRef.toString() !== requesterId.toString()) {
+    throw Errors.forbidden("This ticket does not belong to you");
+  }
+
+  const category = await SupportCategory.findOne({ _id: ticket.categoryRef, isDeleted: false })
+    .select("businessDomain")
+    .lean();
+  const isBookingOrPaymentCategory = category?.businessDomain === "BOOKING" || category?.businessDomain === "PAYMENT";
+  const applicable = Boolean(isBookingOrPaymentCategory || ticket.relatedBookingRef);
+
+  if (!applicable) {
+    return { applicable: false, hasBooking: false, bookingId: null, bookingStatus: null, paymentStatus: null, reason: null };
+  }
+
+  if (!ticket.relatedBookingRef) {
+    return { applicable: true, hasBooking: false, bookingId: null, bookingStatus: null, paymentStatus: null, reason: "NO_BOOKING_LINKED" };
+  }
+
+  const context = await resolveBookingContext({
+    ticket,
+    actor: { id: requesterId, role: ticket.requesterType === REQUESTER_TYPE.SALON_OWNER ? "OWNER" : "USER" },
+  });
+
+  if (!context.ok) {
+    return { applicable: true, hasBooking: false, bookingId: null, bookingStatus: null, paymentStatus: null, reason: context.reason };
+  }
+
+  const { booking } = context;
+  return {
+    applicable: true,
+    hasBooking: true,
+    bookingId: String(booking.id),
+    bookingStatus: booking.status,
+    paymentStatus: booking.paymentStatus,
+    salon: booking.salon ? { name: booking.salon.shopName } : null,
+    services: (booking.services || []).map((s) => s.name),
+    reason: "BOOKING_VERIFIED",
+  };
+}
+
 export async function addCustomerMessage({ requesterId, ticketId, body, attachments, io = null }) {
   if (!mongoose.isValidObjectId(ticketId)) throw Errors.notFound("Ticket not found");
 
@@ -1638,15 +1712,19 @@ async function assertTicketWithinTeamScope(ticketId, scopeTeamIds) {
  * Returns { ticket, reason } — reason is one of "STARTED" |
  * "ALREADY_IN_PROGRESS" | "INVALID_TICKET_STATE".
  */
-export async function startAgentOwnTicket({ agentUserId, ticketId, io = null }) {
-  if (!mongoose.isValidObjectId(ticketId)) throw Errors.notFound("Ticket not found");
-
-  const ticket = await SupportTicket.findOne({ _id: ticketId, isDeleted: false });
-  if (!ticket) throw Errors.notFound("Ticket not found");
-  if (!ticket.currentAssignment?.agentRef || ticket.currentAssignment.agentRef.toString() !== agentUserId.toString()) {
-    throw Errors.forbidden("This ticket is not currently assigned to you");
-  }
-
+/**
+ * Shared ASSIGNED -> IN_PROGRESS transition core, used by BOTH
+ * startAgentOwnTicket() (agent-ownership-checked) and
+ * startScopedTicket() (admin/team-lead-scoped, added to close the gap
+ * found during the E2E lifecycle trace: a SUPPORT_ADMIN viewing a
+ * ticket in "All Tickets" had no way to move it past ASSIGNED at all).
+ * The two callers differ ONLY in how authorization is established
+ * before this point — the transition itself, its idempotent-reason
+ * guards, and its socket/notification side effects are identical
+ * regardless of actor, so they live here exactly once rather than
+ * being forked between two near-duplicate functions.
+ */
+async function performStartTransition(ticket, { actorRef, actorType, io }) {
   if (ticket.status === TICKET_STATUS.IN_PROGRESS) {
     return { ticket, reason: "ALREADY_IN_PROGRESS" };
   }
@@ -1660,8 +1738,8 @@ export async function startAgentOwnTicket({ agentUserId, ticketId, io = null }) 
   await transitionTicketStatus({
     ticket,
     toStatus: TICKET_STATUS.IN_PROGRESS,
-    actorRef: agentUserId,
-    actorType: ACTOR_TYPE.AGENT,
+    actorRef,
+    actorType,
   });
 
   const rooms = [`user:${ticket.requesterRef}`, ...staffRooms({ teamRef })];
@@ -1673,6 +1751,18 @@ export async function startAgentOwnTicket({ agentUserId, ticketId, io = null }) 
   await notifyTicketStatusChanged({ ticket, fromStatus, toStatus: TICKET_STATUS.IN_PROGRESS });
 
   return { ticket, reason: "STARTED" };
+}
+
+export async function startAgentOwnTicket({ agentUserId, ticketId, io = null }) {
+  if (!mongoose.isValidObjectId(ticketId)) throw Errors.notFound("Ticket not found");
+
+  const ticket = await SupportTicket.findOne({ _id: ticketId, isDeleted: false });
+  if (!ticket) throw Errors.notFound("Ticket not found");
+  if (!ticket.currentAssignment?.agentRef || ticket.currentAssignment.agentRef.toString() !== agentUserId.toString()) {
+    throw Errors.forbidden("This ticket is not currently assigned to you");
+  }
+
+  return performStartTransition(ticket, { actorRef: agentUserId, actorType: ACTOR_TYPE.AGENT, io });
 }
 
 /**
@@ -1803,6 +1893,26 @@ export async function unassignAgentOwnTicket({ agentUserId, ticketId, reason, io
 export async function addAgentInternalNote({ agentUserId, ticketId, body, attachments, io = null }) {
   await assertTicketAssignedToAgent(ticketId, agentUserId);
   return addInternalNote({ actorUserId: agentUserId, actorType: ACTOR_TYPE.AGENT, ticketId, body, attachments, scopeTeamIds: null, io });
+}
+
+/**
+ * SUPPORT_ADMIN (scopeTeamIds=null) or team-lead-scoped ASSIGNED ->
+ * IN_PROGRESS. Same authorization pattern as reassignScopedTicket/
+ * unassignScopedTicket/resolveScopedTicket immediately below —
+ * assertTicketWithinTeamScope() instead of agent-ownership — and
+ * reuses the exact same performStartTransition() core
+ * startAgentOwnTicket() already uses, so the transition, its
+ * idempotent-reason guards, and its socket/notification behavior are
+ * identical for either actor; only how authorization is established
+ * differs.
+ */
+export async function startScopedTicket({ scopeTeamIds, ticketId, actorRef, actorType, io = null }) {
+  await assertTicketWithinTeamScope(ticketId, scopeTeamIds);
+
+  const ticket = await SupportTicket.findOne({ _id: ticketId, isDeleted: false });
+  if (!ticket) throw Errors.notFound("Ticket not found");
+
+  return performStartTransition(ticket, { actorRef, actorType, io });
 }
 
 /** SUPPORT_ADMIN (scopeTeamIds=null) or team-lead-scoped reassignment. */
@@ -1952,4 +2062,70 @@ export async function reopenScopedTicket({ scopeTeamIds, ticketId, actorRef, act
   }
 
   return { ticket, reason: "REOPENED" };
+}
+
+/**
+ * SUPPORT_ADMIN (scopeTeamIds=null) or team-lead-scoped: attach a real,
+ * already-existing Booking to a ticket after the fact. This is the
+ * missing counterpart to createTicket()'s own resolveRelatedReferences()
+ * (booking linking is otherwise only possible AT CREATION TIME) — a
+ * ticket like "payment deducted but booking not confirmed" is filed
+ * with no relatedBookingRef precisely because no booking existed yet
+ * at that moment. If a real booking is later found (by the agent
+ * investigating, or the customer follows up with the id), this is how
+ * it gets attached so getMyTicketBookingInfo() can ever surface it.
+ *
+ * Reuses the EXACT SAME ownership rule resolveRelatedReferences()
+ * already enforces at creation time (never touched, never
+ * reimplemented differently here) — a booking can only ever be linked
+ * if it genuinely belongs to this ticket's own requester. This is a
+ * hard authorization gate, not a soft warning: a staff member cannot
+ * attach an unrelated customer's booking to this ticket even by
+ * mistake.
+ *
+ * Never a status transition — relatedBookingRef is not part of
+ * VALID_TRANSITIONS/ticketLifecycle.service.js at all, so this does
+ * not go through transitionTicketStatus(); it is its own audited
+ * single-field write, same shape as reassignScopedTicket()'s own
+ * single-purpose mutation.
+ */
+export async function linkBookingToTicket({ scopeTeamIds, ticketId, bookingId, actorRef, actorType }) {
+  if (!mongoose.isValidObjectId(ticketId)) throw Errors.notFound("Ticket not found");
+  if (!mongoose.isValidObjectId(bookingId)) throw Errors.badRequest("bookingId is not a valid id");
+
+  await assertTicketWithinTeamScope(ticketId, scopeTeamIds);
+
+  const ticket = await SupportTicket.findOne({ _id: ticketId, isDeleted: false });
+  if (!ticket) throw Errors.notFound("Ticket not found");
+
+  const booking = await Booking.findById(bookingId).select("userRef salonRef").lean();
+  if (!booking) throw Errors.badRequest("bookingId does not reference an existing booking");
+
+  // Same ownership rule createTicket()'s own resolveRelatedReferences()
+  // enforces at creation time — never trust the staff-supplied id alone.
+  if (ticket.requesterType === REQUESTER_TYPE.USER) {
+    if (booking.userRef?.toString() !== ticket.requesterRef.toString()) {
+      throw Errors.forbidden("This booking does not belong to the ticket's requester");
+    }
+  } else {
+    const salon = await Salon.findOne({ _id: booking.salonRef, ownerId: ticket.requesterRef }).select("_id").lean();
+    if (!salon) throw Errors.forbidden("This booking is not linked to the ticket requester's salon");
+  }
+
+  const oldValue = { relatedBookingRef: ticket.relatedBookingRef || null };
+  ticket.relatedBookingRef = booking._id;
+  ticket.updatedBy = actorRef;
+  await ticket.save();
+
+  await recordSupportAuditEvent({
+    ticketRef: ticket._id,
+    actorRef,
+    actorType,
+    action: AUDIT_ACTION.BOOKING_LINKED,
+    entityId: ticket._id,
+    oldValue,
+    newValue: { relatedBookingRef: booking._id },
+  });
+
+  return ticket;
 }

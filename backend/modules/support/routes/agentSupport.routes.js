@@ -16,6 +16,8 @@ import { idempotency } from "../../../middlewares/idempotency.middleware.js";
 import { requireRole } from "../../../middlewares/role.middleware.js";
 import { validate } from "../../../middlewares/validate.middleware.js";
 import {
+  getMyPresenceHandler,
+  setMyPresenceHandler,
   listMyAssignedTicketsHandler,
   getMyAssignedTicketHandler,
   getMyTicketVerificationHandler,
@@ -37,6 +39,13 @@ import { supportInternalSchemas } from "../validators/supportInternal.validator.
 const router = express.Router();
 
 router.use(requireRole("AGENT"));
+
+// Phase F.4 — self-service live presence (the missing half of the
+// Redis-backed presence layer assignmentResolution.service.js's
+// ranking engine has always read from). No idempotency needed — a
+// presence set is a pure state overwrite, safe to repeat.
+router.get("/presence", getMyPresenceHandler);
+router.patch("/presence", validate(supportInternalSchemas.presence), setMyPresenceHandler);
 
 router.get("/tickets", listMyAssignedTicketsHandler);
 router.get("/tickets/:id", getMyAssignedTicketHandler);

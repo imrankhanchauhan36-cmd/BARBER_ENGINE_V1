@@ -23,6 +23,8 @@ import {
   getTicketVerificationHandler,
   issueRefundHandler,
   assignAdminTicketHandler,
+  startAdminTicketHandler,
+  linkBookingHandler,
   reassignAdminTicketHandler,
   unassignAdminTicketHandler,
   resolveAdminTicketHandler,
@@ -58,6 +60,14 @@ router.get("/tickets/:id/verification", getTicketVerificationHandler);
 // RefundExecutionService.issueRefundForCancelledBooking itself.
 router.post("/tickets/:id/refund", idempotency, validate(supportInternalSchemas.issueRefund), issueRefundHandler);
 router.post("/tickets/:id/assign", idempotency, validate(supportInternalSchemas.assign), assignAdminTicketHandler);
+// Admin/team-lead-scoped ASSIGNED -> IN_PROGRESS — reuses the existing
+// empty `start` schema (startAgentOwnTicket's own route already uses
+// it; this action takes no body fields either).
+router.post("/tickets/:id/start", idempotency, validate(supportInternalSchemas.start), startAdminTicketHandler);
+// Retroactive booking linking — see linkBookingToTicket()'s own header
+// for why this exists (createTicket() can only link a booking AT
+// CREATION time; this closes the "booking confirmed later" gap).
+router.post("/tickets/:id/link-booking", idempotency, validate(supportInternalSchemas.linkBooking), linkBookingHandler);
 router.post("/tickets/:id/reassign", idempotency, validate(supportInternalSchemas.reassign), reassignAdminTicketHandler);
 router.post("/tickets/:id/unassign", idempotency, validate(supportInternalSchemas.unassign), unassignAdminTicketHandler);
 router.post("/tickets/:id/resolve", idempotency, validate(supportInternalSchemas.resolve), resolveAdminTicketHandler);

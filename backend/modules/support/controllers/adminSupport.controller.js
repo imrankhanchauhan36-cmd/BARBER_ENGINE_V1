@@ -28,10 +28,12 @@ import {
   listAdminTickets,
   getAdminTicketDetail,
   addInternalNote,
+  startScopedTicket,
   reassignScopedTicket,
   unassignScopedTicket,
   resolveScopedTicket,
   reopenScopedTicket,
+  linkBookingToTicket,
   emitRoutingOutcome,
   notifyTicketStatusChanged,
 } from "../services/supportTicket.service.js";
@@ -98,6 +100,76 @@ const REASON_STATUS = {
 };
 
 const statusForReason = (reason) => REASON_STATUS[reason] ?? 200;
+
+// Accurate, action-specific response messages, keyed by the exact
+// `reason` each service function documents on itself. Fixes a real
+// defect (found via a live-ticket trace): every handler below used to
+// return a HARDCODED success-shaped message regardless of `reason` —
+// statusForReason() already returned the correct non-2xx status for a
+// rejection (e.g. 409 for INVALID_TICKET_STATE), but the body's
+// `message` field still said "...successfully", so a genuinely
+// rejected, zero-mutation Close/Resolve/etc. call displayed misleading
+// text in the frontend's error banner. statusForReason() itself, and
+// every service function's actual returned `reason`, are UNCHANGED —
+// only which string accompanies each reason is fixed here.
+const messageFor = (map, reason) => map[reason] || `Unexpected result: ${reason}`;
+
+const ASSIGN_MESSAGES = {
+  ASSIGNED: "Ticket routing/assignment triggered successfully",
+  ALREADY_ASSIGNED: "This ticket is already assigned to an agent.",
+  NO_AGENT_AVAILABLE: "No eligible agent is currently available — the ticket remains queued.",
+  NO_TEAM_RESOLVED: "No team could be resolved for this ticket's routing configuration — the ticket remains queued.",
+  ALREADY_PROGRESSED: "This ticket has already moved past the queued stage; no action was taken.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const REASSIGN_MESSAGES = {
+  REASSIGNED: "Ticket reassigned successfully",
+  NO_OP_SAME_AGENT: "This ticket is already assigned to that agent; no change was made.",
+  NO_ACTIVE_ASSIGNMENT: "This ticket has no active assignment to reassign.",
+  NEW_AGENT_NOT_ELIGIBLE: "The selected agent is not eligible to receive this ticket.",
+  NEW_AGENT_CAPACITY_UNAVAILABLE: "The selected agent has no available capacity right now.",
+  CONCURRENT_MODIFICATION: "This ticket was modified concurrently — please retry.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const UNASSIGN_MESSAGES = {
+  UNASSIGNED: "Ticket unassigned successfully",
+  ALREADY_UNASSIGNED: "This ticket is already unassigned.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const START_MESSAGES = {
+  STARTED: "Ticket started successfully",
+  ALREADY_IN_PROGRESS: "This ticket is already in progress.",
+  INVALID_TICKET_STATE: "This ticket is not in a state that can be started.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const RESOLVE_MESSAGES = {
+  RESOLVED: "Ticket resolved successfully",
+  ALREADY_RESOLVED: "This ticket is already resolved.",
+  ALREADY_CLOSED: "This ticket is already closed.",
+  INVALID_TICKET_STATE: "This ticket is not in a state that can be resolved.",
+  NO_ACTIVE_ASSIGNMENT: "This ticket has no active assignment to resolve.",
+  ACTIVE_ASSIGNMENT_MISSING_AGENT: "This ticket's active assignment is missing an agent — reassign it before resolving.",
+  CONCURRENT_MODIFICATION: "This ticket was modified concurrently — please retry.",
+  WORKLOAD_RELEASE_FAILED: "Resolution failed while releasing the agent's workload — please retry.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const CLOSE_MESSAGES = {
+  CLOSED: "Ticket closed successfully",
+  ALREADY_CLOSED: "This ticket is already closed.",
+  INVALID_TICKET_STATE: "This ticket must be RESOLVED before it can be closed.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const REOPEN_MESSAGES = {
+  REOPENED: "Ticket reopened successfully",
+  INVALID_TICKET_STATE: "Only a closed ticket can be reopened.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
 
 export const listAdminTicketsHandler = async (req, res, next) => {
   try {
@@ -258,8 +330,62 @@ export const assignAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket routing/assignment triggered successfully",
+      message: messageFor(ASSIGN_MESSAGES, result.reason),
       data: result,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Admin/team-lead-scoped ASSIGNED -> IN_PROGRESS. Mirrors resolveAdminTicketHandler's
+// shape exactly — startScopedTicket() reuses the same transition core
+// startAgentOwnTicket() already uses (transitionTicketStatus(), socket
+// emit, notification), authorized via assertTicketWithinTeamScope()
+// instead of agent-ownership, exactly like reassign/unassign/resolve
+// above. Closes the real gap found during the E2E trace: a SUPPORT_ADMIN
+// viewing a ticket in "All Tickets" had no way to move ASSIGNED ->
+// IN_PROGRESS at all — only the assigned agent's own "mine" scope did.
+export const startAdminTicketHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    const result = await startScopedTicket({
+      scopeTeamIds,
+      ticketId: req.params.id,
+      actorRef: req.user._id,
+      actorType: resolveActorType(req),
+      io: req.app.get("io"),
+    });
+
+    return successResponse(res, {
+      statusCode: statusForReason(result.reason),
+      message: messageFor(START_MESSAGES, result.reason),
+      data: result,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Retroactively attach a real, already-existing Booking to a ticket
+// that was filed with no relatedBookingRef. Ownership of the booking
+// against the ticket's own requester is re-verified inside
+// linkBookingToTicket() itself — this handler never trusts the
+// client-supplied bookingId beyond passing it through.
+export const linkBookingHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    const ticket = await linkBookingToTicket({
+      scopeTeamIds,
+      ticketId: req.params.id,
+      bookingId: req.body.bookingId,
+      actorRef: req.user._id,
+      actorType: resolveActorType(req),
+    });
+
+    return successResponse(res, {
+      message: "Booking linked successfully",
+      data: { ticket },
     });
   } catch (err) {
     return next(err);
@@ -281,7 +407,7 @@ export const reassignAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket reassigned successfully",
+      message: messageFor(REASSIGN_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -303,7 +429,7 @@ export const unassignAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket unassigned successfully",
+      message: messageFor(UNASSIGN_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -325,7 +451,7 @@ export const resolveAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket resolved successfully",
+      message: messageFor(RESOLVE_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -365,7 +491,7 @@ export const closeAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket closed successfully",
+      message: messageFor(CLOSE_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -387,7 +513,7 @@ export const reopenAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket reopened successfully",
+      message: messageFor(REOPEN_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {

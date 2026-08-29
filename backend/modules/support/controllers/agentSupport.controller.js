@@ -25,10 +25,16 @@ import {
   waitForUserAgentOwnTicket,
 } from "../services/supportTicket.service.js";
 import { resolveTicketVerification } from "../services/verification/verificationResolver.service.js";
-import { listAssignmentHistory } from "../services/assignmentResolution.service.js";
+import {
+  listAssignmentHistory,
+  setAgentPresence,
+  getMyPresenceStatus,
+  sweepQueuedTicketsForAgent,
+} from "../services/assignmentResolution.service.js";
 import { getTicketEmailHistory } from "../services/emailHistory.service.js";
 import { logAgentCall, updateCallOutcome, getTicketCallHistory } from "../services/callLog.service.js";
 import { getTicketBotActivity } from "../services/botActivity.service.js";
+import logger from "../../../utils/logger.js";
 
 // Phase F.3.7 audit §11 — deterministic service `reason` -> HTTP status
 // mapping, mirrored identically in adminSupport.controller.js. Every
@@ -60,6 +66,95 @@ const REASON_STATUS = {
 };
 
 const statusForReason = (reason) => REASON_STATUS[reason] ?? 200;
+
+// Accurate, action-specific response messages, keyed by the exact
+// `reason` each service function documents on itself — see the
+// identical comment in adminSupport.controller.js for the full
+// rationale (a live-ticket trace found every handler here previously
+// returned a hardcoded success-shaped message regardless of `reason`,
+// even though statusForReason() already returned the correct non-2xx
+// status for a rejection). statusForReason() and every service
+// function's returned `reason` are UNCHANGED — only the message text
+// per reason is fixed here.
+const messageFor = (map, reason) => map[reason] || `Unexpected result: ${reason}`;
+
+const START_MESSAGES = {
+  STARTED: "Ticket started successfully",
+  ALREADY_IN_PROGRESS: "This ticket is already in progress.",
+  INVALID_TICKET_STATE: "This ticket is not in a state that can be started.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const WAIT_MESSAGES = {
+  WAITING_FOR_USER: "Ticket marked as waiting for customer",
+  ALREADY_WAITING_FOR_USER: "This ticket is already waiting for the customer.",
+  INVALID_TICKET_STATE: "This ticket is not in a state that can be marked as waiting for the customer.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const RESOLVE_MESSAGES = {
+  RESOLVED: "Ticket resolved successfully",
+  ALREADY_RESOLVED: "This ticket is already resolved.",
+  ALREADY_CLOSED: "This ticket is already closed.",
+  INVALID_TICKET_STATE: "This ticket is not in a state that can be resolved.",
+  NO_ACTIVE_ASSIGNMENT: "This ticket has no active assignment to resolve.",
+  ACTIVE_ASSIGNMENT_MISSING_AGENT: "This ticket's active assignment is missing an agent — reassign it before resolving.",
+  CONCURRENT_MODIFICATION: "This ticket was modified concurrently — please retry.",
+  WORKLOAD_RELEASE_FAILED: "Resolution failed while releasing the agent's workload — please retry.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+const UNASSIGN_MESSAGES = {
+  UNASSIGNED: "Ticket unassigned successfully",
+  ALREADY_UNASSIGNED: "This ticket is already unassigned.",
+  TICKET_NOT_FOUND: "Ticket not found.",
+};
+
+// Phase F.4 — self-service live presence. GET returns the agent's own
+// current toggle state (for UI hydration on load/reload); PATCH sets
+// it. Identity is always req.user._id — an agent can only ever set
+// their own presence, never another agent's (no agentRef accepted
+// from the client), matching this controller's own established
+// ownership-derivation convention.
+export const getMyPresenceHandler = async (req, res, next) => {
+  try {
+    const status = await getMyPresenceStatus(req.user._id);
+    return successResponse(res, {
+      message: "Presence fetched successfully",
+      data: { status },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const setMyPresenceHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    const result = await setAgentPresence({ agentId: agentUserId, status: req.body.status });
+
+    // Best-effort, non-blocking catch-up — only meaningful on a
+    // transition TO available (new capacity just appeared); never
+    // delays or fails the presence-set response itself, same
+    // non-critical-failure philosophy as every other post-commit hook
+    // in this module (routeAndAssignTicket/bot processing).
+    let sweep = { attempted: 0, assigned: 0 };
+    if (req.body.status === "AVAILABLE") {
+      try {
+        sweep = await sweepQueuedTicketsForAgent({ agentUserId });
+      } catch (err) {
+        logger.warn("[agentSupport] presence sweep failed (non-critical)", { error: err.message });
+      }
+    }
+
+    return successResponse(res, {
+      message: "Presence updated successfully",
+      data: { ...result, sweep },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
 
 export const listMyAssignedTicketsHandler = async (req, res, next) => {
   try {
@@ -133,7 +228,7 @@ export const startMyTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket started successfully",
+      message: messageFor(START_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -152,7 +247,7 @@ export const waitForUserMyTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket marked as waiting for customer",
+      message: messageFor(WAIT_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -172,7 +267,7 @@ export const resolveMyTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket resolved successfully",
+      message: messageFor(RESOLVE_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
@@ -192,7 +287,7 @@ export const unassignMyTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       statusCode: statusForReason(result.reason),
-      message: "Ticket unassigned successfully",
+      message: messageFor(UNASSIGN_MESSAGES, result.reason),
       data: result,
     });
   } catch (err) {
