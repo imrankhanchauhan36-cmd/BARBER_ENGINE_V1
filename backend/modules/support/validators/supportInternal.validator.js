@@ -82,4 +82,23 @@ export const supportInternalSchemas = {
     }),
     attachments: Joi.array().items(attachmentSchema).max(10).default([]),
   }).unknown(false),
+
+  // Phase H — Call Support. Minimal, matching CALL_DIRECTION/
+  // CALL_OUTCOME's own deliberately small enums (support.constants.js)
+  // — no workflow fields invented here.
+  logCall: Joi.object({
+    direction: Joi.string().valid("INBOUND", "OUTBOUND").required().messages({
+      "any.required": "direction is required",
+    }),
+    durationSeconds: Joi.number().integer().min(0).allow(null).default(null),
+    outcome: Joi.string().valid("RESOLVED", "FOLLOW_UP_REQUIRED", "ESCALATED", "CUSTOMER_UNREACHABLE", "WRONG_NUMBER", "OTHER").allow(null).default(null),
+    outcomeNotes: Joi.string().trim().max(2000).allow(null, "").default(null),
+  }).unknown(false),
+
+  callOutcome: Joi.object({
+    outcome: Joi.string().valid("RESOLVED", "FOLLOW_UP_REQUIRED", "ESCALATED", "CUSTOMER_UNREACHABLE", "WRONG_NUMBER", "OTHER").required().messages({
+      "any.required": "outcome is required",
+    }),
+    outcomeNotes: Joi.string().trim().max(2000).allow(null, "").default(null),
+  }).unknown(false),
 };

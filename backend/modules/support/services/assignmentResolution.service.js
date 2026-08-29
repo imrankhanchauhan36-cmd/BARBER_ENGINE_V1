@@ -1043,3 +1043,21 @@ export async function routeAndAssignTicket({ ticketId }) {
 
   return { ticket, routingDecision, assignmentResult, reason: assignmentResult.reason };
 }
+
+/**
+ * Phase H Step 8 (follow-up) — read-only assignment history for one
+ * ticket. Confirmed by direct inspection: SupportAssignment already
+ * carries full history via its previousAssignmentRef chain and
+ * status transitions (ACTIVE/REASSIGNED/UNASSIGNED/COMPLETED), but no
+ * endpoint anywhere ever read it back — this is the first reader.
+ * Does not touch resolveAssignment()/unassignTicket()/reassignTicket()/
+ * routeAndAssignTicket() in any way; it is a pure query over rows
+ * those functions already write. Sorted oldest-first (matches the
+ * ticket's own message/audit ordering convention).
+ */
+export async function listAssignmentHistory({ ticketId }) {
+  return SupportAssignment.find({ ticketRef: ticketId })
+    .select("queueRef teamRef agentRef status assignedAt unassignedAt assignedBy assignmentReason previousAssignmentRef createdAt")
+    .sort({ createdAt: 1 })
+    .lean();
+}

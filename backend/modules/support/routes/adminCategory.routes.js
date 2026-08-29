@@ -29,7 +29,15 @@
 
 import express from "express";
 import { requireSupportAccess } from "../../../middlewares/supportAccess.middleware.js";
+import { validate } from "../../../middlewares/validate.middleware.js";
 import { listCategoriesHandler } from "../controllers/supportTicket.controller.js";
+import {
+  createCategoryHandler,
+  listCategoriesForAdminHandler,
+  updateCategoryHandler,
+  updateCategoryStatusHandler,
+} from "../controllers/adminCategoryConfig.controller.js";
+import { supportCategoryConfigSchemas } from "../validators/supportCategoryConfig.validator.js";
 
 const router = express.Router();
 
@@ -39,6 +47,15 @@ const router = express.Router();
 // see supportAccess.middleware.js.
 router.use(requireSupportAccess("SUPPORT_ADMIN"));
 
+// Existing — UNCHANGED — reused by the customer ticket-creation picker
+// (via listActiveCategories()) AND the existing admin dropdowns in
+// SlaPolicyPage/SupportAgentsPage. Active-only, minimal fields.
 router.get("/", listCategoriesHandler);
+
+// New — Phase H Step 8 (Step 2) — Support Configuration Management.
+router.get("/manage", listCategoriesForAdminHandler);
+router.post("/", validate(supportCategoryConfigSchemas.create), createCategoryHandler);
+router.patch("/:id", validate(supportCategoryConfigSchemas.update), updateCategoryHandler);
+router.patch("/:id/status", validate(supportCategoryConfigSchemas.updateStatus), updateCategoryStatusHandler);
 
 export default router;

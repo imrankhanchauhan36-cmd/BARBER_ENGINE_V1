@@ -29,3 +29,24 @@ export async function recordSupportAuditEvent(
   );
   return event;
 }
+
+/**
+ * Phase H Step 8 (follow-up) — read-only audit trail for one ticket.
+ * Every Support action already writes here via recordSupportAuditEvent
+ * above (confirmed extensively — CREATED/ASSIGNED/REASSIGNED/
+ * STATUS_CHANGED/INTERNAL_NOTE/CUSTOMER_REPLY/SLA_WARNING/SLA_BREACHED/
+ * ESCALATED/RESOLVED/REOPENED/CLOSED/REFUND_ISSUED/REFUND_DENIED etc.),
+ * but no endpoint anywhere ever read it back — this is the first
+ * reader. Deliberately admin/SUPPORT_ADMIN-only at the route level
+ * (not exposed to AGENT) — some recorded events (e.g. REFUND_ISSUED,
+ * ESCALATED's recipient list) are administrative in nature, and an
+ * agent's own action history is already visible to them via the
+ * message thread and assignment history, so exposing the full event
+ * log to every agent would be more than their case actually requires
+ * (least-privilege, per the approved design).
+ */
+export async function listAuditEvents({ ticketId }) {
+  return SupportAuditEvent.find({ ticketRef: ticketId })
+    .sort({ createdAt: 1 })
+    .lean();
+}

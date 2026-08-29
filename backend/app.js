@@ -44,6 +44,12 @@ import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // �
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
 import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
+import adminQueueRoutes from "./modules/support/routes/adminQueue.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Queues
+import adminRoutingRuleRoutes from "./modules/support/routes/adminRoutingRule.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Routing Rules
+import adminCoverageRoutes from "./modules/support/routes/adminCoverage.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Coverage
+import emailWebhookRoutes from "./modules/support/routes/emailWebhook.routes.js"; // ← NEW — Phase H Step 9 Email Support (inbound webhook)
+import whatsappWebhookRoutes from "./modules/support/routes/whatsappWebhook.routes.js"; // ← NEW — Phase H WhatsApp Support (inbound webhook)
+import callWebhookRoutes from "./modules/support/routes/callWebhook.routes.js"; // ← NEW — Phase H Call Support (inbound webhook)
 
 
 
@@ -190,6 +196,20 @@ app.use("/api/admin-auth", adminAuthRoutes);
 // reaching supportAuthRoutes. No protect/onboardingBypass here — same
 // as /api/auth and /api/admin-auth above.
 app.use("/api/support/auth", supportAuthRoutes);
+// Phase H Step 9 — same reasoning as /api/support/auth immediately
+// above: an inbound email webhook has no user session at all, so it
+// must be mounted here, before the generic protect-wrapping mounts
+// further below, and is secured instead by emailWebhookAuth's own
+// shared-secret check inside the router itself.
+app.use("/api/support/email", emailWebhookRoutes);
+// Phase H — WhatsApp Support. Same reasoning as /api/support/email
+// immediately above: an inbound WhatsApp webhook has no user session
+// at all, so it must be mounted here, secured instead by
+// whatsappWebhookAuth's own shared-secret check inside the router.
+app.use("/api/support/whatsapp", whatsappWebhookRoutes);
+// Phase H — Call Support. Same reasoning as /api/support/email and
+// /api/support/whatsapp immediately above.
+app.use("/api/support/call", callWebhookRoutes);
 app.use("/api/user", userRoutes);
 
 
@@ -256,6 +276,11 @@ app.use("/api/support/admin/categories", protect, onboardingBypass, adminCategor
 // Same defensive reasoning as sla-policies/categories above — Phase H Step 7.
 app.use("/api/support/admin/agents", protect, onboardingBypass, adminAgentRoutes);
 app.use("/api/support/admin/teams", protect, onboardingBypass, adminTeamRoutes);
+// Same defensive reasoning as sla-policies/categories/agents/teams
+// above — Phase H Step 8.
+app.use("/api/support/admin/queues", protect, onboardingBypass, adminQueueRoutes);
+app.use("/api/support/admin/routing-rules", protect, onboardingBypass, adminRoutingRuleRoutes);
+app.use("/api/support/admin/coverage", protect, onboardingBypass, adminCoverageRoutes);
 app.use("/api/support/admin", protect, onboardingBypass, supportAdminRoutes);
 
 ///////////////////////////////////////////////////////////

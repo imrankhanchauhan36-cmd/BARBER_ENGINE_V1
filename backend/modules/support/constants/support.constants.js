@@ -88,6 +88,10 @@ export const SENDER_TYPE = Object.freeze({
   CUSTOMER: "CUSTOMER",
   AGENT: "AGENT",
   SYSTEM: "SYSTEM",
+  // Phase H — Bot Support. An actor type, not a channel — a bot
+  // operates within whatever channel the ticket already is (IN_APP/
+  // EMAIL/WHATSAPP/PHONE), exactly like CUSTOMER/AGENT already do.
+  BOT: "BOT",
 });
 
 // ── Audit ─────────────────────────────────────────────────────────
@@ -136,6 +140,56 @@ export const AUDIT_ACTION = Object.freeze({
   // reason-based convention already used across this audit trail.
   REFUND_ISSUED: "REFUND_ISSUED",
   REFUND_DENIED: "REFUND_DENIED",
+
+  // Phase H — Call Support. One value covers both a call being
+  // logged/attached against a ticket and its outcome being recorded —
+  // the audit event's own `reason`/`newValue` fields carry the
+  // specifics, matching this enum's existing philosophy (e.g.
+  // REFUND_DENIED above) of not inventing a new constant per nuance.
+  CALL_LOGGED: "CALL_LOGGED",
+
+  // Phase H — Bot Support. Two case-lifecycle-consequential actions
+  // only — finer-grained bot telemetry (intent, confidence, tool
+  // calls) lives on SupportBotAction, not as additional enum values
+  // here, mirroring the exact SupportAuditEvent-vs-SupportCall split
+  // Call Support already established.
+  BOT_REPLY: "BOT_REPLY",
+  BOT_ESCALATED: "BOT_ESCALATED",
+});
+
+// ── Call Support (Phase H) ───────────────────────────────────────────
+export const CALL_DIRECTION = Object.freeze({
+  INBOUND: "INBOUND",
+  OUTBOUND: "OUTBOUND",
+});
+
+// Call-lifecycle status — deliberately NOT reusing TICKET_STATUS; a
+// call's status describes the telephony session itself (ringing,
+// answered, ended), not the case/ticket it's attached to.
+export const CALL_STATUS = Object.freeze({
+  RINGING: "RINGING",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  NO_ANSWER: "NO_ANSWER",
+  BUSY: "BUSY",
+});
+
+// Agent-recorded post-call outcome — intentionally small and flat, not
+// a workflow. Extend here only, never invent a parallel status field.
+export const CALL_OUTCOME = Object.freeze({
+  RESOLVED: "RESOLVED",
+  FOLLOW_UP_REQUIRED: "FOLLOW_UP_REQUIRED",
+  ESCALATED: "ESCALATED",
+  CUSTOMER_UNREACHABLE: "CUSTOMER_UNREACHABLE",
+  WRONG_NUMBER: "WRONG_NUMBER",
+  OTHER: "OTHER",
+});
+
+export const CALL_RECORDING_STATUS = Object.freeze({
+  NOT_AVAILABLE: "NOT_AVAILABLE",
+  AVAILABLE: "AVAILABLE",
+  CONSENT_DECLINED: "CONSENT_DECLINED",
 });
 
 // ── Routing + Coverage (Phase E.1 — schema foundation only; the

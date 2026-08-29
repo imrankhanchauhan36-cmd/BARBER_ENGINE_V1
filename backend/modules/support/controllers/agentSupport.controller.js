@@ -25,6 +25,10 @@ import {
   waitForUserAgentOwnTicket,
 } from "../services/supportTicket.service.js";
 import { resolveTicketVerification } from "../services/verification/verificationResolver.service.js";
+import { listAssignmentHistory } from "../services/assignmentResolution.service.js";
+import { getTicketEmailHistory } from "../services/emailHistory.service.js";
+import { logAgentCall, updateCallOutcome, getTicketCallHistory } from "../services/callLog.service.js";
+import { getTicketBotActivity } from "../services/botActivity.service.js";
 
 // Phase F.3.7 audit §11 — deterministic service `reason` -> HTTP status
 // mapping, mirrored identically in adminSupport.controller.js. Every
@@ -75,7 +79,7 @@ export const listMyAssignedTicketsHandler = async (req, res, next) => {
 export const getMyAssignedTicketHandler = async (req, res, next) => {
   try {
     const agentUserId = req.user._id;
-    const { ticket, messages, messagesPagination } = await getAgentTicketDetail({
+    const { ticket, messages, messagesPagination, requester } = await getAgentTicketDetail({
       agentUserId,
       ticketId: req.params.id,
       query: req.query,
@@ -83,7 +87,7 @@ export const getMyAssignedTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       message: "Ticket fetched successfully",
-      data: { ticket, messages },
+      data: { ticket, messages, requester },
       pagination: messagesPagination,
     });
   } catch (err) {
@@ -232,6 +236,134 @@ export const addMyTicketInternalNoteHandler = async (req, res, next) => {
       statusCode: 201,
       message: "Internal note added successfully",
       data: { message },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H Step 8 (follow-up) — read-only assignment history for the
+// agent's own currently-assigned ticket. Reuses getAgentTicketDetail()
+// purely as the existing ownership gate ("is this ticket currently
+// assigned to me") — its messages/requester fields are discarded
+// here, no new authorization logic introduced. Full audit trail is
+// deliberately NOT exposed to AGENT (see supportAudit.service.js's
+// listAuditEvents() comment) — assignment history is the
+// least-privilege subset appropriate for the agent's own case.
+export const getMyTicketAssignmentHistoryHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    await getAgentTicketDetail({ agentUserId, ticketId: req.params.id });
+    const history = await listAssignmentHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Assignment history fetched successfully",
+      data: { history },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H Step 9 (follow-up) — read-only email history for the
+// agent's own currently-assigned ticket. Reuses getAgentTicketDetail()
+// purely as the existing ownership gate, same pattern as
+// getMyTicketAssignmentHistoryHandler above — no new authorization
+// logic introduced, no admin-only data exposed.
+export const getMyTicketEmailHistoryHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    await getAgentTicketDetail({ agentUserId, ticketId: req.params.id });
+    const history = await getTicketEmailHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Email history fetched successfully",
+      data: history,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Call Support. Manually log a call against the agent's own
+// assigned ticket — ownership is enforced inside logAgentCall() itself
+// (same pattern as addAgentReply()), not here.
+export const logMyTicketCallHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    const call = await logAgentCall({
+      agentUserId,
+      ticketId: req.params.id,
+      direction: req.body.direction,
+      durationSeconds: req.body.durationSeconds,
+      outcome: req.body.outcome,
+      outcomeNotes: req.body.outcomeNotes,
+    });
+
+    return successResponse(res, {
+      statusCode: 201,
+      message: "Call logged successfully",
+      data: { call },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Call Support. Record/update a call's outcome — the one
+// deliberately minimal post-call action.
+export const updateMyTicketCallOutcomeHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    const call = await updateCallOutcome({
+      agentUserId,
+      ticketId: req.params.id,
+      callId: req.params.callId,
+      outcome: req.body.outcome,
+      outcomeNotes: req.body.outcomeNotes,
+    });
+
+    return successResponse(res, {
+      message: "Call outcome recorded successfully",
+      data: { call },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Call Support. Read-only call history for the agent's own
+// assigned ticket. Reuses getAgentTicketDetail() purely as the
+// existing ownership gate, same pattern as
+// getMyTicketEmailHistoryHandler above.
+export const getMyTicketCallHistoryHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    await getAgentTicketDetail({ agentUserId, ticketId: req.params.id });
+    const history = await getTicketCallHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Call history fetched successfully",
+      data: history,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Bot Support. Read-only bot activity for the agent's own
+// assigned ticket. Reuses getAgentTicketDetail() purely as the
+// existing ownership gate, same pattern as every other history
+// handler above.
+export const getMyTicketBotActivityHandler = async (req, res, next) => {
+  try {
+    const agentUserId = req.user._id;
+    await getAgentTicketDetail({ agentUserId, ticketId: req.params.id });
+    const activity = await getTicketBotActivity({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Bot activity fetched successfully",
+      data: activity,
     });
   } catch (err) {
     return next(err);

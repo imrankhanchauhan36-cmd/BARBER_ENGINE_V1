@@ -147,6 +147,16 @@ const supportTicketSchema = new mongoose.Schema(
     reopenedAt: { type: Date, default: null },
     reopenCount: { type: Number, default: 0 },
 
+    // Phase H — Bot Support. Null means the bot may still engage with
+    // this ticket; set (to the escalation time) means the bot must
+    // permanently stay silent — supportBot.service.js checks this
+    // field before doing any classification work. Deliberately a
+    // single nullable field, not a new lifecycle status — reuses the
+    // EXISTING TICKET_STATUS values (WAITING_FOR_USER, etc.) for
+    // everything else; this is purely a bot-engagement flag,
+    // orthogonal to ticket status.
+    botHandoffAt: { type: Date, default: null },
+
     isActive: { type: Boolean, default: true, index: true },
     isDeleted: { type: Boolean, default: false, index: true },
 

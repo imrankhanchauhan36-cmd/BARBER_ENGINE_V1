@@ -35,9 +35,12 @@ import {
   emitRoutingOutcome,
   notifyTicketStatusChanged,
 } from "../services/supportTicket.service.js";
-import { routeAndAssignTicket, closeTicket } from "../services/assignmentResolution.service.js";
+import { routeAndAssignTicket, closeTicket, listAssignmentHistory } from "../services/assignmentResolution.service.js";
+import { getTicketEmailHistory } from "../services/emailHistory.service.js";
+import { getTicketCallHistory } from "../services/callLog.service.js";
+import { getTicketBotActivity } from "../services/botActivity.service.js";
 import { resolveTicketVerification } from "../services/verification/verificationResolver.service.js";
-import { recordSupportAuditEvent } from "../services/supportAudit.service.js";
+import { recordSupportAuditEvent, listAuditEvents } from "../services/supportAudit.service.js";
 import { issueRefundForCancelledBooking } from "../../../services/RefundExecutionService.js";
 
 // The single India-level main-console Admin (role:"ADMIN",
@@ -114,7 +117,7 @@ export const listAdminTicketsHandler = async (req, res, next) => {
 export const getAdminTicketHandler = async (req, res, next) => {
   try {
     const scopeTeamIds = await resolveAdminScope(req);
-    const { ticket, messages, messagesPagination } = await getAdminTicketDetail({
+    const { ticket, messages, messagesPagination, requester } = await getAdminTicketDetail({
       scopeTeamIds,
       ticketId: req.params.id,
       query: req.query,
@@ -122,7 +125,7 @@ export const getAdminTicketHandler = async (req, res, next) => {
 
     return successResponse(res, {
       message: "Ticket fetched successfully",
-      data: { ticket, messages },
+      data: { ticket, messages, requester },
       pagination: messagesPagination,
     });
   } catch (err) {
@@ -409,6 +412,105 @@ export const addAdminInternalNoteHandler = async (req, res, next) => {
       statusCode: 201,
       message: "Internal note added successfully",
       data: { message },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H Step 8 (follow-up) — read-only assignment history. Reuses
+// getAdminTicketDetail() purely as the existing scope/existence gate
+// (same team-lead-vs-global check every other admin ticket handler
+// already uses) — its messages/requester fields are simply discarded
+// here, no new authorization logic introduced.
+export const getAssignmentHistoryHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    await getAdminTicketDetail({ scopeTeamIds, ticketId: req.params.id });
+    const history = await listAssignmentHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Assignment history fetched successfully",
+      data: { history },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H Step 8 (follow-up) — read-only audit trail. SUPPORT_ADMIN/
+// India-Admin-only (this file's own router-level gate already
+// enforces that against AGENT for /assign,/close-style actions, but
+// AGENT can otherwise reach adminSupport.routes.js for team-lead-scoped
+// reads — assertIsSupportAdmin() here additionally restricts the full
+// event log specifically, per the least-privilege decision documented
+// on listAuditEvents() itself).
+export const getAuditTrailHandler = async (req, res, next) => {
+  try {
+    assertIsSupportAdmin(req);
+    await getAdminTicketDetail({ scopeTeamIds: null, ticketId: req.params.id });
+    const events = await listAuditEvents({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Audit trail fetched successfully",
+      data: { events },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H Step 9 (follow-up) — read-only email history (inbound events
+// + outbound delivery log). Reuses getAdminTicketDetail() purely as
+// the existing scope/existence gate (same team-lead-vs-global check
+// every other admin ticket handler already uses) — messages/requester
+// fields are discarded here, no new authorization logic introduced.
+// Available to team-lead AGENT (scoped) and SUPPORT_ADMIN/India-Admin
+// (global) alike, same visibility tier as assignment history — this
+// data is no more sensitive than the message thread both already see.
+export const getTicketEmailHistoryHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    await getAdminTicketDetail({ scopeTeamIds, ticketId: req.params.id });
+    const history = await getTicketEmailHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Email history fetched successfully",
+      data: history,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Call Support. Read-only call history, same scope/existence
+// gate and visibility tier as getTicketEmailHistoryHandler above.
+export const getTicketCallHistoryHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    await getAdminTicketDetail({ scopeTeamIds, ticketId: req.params.id });
+    const history = await getTicketCallHistory({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Call history fetched successfully",
+      data: history,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// Phase H — Bot Support. Read-only, same scope/existence gate and
+// visibility tier as getTicketCallHistoryHandler above.
+export const getTicketBotActivityHandler = async (req, res, next) => {
+  try {
+    const scopeTeamIds = await resolveAdminScope(req);
+    await getAdminTicketDetail({ scopeTeamIds, ticketId: req.params.id });
+    const activity = await getTicketBotActivity({ ticketId: req.params.id });
+
+    return successResponse(res, {
+      message: "Bot activity fetched successfully",
+      data: activity,
     });
   } catch (err) {
     return next(err);

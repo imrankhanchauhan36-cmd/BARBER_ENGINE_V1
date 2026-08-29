@@ -25,6 +25,12 @@ import {
   unassignMyTicketHandler,
   addMyTicketReplyHandler,
   addMyTicketInternalNoteHandler,
+  getMyTicketAssignmentHistoryHandler,
+  getMyTicketEmailHistoryHandler,
+  logMyTicketCallHandler,
+  updateMyTicketCallOutcomeHandler,
+  getMyTicketCallHistoryHandler,
+  getMyTicketBotActivityHandler,
 } from "../controllers/agentSupport.controller.js";
 import { supportInternalSchemas } from "../validators/supportInternal.validator.js";
 
@@ -42,5 +48,18 @@ router.post("/tickets/:id/resolve", idempotency, validate(supportInternalSchemas
 router.post("/tickets/:id/unassign", idempotency, validate(supportInternalSchemas.unassign), unassignMyTicketHandler);
 router.post("/tickets/:id/messages", idempotency, validate(supportInternalSchemas.agentReply), addMyTicketReplyHandler);
 router.post("/tickets/:id/internal-notes", idempotency, validate(supportInternalSchemas.internalNote), addMyTicketInternalNoteHandler);
+// Phase H Step 8 (follow-up) — read-only, no idempotency/validate
+// needed, same convention as /verification above.
+router.get("/tickets/:id/assignment-history", getMyTicketAssignmentHistoryHandler);
+// Phase H Step 9 (follow-up) — read-only, same convention as
+// assignment-history above.
+router.get("/tickets/:id/email-history", getMyTicketEmailHistoryHandler);
+// Phase H — Call Support. Minimal agent actions: log a call, record
+// its outcome. Same idempotency-middleware convention as every other
+// mutating route above.
+router.post("/tickets/:id/calls", idempotency, validate(supportInternalSchemas.logCall), logMyTicketCallHandler);
+router.patch("/tickets/:id/calls/:callId/outcome", idempotency, validate(supportInternalSchemas.callOutcome), updateMyTicketCallOutcomeHandler);
+router.get("/tickets/:id/call-history", getMyTicketCallHistoryHandler);
+router.get("/tickets/:id/bot-activity", getMyTicketBotActivityHandler);
 
 export default router;

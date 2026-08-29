@@ -29,6 +29,11 @@ import {
   closeAdminTicketHandler,
   reopenAdminTicketHandler,
   addAdminInternalNoteHandler,
+  getAssignmentHistoryHandler,
+  getAuditTrailHandler,
+  getTicketEmailHistoryHandler,
+  getTicketCallHistoryHandler,
+  getTicketBotActivityHandler,
 } from "../controllers/adminSupport.controller.js";
 import { supportInternalSchemas } from "../validators/supportInternal.validator.js";
 
@@ -59,5 +64,14 @@ router.post("/tickets/:id/resolve", idempotency, validate(supportInternalSchemas
 router.post("/tickets/:id/close", idempotency, validate(supportInternalSchemas.close), closeAdminTicketHandler);
 router.post("/tickets/:id/reopen", idempotency, validate(supportInternalSchemas.reopen), reopenAdminTicketHandler);
 router.post("/tickets/:id/internal-notes", idempotency, validate(supportInternalSchemas.internalNote), addAdminInternalNoteHandler);
+// Phase H Step 8 (follow-up) — read-only, no idempotency/validate
+// needed, same convention as /verification above.
+router.get("/tickets/:id/assignment-history", getAssignmentHistoryHandler);
+router.get("/tickets/:id/audit-trail", getAuditTrailHandler);
+// Phase H Step 9 (follow-up) — read-only, same convention as
+// assignment-history/audit-trail above.
+router.get("/tickets/:id/email-history", getTicketEmailHistoryHandler);
+router.get("/tickets/:id/call-history", getTicketCallHistoryHandler);
+router.get("/tickets/:id/bot-activity", getTicketBotActivityHandler);
 
 export default router;

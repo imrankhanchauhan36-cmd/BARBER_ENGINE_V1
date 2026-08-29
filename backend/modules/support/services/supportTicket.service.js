@@ -17,6 +17,7 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 import Booking from "../../../models/Booking.js";
 import Salon from "../../../models/Salon.js";
+import User from "../../../models/User.js";
 import { emitToRoom } from "../../../socket/index.js";
 import NotificationService from "../../../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../../../modules/notifications/constants/notificationEvents.constants.js";
@@ -26,6 +27,9 @@ import SupportCategory from "../models/SupportCategory.js";
 import SupportConversation from "../models/SupportConversation.js";
 import SupportMessage from "../models/SupportMessage.js";
 import SupportTicket from "../models/SupportTicket.js";
+import { sendAgentReplyEmail } from "./emailOutbound.service.js";
+import { sendAgentReplyWhatsApp } from "./whatsappOutbound.service.js";
+import { processCustomerMessageForBot } from "./supportBot.service.js";
 import {
   ACTOR_TYPE,
   AUDIT_ACTION,
@@ -359,7 +363,7 @@ export async function createTicket({ requesterId, role, categoryRef, subject, bo
         { session }
       );
 
-      await SupportMessage.create(
+      const [message] = await SupportMessage.create(
         [{
           conversationRef: conversationId,
           ticketRef: ticketId,
@@ -410,6 +414,19 @@ export async function createTicket({ requesterId, role, categoryRef, subject, bo
         console.warn("[createTicket] routeAndAssignTicket failed (non-critical):", routingErr.message);
       }
 
+      // Phase H — Bot Support. Additive, non-blocking, try/catch-
+      // protected — same convention as every other channel's own
+      // ticket-creation hook (createTicketFromEmail/WhatsApp/Call all
+      // trigger the bot on their first message too, for parity).
+      // Deliberately does NOT change this function's return shape
+      // (still plain `ticket`, not `{ticket, message}`) — every
+      // existing caller of createTicket() must see zero change.
+      try {
+        await processCustomerMessageForBot({ message, ticket, io });
+      } catch (err) {
+        console.warn("[createTicket] bot processing failed (non-critical):", err.message);
+      }
+
       return ticket;
     } catch (err) {
       try {
@@ -427,6 +444,474 @@ export async function createTicket({ requesterId, role, categoryRef, subject, bo
   }
 
   throw lastError || Errors.internal("Could not create ticket");
+}
+
+/**
+ * Phase H Step 9 — Email Support. A deliberate SIBLING of createTicket()
+ * above, not a generalization of it — the amount of genuinely divergent
+ * logic (no authenticated role, no resolveRelatedReferences() call, no
+ * caller-supplied categoryRef, EMAIL-channel conversation) made a
+ * parallel function the cleaner, lower-risk choice here, per the
+ * approved Phase 1 design. createTicket() itself is completely
+ * unmodified by this addition.
+ *
+ * Reuses, verbatim: the same transaction shape, the same ticketNumber-
+ * collision retry loop, the same SLA-resolution-before-the-loop
+ * pattern, the same recordSupportAuditEvent(CREATED) call, and the
+ * same post-commit routeAndAssignTicket() call — every one of those
+ * primitives is imported/called exactly as createTicket() already
+ * does, never reimplemented.
+ *
+ * categoryRef has no picker in an email — resolved from
+ * SUPPORT_EMAIL_DEFAULT_CATEGORY_CODE (.env), matching an existing
+ * SupportCategory.code exactly. Never fabricated: an unset/unresolvable
+ * default throws loudly (same "never fabricate SLA values" philosophy
+ * createTicket() already applies to its own SLA-policy resolution).
+ *
+ * requesterId must already be a matched, real User — this function
+ * never creates one (see emailInbound.service.js, the only caller).
+ * requesterRole must be exactly "USER" or "OWNER" — the same
+ * constraint createMyTicket's own requireRole("USER","OWNER") already
+ * enforces for the in-app path; the caller is responsible for having
+ * already checked this.
+ */
+export async function createTicketFromEmail({ requesterId, requesterRole, subject, body, attachments = [], io = null }) {
+  const categoryCode = process.env.SUPPORT_EMAIL_DEFAULT_CATEGORY_CODE;
+  if (!categoryCode) {
+    throw Errors.internal("SUPPORT_EMAIL_DEFAULT_CATEGORY_CODE is not configured. Please contact support administration.");
+  }
+  const category = await SupportCategory.findOne({ code: categoryCode, isActive: true, isDeleted: false }).select("_id").lean();
+  if (!category) {
+    throw Errors.internal(`SUPPORT_EMAIL_DEFAULT_CATEGORY_CODE ("${categoryCode}") does not match any active category.`);
+  }
+  const categoryRef = category._id;
+
+  // No salon/booking linkage is derivable from a raw email — matches
+  // the existing "no booking, no salon" branch resolveRelatedReferences()
+  // already returns for a USER with neither field supplied.
+  const routingSnapshot = await captureRoutingSnapshot(null);
+  const requesterType = requesterRole === "OWNER" ? REQUESTER_TYPE.SALON_OWNER : REQUESTER_TYPE.USER;
+
+  const effectivePriority = PRIORITY.NORMAL;
+  const effectiveSlaPolicy = await resolveEffectiveSlaPolicy({ categoryRef });
+  if (!effectiveSlaPolicy) {
+    throw Errors.internal("No SLA policy is configured for this category or as a global default. Please contact support administration.");
+  }
+  const priorityTargets = effectiveSlaPolicy.targetsByPriority?.[effectivePriority];
+  if (!priorityTargets) {
+    throw Errors.internal(`SLA policy is missing targets for priority ${effectivePriority}`);
+  }
+  const slaCapturedAt = new Date();
+  const slaTargets = {
+    firstResponseDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.firstResponseMinutes * 60 * 1000),
+    resolutionDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.resolutionMinutes * 60 * 1000),
+    pausedAt: null,
+    totalPausedMs: 0,
+  };
+
+  let lastError = null;
+
+  for (let attempt = 0; attempt < MAX_TICKET_NUMBER_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      const ticketId = new mongoose.Types.ObjectId();
+      const conversationId = new mongoose.Types.ObjectId();
+      const ticketNumber = generateTicketNumber();
+
+      await SupportConversation.create(
+        [{
+          _id: conversationId,
+          ticketRef: ticketId,
+          channel: CHANNEL.EMAIL,
+          status: CONVERSATION_STATUS.ACTIVE,
+          participantRefs: [{ userRef: requesterId, roleAtTime: requesterRole }],
+          lastMessageAt: new Date(),
+          lastMessagePreview: body.slice(0, 300),
+        }],
+        { session }
+      );
+
+      const [ticket] = await SupportTicket.create(
+        [{
+          _id: ticketId,
+          ticketNumber,
+          requesterRef: requesterId,
+          requesterType,
+          relatedSalonRef: null,
+          relatedBookingRef: null,
+          categoryRef,
+          priority: effectivePriority,
+          language: "en",
+          subject,
+          status: TICKET_STATUS.OPEN,
+          routingSnapshot,
+          slaPolicyRef: effectiveSlaPolicy._id,
+          slaTargets,
+          conversationRef: conversationId,
+          createdBy: requesterId,
+          updatedBy: requesterId,
+        }],
+        { session }
+      );
+
+      const [message] = await SupportMessage.create(
+        [{
+          conversationRef: conversationId,
+          ticketRef: ticketId,
+          senderRef: requesterId,
+          senderType: SENDER_TYPE.CUSTOMER,
+          visibility: MESSAGE_VISIBILITY.CUSTOMER_VISIBLE,
+          body,
+          attachments,
+          channel: CHANNEL.EMAIL,
+        }],
+        { session }
+      );
+
+      await recordSupportAuditEvent(
+        {
+          ticketRef: ticketId,
+          actorRef: requesterId,
+          actorType: ACTOR_TYPE.CUSTOMER,
+          action: AUDIT_ACTION.CREATED,
+          entityId: ticketId,
+          newValue: { status: TICKET_STATUS.OPEN, categoryRef, priority: ticket.priority, channel: CHANNEL.EMAIL },
+        },
+        session
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Best-effort, post-commit, non-blocking — identical philosophy
+      // to createTicket()'s own routing call immediately below.
+      try {
+        const result = await routeAndAssignTicket({ ticketId: ticket._id });
+        await emitRoutingOutcome({ io, ticket, fromStatus: TICKET_STATUS.OPEN, result });
+      } catch (routingErr) {
+        console.warn("[createTicketFromEmail] routeAndAssignTicket failed (non-critical):", routingErr.message);
+      }
+
+      return { ticket, conversation: { _id: conversationId }, message };
+    } catch (err) {
+      try {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
+      } catch {}
+
+      const isDuplicateTicketNumber = err.code === 11000 && err.keyPattern?.ticketNumber;
+      if (isDuplicateTicketNumber && attempt < MAX_TICKET_NUMBER_ATTEMPTS - 1) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || Errors.internal("Could not create ticket from email");
+}
+
+/**
+ * Phase H — WhatsApp Support. Sibling of createTicketFromEmail() —
+ * same transaction/SLA/routing shape, deliberately not a rewrite of
+ * createTicket() or a generalization of createTicketFromEmail(), per
+ * the approved design's "no premature generalization" precedent
+ * (SupportInboundEmailEvent.js's own header comment states this
+ * explicitly for a future channel). The only real differences from
+ * createTicketFromEmail() are: no email-specific fields, a WhatsApp-
+ * specific default-category env var, and channel=WHATSAPP.
+ */
+export async function createTicketFromWhatsApp({ requesterId, requesterRole, subject, body, io = null }) {
+  const categoryCode = process.env.SUPPORT_WHATSAPP_DEFAULT_CATEGORY_CODE;
+  if (!categoryCode) {
+    throw Errors.internal("SUPPORT_WHATSAPP_DEFAULT_CATEGORY_CODE is not configured. Please contact support administration.");
+  }
+  const category = await SupportCategory.findOne({ code: categoryCode, isActive: true, isDeleted: false }).select("_id").lean();
+  if (!category) {
+    throw Errors.internal(`SUPPORT_WHATSAPP_DEFAULT_CATEGORY_CODE ("${categoryCode}") does not match any active category.`);
+  }
+  const categoryRef = category._id;
+
+  // No salon/booking linkage is derivable from a raw WhatsApp message —
+  // matches the existing "no booking, no salon" branch
+  // resolveRelatedReferences() already returns for a USER with neither
+  // field supplied (same reasoning createTicketFromEmail() uses).
+  const routingSnapshot = await captureRoutingSnapshot(null);
+  const requesterType = requesterRole === "OWNER" ? REQUESTER_TYPE.SALON_OWNER : REQUESTER_TYPE.USER;
+
+  const effectivePriority = PRIORITY.NORMAL;
+  const effectiveSlaPolicy = await resolveEffectiveSlaPolicy({ categoryRef });
+  if (!effectiveSlaPolicy) {
+    throw Errors.internal("No SLA policy is configured for this category or as a global default. Please contact support administration.");
+  }
+  const priorityTargets = effectiveSlaPolicy.targetsByPriority?.[effectivePriority];
+  if (!priorityTargets) {
+    throw Errors.internal(`SLA policy is missing targets for priority ${effectivePriority}`);
+  }
+  const slaCapturedAt = new Date();
+  const slaTargets = {
+    firstResponseDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.firstResponseMinutes * 60 * 1000),
+    resolutionDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.resolutionMinutes * 60 * 1000),
+    pausedAt: null,
+    totalPausedMs: 0,
+  };
+
+  let lastError = null;
+
+  for (let attempt = 0; attempt < MAX_TICKET_NUMBER_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      const ticketId = new mongoose.Types.ObjectId();
+      const conversationId = new mongoose.Types.ObjectId();
+      const ticketNumber = generateTicketNumber();
+
+      await SupportConversation.create(
+        [{
+          _id: conversationId,
+          ticketRef: ticketId,
+          channel: CHANNEL.WHATSAPP,
+          status: CONVERSATION_STATUS.ACTIVE,
+          participantRefs: [{ userRef: requesterId, roleAtTime: requesterRole }],
+          lastMessageAt: new Date(),
+          lastMessagePreview: body.slice(0, 300),
+        }],
+        { session }
+      );
+
+      const [ticket] = await SupportTicket.create(
+        [{
+          _id: ticketId,
+          ticketNumber,
+          requesterRef: requesterId,
+          requesterType,
+          relatedSalonRef: null,
+          relatedBookingRef: null,
+          categoryRef,
+          priority: effectivePriority,
+          language: "en",
+          subject,
+          status: TICKET_STATUS.OPEN,
+          routingSnapshot,
+          slaPolicyRef: effectiveSlaPolicy._id,
+          slaTargets,
+          conversationRef: conversationId,
+          createdBy: requesterId,
+          updatedBy: requesterId,
+        }],
+        { session }
+      );
+
+      const [message] = await SupportMessage.create(
+        [{
+          conversationRef: conversationId,
+          ticketRef: ticketId,
+          senderRef: requesterId,
+          senderType: SENDER_TYPE.CUSTOMER,
+          visibility: MESSAGE_VISIBILITY.CUSTOMER_VISIBLE,
+          body,
+          attachments: [],
+          channel: CHANNEL.WHATSAPP,
+        }],
+        { session }
+      );
+
+      await recordSupportAuditEvent(
+        {
+          ticketRef: ticketId,
+          actorRef: requesterId,
+          actorType: ACTOR_TYPE.CUSTOMER,
+          action: AUDIT_ACTION.CREATED,
+          entityId: ticketId,
+          newValue: { status: TICKET_STATUS.OPEN, categoryRef, priority: ticket.priority, channel: CHANNEL.WHATSAPP },
+        },
+        session
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Best-effort, post-commit, non-blocking — identical philosophy
+      // to createTicket()'s/createTicketFromEmail()'s own routing call.
+      try {
+        const result = await routeAndAssignTicket({ ticketId: ticket._id });
+        await emitRoutingOutcome({ io, ticket, fromStatus: TICKET_STATUS.OPEN, result });
+      } catch (routingErr) {
+        console.warn("[createTicketFromWhatsApp] routeAndAssignTicket failed (non-critical):", routingErr.message);
+      }
+
+      return { ticket, conversation: { _id: conversationId }, message };
+    } catch (err) {
+      try {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
+      } catch {}
+
+      const isDuplicateTicketNumber = err.code === 11000 && err.keyPattern?.ticketNumber;
+      if (isDuplicateTicketNumber && attempt < MAX_TICKET_NUMBER_ATTEMPTS - 1) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || Errors.internal("Could not create ticket from WhatsApp message");
+}
+
+/**
+ * Phase H — Call Support. Sibling of createTicketFromEmail()/
+ * createTicketFromWhatsApp() — same transaction/SLA/routing shape,
+ * deliberately not a rewrite of createTicket() or a generalization of
+ * either sibling, per the approved design's "no premature
+ * generalization" precedent. Called only from callInbound.service.js
+ * when an inbound call's caller has no existing open ticket (channel-
+ * agnostic match — see that file's header) — every call that DOES
+ * match an existing ticket attaches via a SupportCall row instead,
+ * never through this function.
+ */
+export async function createTicketFromCall({ requesterId, requesterRole, subject, body, io = null }) {
+  const categoryCode = process.env.SUPPORT_CALL_DEFAULT_CATEGORY_CODE;
+  if (!categoryCode) {
+    throw Errors.internal("SUPPORT_CALL_DEFAULT_CATEGORY_CODE is not configured. Please contact support administration.");
+  }
+  const category = await SupportCategory.findOne({ code: categoryCode, isActive: true, isDeleted: false }).select("_id").lean();
+  if (!category) {
+    throw Errors.internal(`SUPPORT_CALL_DEFAULT_CATEGORY_CODE ("${categoryCode}") does not match any active category.`);
+  }
+  const categoryRef = category._id;
+
+  // No salon/booking linkage is derivable from a raw inbound call —
+  // matches the existing "no booking, no salon" branch
+  // resolveRelatedReferences() already returns for a USER with neither
+  // field supplied (same reasoning createTicketFromEmail()/
+  // createTicketFromWhatsApp() use).
+  const routingSnapshot = await captureRoutingSnapshot(null);
+  const requesterType = requesterRole === "OWNER" ? REQUESTER_TYPE.SALON_OWNER : REQUESTER_TYPE.USER;
+
+  const effectivePriority = PRIORITY.NORMAL;
+  const effectiveSlaPolicy = await resolveEffectiveSlaPolicy({ categoryRef });
+  if (!effectiveSlaPolicy) {
+    throw Errors.internal("No SLA policy is configured for this category or as a global default. Please contact support administration.");
+  }
+  const priorityTargets = effectiveSlaPolicy.targetsByPriority?.[effectivePriority];
+  if (!priorityTargets) {
+    throw Errors.internal(`SLA policy is missing targets for priority ${effectivePriority}`);
+  }
+  const slaCapturedAt = new Date();
+  const slaTargets = {
+    firstResponseDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.firstResponseMinutes * 60 * 1000),
+    resolutionDueAt: new Date(slaCapturedAt.getTime() + priorityTargets.resolutionMinutes * 60 * 1000),
+    pausedAt: null,
+    totalPausedMs: 0,
+  };
+
+  let lastError = null;
+
+  for (let attempt = 0; attempt < MAX_TICKET_NUMBER_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      const ticketId = new mongoose.Types.ObjectId();
+      const conversationId = new mongoose.Types.ObjectId();
+      const ticketNumber = generateTicketNumber();
+
+      await SupportConversation.create(
+        [{
+          _id: conversationId,
+          ticketRef: ticketId,
+          channel: CHANNEL.PHONE,
+          status: CONVERSATION_STATUS.ACTIVE,
+          participantRefs: [{ userRef: requesterId, roleAtTime: requesterRole }],
+          lastMessageAt: new Date(),
+          lastMessagePreview: body.slice(0, 300),
+        }],
+        { session }
+      );
+
+      const [ticket] = await SupportTicket.create(
+        [{
+          _id: ticketId,
+          ticketNumber,
+          requesterRef: requesterId,
+          requesterType,
+          relatedSalonRef: null,
+          relatedBookingRef: null,
+          categoryRef,
+          priority: effectivePriority,
+          language: "en",
+          subject,
+          status: TICKET_STATUS.OPEN,
+          routingSnapshot,
+          slaPolicyRef: effectiveSlaPolicy._id,
+          slaTargets,
+          conversationRef: conversationId,
+          createdBy: requesterId,
+          updatedBy: requesterId,
+        }],
+        { session }
+      );
+
+      const [message] = await SupportMessage.create(
+        [{
+          conversationRef: conversationId,
+          ticketRef: ticketId,
+          senderRef: requesterId,
+          senderType: SENDER_TYPE.CUSTOMER,
+          visibility: MESSAGE_VISIBILITY.CUSTOMER_VISIBLE,
+          body,
+          attachments: [],
+          channel: CHANNEL.PHONE,
+        }],
+        { session }
+      );
+
+      await recordSupportAuditEvent(
+        {
+          ticketRef: ticketId,
+          actorRef: requesterId,
+          actorType: ACTOR_TYPE.CUSTOMER,
+          action: AUDIT_ACTION.CREATED,
+          entityId: ticketId,
+          newValue: { status: TICKET_STATUS.OPEN, categoryRef, priority: ticket.priority, channel: CHANNEL.PHONE },
+        },
+        session
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Best-effort, post-commit, non-blocking — identical philosophy
+      // to createTicket()'s/createTicketFromEmail()'s/
+      // createTicketFromWhatsApp()'s own routing call.
+      try {
+        const result = await routeAndAssignTicket({ ticketId: ticket._id });
+        await emitRoutingOutcome({ io, ticket, fromStatus: TICKET_STATUS.OPEN, result });
+      } catch (routingErr) {
+        console.warn("[createTicketFromCall] routeAndAssignTicket failed (non-critical):", routingErr.message);
+      }
+
+      return { ticket, conversation: { _id: conversationId }, message };
+    } catch (err) {
+      try {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
+      } catch {}
+
+      const isDuplicateTicketNumber = err.code === 11000 && err.keyPattern?.ticketNumber;
+      if (isDuplicateTicketNumber && attempt < MAX_TICKET_NUMBER_ATTEMPTS - 1) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || Errors.internal("Could not create ticket from call");
 }
 
 /**
@@ -579,6 +1064,18 @@ export async function addCustomerMessage({ requesterId, ticketId, body, attachme
     });
 
     await notifyTicketStatusChanged({ ticket, fromStatus, toStatus: TICKET_STATUS.IN_PROGRESS });
+  }
+
+  // Phase H — Bot Support. Additive, non-blocking, try/catch-protected
+  // — the customer's own message and every step above have already
+  // completed successfully; a bot failure must never fail this
+  // request or corrupt what's already been persisted, exactly matching
+  // the existing non-blocking philosophy already proven for the
+  // EMAIL/WHATSAPP outbound-dispatch calls in addAgentReply().
+  try {
+    await processCustomerMessageForBot({ message, ticket, io });
+  } catch (err) {
+    console.warn("[addCustomerMessage] bot processing failed (non-critical):", err.message);
   }
 
   return message;
@@ -752,6 +1249,18 @@ export async function addAgentReply({ agentUserId, ticketId, body, attachments, 
   }
   if (!ticket.conversationRef) throw Errors.internal("Ticket has no conversation");
 
+  // Phase H Step 9 — channel-aware. Reads the TICKET'S OWN conversation
+  // channel instead of hardcoding IN_APP — confirmed safe by direct
+  // inspection: addAgentReply() has exactly one caller in the entire
+  // codebase (agentSupport.controller.js's addMyTicketReplyHandler),
+  // and every ticket that exists today has an IN_APP-channel
+  // conversation, so this is provably behavior-identical for every
+  // current caller — only a ticket created via the new
+  // createTicketFromEmail() (EMAIL-channel conversation) ever sees a
+  // different value here.
+  const conversation = await SupportConversation.findById(ticket.conversationRef).select("channel").lean();
+  const messageChannel = conversation?.channel || CHANNEL.IN_APP;
+
   const message = await SupportMessage.create({
     conversationRef: ticket.conversationRef,
     ticketRef: ticket._id,
@@ -760,7 +1269,7 @@ export async function addAgentReply({ agentUserId, ticketId, body, attachments, 
     visibility: MESSAGE_VISIBILITY.CUSTOMER_VISIBLE,
     body,
     attachments: attachments || [],
-    channel: CHANNEL.IN_APP,
+    channel: messageChannel,
   });
 
   // Phase G Step 3 — first-response tracking. Runs only after the
@@ -805,6 +1314,50 @@ export async function addAgentReply({ agentUserId, ticketId, body, attachments, 
   // Phase F.3.8 — genuine notification gap (not a self-echo): the
   // customer, not the agent who just acted, is the recipient.
   await notifyAgentReplyReceived({ ticket });
+
+  // Phase H Step 9 — Email Support. Only for an EMAIL-channel
+  // conversation (never for IN_APP — this is the one guard that
+  // prevents "accidentally sending IN_APP messages as emails"). Runs
+  // AFTER every existing step above has already completed
+  // successfully — an email delivery failure must never roll back or
+  // block the ticket/message update that already happened, matching
+  // NotificationService.send()'s own established non-blocking,
+  // never-throw-to-the-caller convention in this codebase.
+  if (messageChannel === CHANNEL.EMAIL) {
+    try {
+      const requester = await User.findOne({ _id: ticket.requesterRef, isDeleted: { $ne: true } })
+        .select("name email")
+        .lean();
+      const { deliveryLogId } = await sendAgentReplyEmail({ ticket, message, requester });
+      await SupportMessage.updateOne({ _id: message._id }, { $set: { deliveryLogRef: deliveryLogId } });
+    } catch (err) {
+      // Never rethrown — the SupportMessage this function already
+      // created and returned to the caller remains the source of
+      // truth; a delivery-side failure is recorded inside
+      // sendAgentReplyEmail's own NotificationDeliveryLog write (or,
+      // in the rare case this catch is what fires, simply logged here
+      // and left undelivered/untracked rather than corrupting the
+      // reply the agent already successfully sent in-app).
+      console.warn("[addAgentReply] email dispatch failed (non-critical):", err.message);
+    }
+  }
+
+  // Phase H — WhatsApp Support. Same guard/ordering/non-blocking
+  // reasoning as the EMAIL branch immediately above — only for a
+  // WHATSAPP-channel conversation, runs after every existing step has
+  // already completed, never rethrown.
+  if (messageChannel === CHANNEL.WHATSAPP) {
+    try {
+      const requester = await User.findOne({ _id: ticket.requesterRef, isDeleted: { $ne: true } })
+        .select("phone")
+        .lean();
+      const { deliveryLogId } = await sendAgentReplyWhatsApp({ ticket, message, requester });
+      await SupportMessage.updateOne({ _id: message._id }, { $set: { deliveryLogRef: deliveryLogId } });
+    } catch (err) {
+      // Never rethrown — see the EMAIL branch's identical comment above.
+      console.warn("[addAgentReply] whatsapp dispatch failed (non-critical):", err.message);
+    }
+  }
 
   return message;
 }
@@ -891,7 +1444,14 @@ export async function listAgentTickets({ agentUserId, query }) {
   const filter = { "currentAssignment.agentRef": agentUserId, isDeleted: false };
   Object.assign(filter, buildStatusFilter(query, "status", Object.values(TICKET_STATUS)));
 
-  return paginatedQuery(SupportTicket, filter, pagination, { sort: { createdAt: -1 } });
+  // Phase H Step 9 (follow-up) — additive channel visibility for the
+  // Admin Panel ticket list. SupportTicket itself has no channel
+  // field (channel lives on SupportConversation); populate() is the
+  // read-only join, no schema change, no other field affected.
+  return paginatedQuery(SupportTicket, filter, pagination, {
+    sort: { createdAt: -1 },
+    populate: [{ path: "conversationRef", select: "channel" }],
+  });
 }
 
 /**
@@ -920,7 +1480,22 @@ export async function getAgentTicketDetail({ agentUserId, ticketId, query = {} }
     { sort: { createdAt: 1 } }
   );
 
-  return { ticket, messages, messagesPagination };
+  // Phase H Step 8 (follow-up) — a SEPARATE `requester` field, never a
+  // mutation of ticket.requesterRef itself. That field is relied on
+  // elsewhere as a raw ObjectId (confirmed by direct inspection:
+  // bookingVerification.service.js does `String(ticket.requesterRef)
+  // !== ownerId`, and issueRefundHandler/getTicketVerificationHandler
+  // both feed this same getAgentTicketDetail-shaped ticket into that
+  // exact check) — populating requesterRef in place would silently
+  // turn every such comparison into a permanent OWNERSHIP_MISMATCH,
+  // breaking the refund/verification flow. Fetched as a small,
+  // best-effort lookup: a missing/deleted User must never fail the
+  // whole ticket-detail call.
+  const requester = await User.findOne({ _id: ticket.requesterRef, isDeleted: { $ne: true } })
+    .select("name phone email")
+    .lean();
+
+  return { ticket, messages, messagesPagination, requester: requester || null };
 }
 
 /**
@@ -942,7 +1517,12 @@ export async function listAdminTickets({ scopeTeamIds = null, query }) {
   }
   Object.assign(filter, buildStatusFilter(query, "status", Object.values(TICKET_STATUS)));
 
-  return paginatedQuery(SupportTicket, filter, pagination, { sort: { createdAt: -1 } });
+  // Phase H Step 9 (follow-up) — see the identical comment in
+  // listAgentTickets() above.
+  return paginatedQuery(SupportTicket, filter, pagination, {
+    sort: { createdAt: -1 },
+    populate: [{ path: "conversationRef", select: "channel" }],
+  });
 }
 
 /** Phase F.3.7 — admin/team-lead ticket detail; see listAdminTickets(). */
@@ -967,7 +1547,17 @@ export async function getAdminTicketDetail({ scopeTeamIds = null, ticketId, quer
     { sort: { createdAt: 1 } }
   );
 
-  return { ticket, messages, messagesPagination };
+  // Phase H Step 8 (follow-up) — a SEPARATE `requester` field, never a
+  // mutation of ticket.requesterRef itself — see getAgentTicketDetail's
+  // own comment above for exactly why (bookingVerification.service.js
+  // and both getTicketVerificationHandler/issueRefundHandler in
+  // adminSupport.controller.js consume this SAME ticket object and
+  // rely on ticket.requesterRef staying a raw ObjectId).
+  const requester = await User.findOne({ _id: ticket.requesterRef, isDeleted: { $ne: true } })
+    .select("name phone email")
+    .lean();
+
+  return { ticket, messages, messagesPagination, requester: requester || null };
 }
 
 // ── Phase F.3.7 authorization-scope wrappers ────────────────────────
