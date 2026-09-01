@@ -108,25 +108,25 @@ export const buildChairTimeline = (chairs, bookings) => {
 
     if (!timelineMap[chairId]) continue;
 
-    // FIX-1: timeline block end = endTime + bufferTime
-    //
-    // OLD: end: new Date(booking.endTime)
-    // Problem: timeline showed service end only — gap engine saw
-    // cleanup window as free, allowing back-to-back bookings with
-    // zero cleanup time between them. Operational inconsistency.
-    //
-    // NEW: end = endTime + bufferTime
-    // Now the blocked window = service + cleanup, matching
-    // slot engine, overlap engine, and confirmation engine.
-    // All engines now share the same occupancy truth.
-    // (Math extracted into computeOccupiedEnd() above — same
-    // formula, same output, now reusable by other write-paths.)
-    const occupiedEnd = computeOccupiedEnd(booking.endTime, booking.bufferTime);
+    // Phase D fix — booking.endTime is ALREADY buffer-inclusive
+    // (generateSlotsFromGap() in slotEngine.service.js computes
+    // slot.end = start + serviceDuration + bufferTime, and lockSlot()
+    // persists that exact value as Booking.endTime) — so the blocked
+    // window is simply booking.endTime itself, with no further
+    // arithmetic. The historical FIX-1 note this replaced assumed
+    // endTime was buffer-EXCLUSIVE and added bufferTime again on top,
+    // which silently inflated every booking's true occupied window
+    // from (duration + buffer) to (duration + 2×buffer) — confirmed
+    // via a real production-data HTTP reproduction (10min service +
+    // 5min buffer occupied 20 minutes instead of the intended 15).
+    // All engines now share the SAME occupancy truth (start..endTime,
+    // buffer applied exactly once, at slot-generation time only).
+    const occupiedEnd = toAbsoluteInstant(booking.endTime);
 
     timelineMap[chairId].push({
       start:          toAbsoluteInstant(booking.startTime),
-      end:            occupiedEnd,          // includes cleanup buffer
-      serviceEnd:     new Date(booking.endTime), // raw service end (for display)
+      end:            occupiedEnd,          // already includes cleanup buffer
+      serviceEnd:     new Date(booking.endTime), // same value — kept as a separate field for existing display consumers
       bufferTime:     booking.bufferTime || 0,
     });
   }

@@ -57,7 +57,7 @@ const getISTDayName = (date) =>
 // would exceed the gap end.
 //////////////////////////////////////////////////////////////
 
-const generateSlotsFromGap = (gap, serviceDuration, bufferTime) => {
+export const generateSlotsFromGap = (gap, serviceDuration, bufferTime) => {
   const slots         = [];
   const totalDuration = (serviceDuration + bufferTime) * 60 * 1000;
   let   current       = new Date(gap.start);

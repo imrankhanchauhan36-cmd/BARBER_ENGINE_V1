@@ -103,6 +103,27 @@ const BookingSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////////
+    // 🧑‍🎨 PROFESSIONAL — Phase 5 (Booking Integration)
+    //
+    // Additive, optional, historical snapshot — NOT required. Stamped
+    // at lockSlot() time from the authoritative, transaction-scoped
+    // ProfessionalChairAssignment re-validation (services/
+    // professionalAvailability.service.js). Legacy bookings (created
+    // before this field existed) and any booking made without
+    // selecting a professional simply have professionalRef: null
+    // forever — never backfilled, never inferred. A later
+    // ProfessionalChairAssignment change (reassignment, cancellation,
+    // the professional going INACTIVE) must never rewrite this value
+    // — it is what was actually selected/validated at booking time,
+    // not a live pointer to "whoever is currently assigned".
+    //////////////////////////////////////////////////////////
+    professionalRef: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "Staff",
+      default: null,
+    },
+
+    //////////////////////////////////////////////////////////
     // 💇 SERVICES
     //////////////////////////////////////////////////////////
     serviceRefs: [
@@ -750,6 +771,57 @@ BookingSchema.index(
   {
     unique: true,
     partialFilterExpression: {
+      status: {
+        $in: [
+          BOOKING_STATUS.HOLD,
+          BOOKING_STATUS.CONFIRMED,
+          BOOKING_STATUS.CHECKED_IN,
+          BOOKING_STATUS.ONGOING,
+        ],
+      },
+    },
+  }
+);
+
+// ── PROFESSIONAL RACE CONDITION SAFETY NET — unique constraint (Phase C) ──
+// Mirrors the chair unique index directly above, keyed on professionalRef
+// instead of chairRef. Physical chair count must never become
+// professional booking capacity: this is the DB-level backstop for the
+// exact-same-millisecond race on top of the primary protection, which is
+// the transaction-scoped range-overlap query in
+// booking.controller.js::buildProfessionalOverlapFilter (checked inside
+// the SAME session as the create, immediately before it). A unique index
+// can only match exact key equality, not arbitrary time-range overlap —
+// it does NOT by itself catch two DIFFERENT-but-overlapping start times
+// for the same professional; that general case is what the transaction
+// query above is for. This index only closes the narrow gap where two
+// transactions somehow both pass that query for the exact same
+// professionalRef + exact same startTime instant.
+//
+// professionalRef: { $type: "objectId" } is REQUIRED here, unlike the
+// chairRef index above — chairRef is always required/non-null on every
+// booking, but professionalRef is only sometimes set. Verified against
+// the real database before choosing this (Phase C): MongoDB partial
+// filter expressions do NOT support $ne/$not at all ("Expression not
+// supported in partial index: $not", confirmed via a real createIndex
+// call) — only equality, $exists, $gt/$gte/$lt/$lte, $type, and a
+// top-level $and are allowed. $exists:true is ALSO wrong here: every
+// pre-Phase-5 booking has the field genuinely ABSENT (confirmed via a
+// real $type aggregation — 202/202 documents came back "missing", not
+// "null"), but lockSlot() explicitly writes `professionalRef: null`
+// (not omitting the key) for every future no-professional booking — so
+// $exists:true would start wrongly including those going forward.
+// $type:"objectId" is the only condition that correctly excludes BOTH
+// the "missing" (historical) and "null" (future legacy) shapes, while
+// only ever matching a booking where a real professional was actually
+// resolved — confirmed accepted by a real (temporary, since-dropped)
+// test index against this exact database before being used here.
+BookingSchema.index(
+  { professionalRef: 1, startTime: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      professionalRef: { $type: "objectId" },
       status: {
         $in: [
           BOOKING_STATUS.HOLD,

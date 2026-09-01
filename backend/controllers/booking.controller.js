@@ -22,6 +22,11 @@ import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { sendOtpSms } from "../services/sms.service.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
+import {
+  getEligibleSlotsForProfessional,
+  selectAnyProfessional,
+  revalidateProfessionalForBooking,
+} from "../services/professionalAvailability.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import {
   BOOKING_STATUS,
@@ -141,22 +146,37 @@ const getPagination = (query) => {
 };
 
 /**
- * Buffer-aware chair-overlap conflict filter — shared by lockSlot()
- * and confirmBooking(), previously duplicated verbatim in both.
- * A booking is considered occupied until (endTime + bufferTime); two
- * bookings conflict when:
- *   existing.effectiveOccupiedUntil > incoming.start
- *   AND existing.start < incoming.effectiveOccupiedUntil
+ * Chair-overlap conflict filter — shared by lockSlot() and
+ * confirmBooking(), previously duplicated verbatim in both.
+ *
+ * Phase D fix: `endTime` (both the incoming candidate's and every
+ * stored booking's) is ALREADY buffer-inclusive — generateSlotsFromGap()
+ * in slotEngine.service.js computes slot.end = start + serviceDuration +
+ * bufferTime, and that exact value is what lockSlot()/confirmBooking()
+ * persist as Booking.endTime. This filter previously added bufferTime a
+ * SECOND time on top of that (both for the incoming candidate's upper
+ * bound and for each existing document's own endTime via $expr),
+ * inflating every booking's true occupied window from
+ * (duration + buffer) to (duration + 2×buffer) — confirmed via a real
+ * production-data HTTP reproduction (10min service + 5min buffer
+ * occupied 20 minutes instead of 15). Locked contract going forward:
+ * Booking.endTime = start + serviceDuration + bufferTime, buffer applied
+ * exactly once, never re-added when endTime is read back from storage.
+ *
+ * Two bookings conflict when: existing.endTime > incoming.startTime
+ * AND existing.startTime < incoming.endTime — the standard interval-
+ * overlap test, now using each side's true (already buffer-inclusive)
+ * occupied window directly, with no further arithmetic.
+ *
  * @param {object} params
  * @param {ObjectId} params.chairId
  * @param {Date}     params.startTime
- * @param {Date}     params.endTime
- * @param {number}   params.bufferTime
+ * @param {Date}     params.endTime — already buffer-inclusive
  * @param {ObjectId} [params.excludeBookingId] — confirmBooking's own
  *   booking already exists at query time and must not conflict with
  *   itself; lockSlot's booking doesn't exist yet, so it omits this.
  */
-const buildChairOverlapFilter = ({ chairId, startTime, endTime, bufferTime, excludeBookingId }) => {
+const buildChairOverlapFilter = ({ chairId, startTime, endTime, excludeBookingId }) => {
   const filter = {
     chairRef: chairId,
     $and: [
@@ -178,22 +198,58 @@ const buildChairOverlapFilter = ({ chairId, startTime, endTime, bufferTime, excl
         ],
       },
       {
-        // $expr computes the existing booking's effectiveOccupiedUntil
-        // at query time — no extra field needed on the schema.
-        startTime: {
-          $lt: new Date(endTime.getTime() + bufferTime * 60 * 1000),
-        },
-        $expr: {
-          $gt: [
-            {
-              $add: [
-                "$endTime",
-                { $multiply: ["$bufferTime", 60 * 1000] },
+        startTime: { $lt: endTime },
+        $expr: { $gt: ["$endTime", startTime] },
+      },
+    ],
+  };
+
+  if (excludeBookingId) {
+    filter._id = { $ne: excludeBookingId };
+  }
+
+  return filter;
+};
+
+/**
+ * PROFESSIONAL-overlap conflict filter (Phase C) — mirrors
+ * buildChairOverlapFilter() above exactly, keyed on professionalRef
+ * instead of chairRef. Physical chair count must never become
+ * professional booking capacity: the SAME professional must never hold
+ * two overlapping active/HOLD bookings on two DIFFERENT chairs at once
+ * (this is what makes owner-only auto-chair selection safe — without
+ * this, two free chairs could each independently accept a booking for
+ * the one real person). Only ever queried when a professional was
+ * actually resolved (specific id or ANY) — legacy no-professional
+ * bookings never reach this filter.
+ *
+ * Phase D fix: same buffer-inclusive `endTime` contract and the same
+ * double-buffer correction as buildChairOverlapFilter() above.
+ */
+const buildProfessionalOverlapFilter = ({ professionalId, startTime, endTime, excludeBookingId }) => {
+  const filter = {
+    professionalRef: professionalId,
+    $and: [
+      {
+        $or: [
+          {
+            status: {
+              $in: [
+                BOOKING_STATUS.CONFIRMED,
+                BOOKING_STATUS.CHECKED_IN,
+                BOOKING_STATUS.ONGOING,
               ],
             },
-            startTime,
-          ],
-        },
+          },
+          {
+            status:    BOOKING_STATUS.HOLD,
+            lockUntil: { $gt: new Date() },
+          },
+        ],
+      },
+      {
+        startTime: { $lt: endTime },
+        $expr: { $gt: ["$endTime", startTime] },
       },
     ],
   };
@@ -394,6 +450,7 @@ export const lockSlot = async (req, res) => {
       bufferTime = 0,
       requestedTime,
       serviceRefs,
+      professionalId, // Phase 5 — optional. Absent = existing behavior, byte for byte.
     } = req.body;
 
     const userId  = req.user._id;
@@ -434,15 +491,61 @@ export const lockSlot = async (req, res) => {
     //////////////////////////////////////////////////////////
 
     const dateStr = typeof date === 'string' ? date : new Date(date).toISOString().split('T')[0];
-    const slots = await getSmartSlots({ salonId, date: dateStr, serviceDuration, bufferTime });
 
-    const matchedSlot = slots.find((s) => isSameTime(s.start, reqTime));
+    //////////////////////////////////////////////////////////
+    // 🧑‍🎨 PHASE 5 — PROFESSIONAL-AWARE SLOT SOURCE (additive)
+    //
+    // professionalId absent: EXISTING path, completely unchanged —
+    // this is the zero-regression guarantee for legacy clients.
+    //////////////////////////////////////////////////////////
 
-    if (!matchedSlot) {
-      return res.status(400).json({
-        success: false,
-        message: "Requested slot is not available",
+    let matchedSlot;
+    let resolvedProfessionalId = null; // stays null unless a professional path resolves one
+
+    if (professionalId) {
+      let candidateProfessionalId = professionalId;
+
+      if (professionalId === "ANY") {
+        // Deterministic recommendation only — NOT authoritative yet.
+        // Re-validated inside the transaction below before it is
+        // ever persisted. "ANY" itself is never stored anywhere.
+        candidateProfessionalId = await selectAnyProfessional({ salonId, serviceId: serviceRefs, date: dateStr });
+        if (!candidateProfessionalId) {
+          return res.status(400).json({
+            success: false,
+            message: "No professional is currently available for the selected service and date.",
+          });
+        }
+      }
+
+      const eligibleSlots = await getEligibleSlotsForProfessional({
+        salonId, professionalId: candidateProfessionalId, serviceId: serviceRefs,
+        date: dateStr, serviceDuration, bufferTime,
       });
+
+      matchedSlot = eligibleSlots.find((s) => isSameTime(s.start, reqTime));
+
+      if (!matchedSlot) {
+        return res.status(400).json({
+          success: false,
+          message: "Requested slot is not available for the selected professional",
+        });
+      }
+
+      resolvedProfessionalId = candidateProfessionalId;
+
+    } else {
+      // ── EXISTING PATH — completely unchanged ──
+      const slots = await getSmartSlots({ salonId, date: dateStr, serviceDuration, bufferTime });
+
+      matchedSlot = slots.find((s) => isSameTime(s.start, reqTime));
+
+      if (!matchedSlot) {
+        return res.status(400).json({
+          success: false,
+          message: "Requested slot is not available",
+        });
+      }
     }
 
     //////////////////////////////////////////////////////////
@@ -473,7 +576,6 @@ export const lockSlot = async (req, res) => {
           chairId:   matchedSlot.chairId,
           startTime: matchedSlot.start,
           endTime:   matchedSlot.end,
-          bufferTime,
         })
       ).session(lockSession);
 
@@ -484,6 +586,56 @@ export const lockSlot = async (req, res) => {
           success: false,
           message: "Slot already taken. Please try another time.",
         });
+      }
+
+      //////////////////////////////////////////////////////////
+      // 🧑‍🎨 PHASE 5 — FINAL, TRANSACTION-SCOPED PROFESSIONAL
+      // RE-VALIDATION (never skipped, never moved outside this
+      // session — closes the race where an owner changes/cancels
+      // the assignment between slot-listing and this exact commit).
+      // Only runs when a professional was actually resolved above;
+      // the legacy (no-professional) path never reaches this block.
+      //////////////////////////////////////////////////////////
+
+      if (resolvedProfessionalId) {
+        // Phase C — direct professional-level overlap check, run
+        // unconditionally alongside the chair check above whenever a
+        // professional was resolved (owner-only OR assignment-backed).
+        // This is what actually enforces "professional capacity, not
+        // chair count": without it, two free chairs could each
+        // independently accept a booking for the same person.
+        const conflictingProfessionalBooking = await Booking.findOne(
+          buildProfessionalOverlapFilter({
+            professionalId: resolvedProfessionalId,
+            startTime:      matchedSlot.start,
+            endTime:        matchedSlot.end,
+          })
+        ).session(lockSession);
+
+        if (conflictingProfessionalBooking) {
+          await lockSession.abortTransaction();
+          lockSession.endSession();
+          return res.status(409).json({
+            success: false,
+            message: "Selected professional is already booked for an overlapping time. Please choose another slot.",
+          });
+        }
+
+        const stillValid = await revalidateProfessionalForBooking({
+          salonId, professionalId: resolvedProfessionalId, serviceId: serviceRefs,
+          chairId: matchedSlot.chairId, date: dateStr,
+          slotStart: matchedSlot.start, slotEnd: matchedSlot.end,
+          session: lockSession,
+        });
+
+        if (!stillValid) {
+          await lockSession.abortTransaction();
+          lockSession.endSession();
+          return res.status(409).json({
+            success: false,
+            message: "Selected professional is no longer available for this slot. Please choose another.",
+          });
+        }
       }
 
       //////////////////////////////////////////////////////////
@@ -554,6 +706,7 @@ export const lockSlot = async (req, res) => {
             userRef:            userId,
             salonRef:           salonId,
             chairRef:           matchedSlot.chairId,
+            professionalRef:    resolvedProfessionalId || null,
             serviceRefs,
             bookingDate,
             startTime:          matchedSlot.start,
@@ -748,7 +901,6 @@ export const confirmBooking = async (req, res) => {
         chairId:          booking.chairRef,
         startTime:        booking.startTime,
         endTime:          booking.endTime,
-        bufferTime:       booking.bufferTime,
         excludeBookingId: booking._id,
       })
     ).session(session);

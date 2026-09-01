@@ -44,6 +44,47 @@ const StaffSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////
+    // 🧑‍🎨 GENERIC PROFESSIONAL PROFILE (Phase 1 — Professional Engine)
+    //
+    // Additive only — `role` above is untouched and still used as-is
+    // by adminStaff.controller.js. `profession` is deliberately a free
+    // String, not an enum: the whole point of the Professional Engine
+    // is that new professions (Stylist, Beautician, Makeup Artist,
+    // Nail Artist, ...) can be added without a schema/code change.
+    //////////////////////////////////////////////////////
+    profession: {
+      type:      String,
+      trim:      true,
+      maxlength: 60,
+      default:   null,
+    },
+
+    photo: {
+      type:    String, // URL
+      default: null,
+    },
+
+    experienceYears: {
+      type:    Number,
+      min:     0,
+      default: null,
+    },
+
+    languages: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+
+    bio: {
+      type:      String,
+      trim:      true,
+      maxlength: 500,
+      default:   null,
+    },
+
+    //////////////////////////////////////////////////////
     // 🎯 SKILLS
     //////////////////////////////////////////////////////
     skills: [

@@ -78,7 +78,7 @@ export const Errors = Object.freeze({
   unauthorized: (msg = "Unauthorized")                     => new AppError(msg, 401, "UNAUTHORIZED"),
   forbidden:    (msg = "Forbidden")                        => new AppError(msg, 403, "FORBIDDEN"),
   notFound:     (msg = "Not found")                        => new AppError(msg, 404, "NOT_FOUND"),
-  conflict:     (msg = "Conflict")                         => new AppError(msg, 409, "CONFLICT"),
+  conflict:     (msg = "Conflict", errors = null)          => new AppError(msg, 409, "CONFLICT",      errors),
   validation:   (msg = "Validation failed", errors = null) => new AppError(msg, 422, "VALIDATION_ERROR", errors),
   tooMany:      (msg = "Too many requests")                => new AppError(msg, 429, "RATE_LIMITED"),
   internal:     (msg = "Internal server error")            => new AppError(msg, 500, "SERVER_ERROR"),

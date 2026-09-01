@@ -13,6 +13,8 @@ import { getMySalon, getDashboardStats, getLiveSchedule, getWallet, updateChairP
 import { getBusinessPerformance } from "../controllers/salon.performance.controller.js";
 import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
 import chairAvailabilityRoutes from "./chairAvailability.routes.js";
+import professionalRoutes from "./professional.routes.js";
+import professionalChairAssignmentRoutes from "./professionalChairAssignment.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -67,6 +69,23 @@ ownerRouter.patch("/holidays/:date", setHolidayOverride);
 // Mounted at /api/salon/owner/chairs/availability — inherits
 // protect + requireRole("OWNER") from this router.
 ownerRouter.use("/chairs/availability", chairAvailabilityRoutes);
+
+// Professional Engine — Phase 1 (backend foundation only). Safe,
+// incremental, owner-scoped CRUD on the existing Staff collection —
+// deliberately separate from salon.onboarding.controller.js's
+// saveStaff() (that endpoint destructively replaces the whole staff
+// array; this one never does). Mounted at
+// /api/salon/owner/professionals — inherits protect +
+// requireRole("OWNER") from this router.
+ownerRouter.use("/professionals", professionalRoutes);
+
+// Professional ↔ Chair Assignment Engine — Phase 3 (backend only).
+// Date/time-windowed assignment of a Professional to a Chair — a new,
+// dedicated collection, does not touch Chair.js, Staff.chairId, or
+// Booking.js. Mounted at
+// /api/salon/owner/professional-chair-assignments — inherits
+// protect + requireRole("OWNER") from this router.
+ownerRouter.use("/professional-chair-assignments", professionalChairAssignmentRoutes);
 
 // Chair Photo — additive, sets the existing (previously write-less) Chair.photo field
 ownerRouter.patch("/chairs/:chairId/photo", updateChairPhoto);

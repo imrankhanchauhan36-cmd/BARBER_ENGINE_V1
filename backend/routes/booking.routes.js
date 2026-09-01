@@ -31,6 +31,11 @@ import {
 import { requireRole } from "../middlewares/role.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { getSmartSlots } from "../services/slotEngine.service.js";
+import {
+  getEligibleSlotsForProfessional,
+  selectAnyProfessional,
+  getEligibleProfessionalsForService,
+} from "../services/professionalAvailability.service.js";
 import { bookingSchemas } from "../validators/booking.validators.js";
 
 const router = express.Router();
@@ -51,6 +56,12 @@ const userRouter = express.Router();
 userRouter.use(requireRole("USER", "OWNER"));
 
 // ── Available slots ─────────────────────────────────────────
+// Phase 5 — professionalId is an OPTIONAL query param, additive only.
+// Absent (the existing/legacy case): behaves EXACTLY as before, byte
+// for byte — no professional-related code runs at all. Present as a
+// specific id or "ANY": layers Professional/Chair-assignment
+// eligibility (services/professionalAvailability.service.js) on top
+// of the SAME unmodified getSmartSlots()/getChairTimelines() engine.
 userRouter.get("/slots", async (req, res) => {
   try {
     const {
@@ -58,6 +69,8 @@ userRouter.get("/slots", async (req, res) => {
       date,
       serviceDuration,
       bufferTime = 0,
+      professionalId,
+      serviceId,
     } = req.query;
 
     if (!salonId || !date || !serviceDuration) {
@@ -67,8 +80,51 @@ userRouter.get("/slots", async (req, res) => {
       });
     }
 
-    const slots = await getSmartSlots({
+    // ── EXISTING PATH — completely unchanged ──
+    if (!professionalId) {
+      const slots = await getSmartSlots({
+        salonId,
+        date,
+        serviceDuration: Number(serviceDuration),
+        bufferTime:      Number(bufferTime),
+      });
+
+      return res.status(200).json({
+        success: true,
+        count:   slots.length,
+        slots,
+      });
+    }
+
+    // ── PROFESSIONAL-AWARE PATH (new, additive) ──
+    if (!serviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "serviceId is required when professionalId is supplied",
+      });
+    }
+
+    // Phase 7 fix — a multi-service cart needs the professional eligible
+    // for ALL selected services (Phase 4/5 rule), so serviceId must
+    // support more than one id here too. Comma-separated in the query
+    // string, matching the Phase 7 eligible-professionals endpoint's
+    // own convention; a single id (the common case) still works
+    // unchanged — splitting a string with no comma yields a 1-element
+    // array, identical in effect to the previous single-id behavior.
+    const serviceIdList = String(serviceId).split(",").map((s) => s.trim()).filter(Boolean);
+
+    let resolvedProfessionalId = professionalId;
+    if (professionalId === "ANY") {
+      resolvedProfessionalId = await selectAnyProfessional({ salonId, serviceId: serviceIdList, date });
+      if (!resolvedProfessionalId) {
+        return res.status(200).json({ success: true, count: 0, slots: [] });
+      }
+    }
+
+    const slots = await getEligibleSlotsForProfessional({
       salonId,
+      professionalId: resolvedProfessionalId,
+      serviceId: serviceIdList,
       date,
       serviceDuration: Number(serviceDuration),
       bufferTime:      Number(bufferTime),
@@ -85,6 +141,53 @@ userRouter.get("/slots", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch slots",
+    });
+  }
+});
+
+// ── Eligible professionals (Phase 7 — customer-facing) ────────
+// Read-only. Reuses the existing, unmodified eligibility logic in
+// getEligibleProfessionalsForService() — no second eligibility
+// engine. Never exposes owner-only fields (salonId, phone,
+// statusHistory, isDeleted, createdBy, updatedBy, chairId) — the
+// service's own return shape is already the safe customer
+// projection (professionalId/name/profession/photo/experienceYears
+// only). No rating/reviewCount fields exist here — Rating Engine is
+// not implemented; nothing is fabricated in its place.
+userRouter.get("/eligible-professionals", async (req, res) => {
+  try {
+    const { salonId, serviceIds, date } = req.query;
+
+    if (!salonId || !serviceIds || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "salonId, serviceIds, and date are required",
+      });
+    }
+
+    // Comma-separated in the query string, matching how serviceRefs
+    // is already sent as a plain array elsewhere in this same flow —
+    // normalized to an array here for getEligibleProfessionalsForService's
+    // existing "single id or array" contract (Phase 5).
+    const serviceIdList = String(serviceIds).split(",").map((s) => s.trim()).filter(Boolean);
+
+    const professionals = await getEligibleProfessionalsForService({
+      salonId,
+      serviceId: serviceIdList,
+      date,
+    });
+
+    return res.status(200).json({
+      success: true,
+      count:   professionals.length,
+      professionals,
+    });
+
+  } catch (err) {
+    console.error("Eligible professionals error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch eligible professionals",
     });
   }
 });

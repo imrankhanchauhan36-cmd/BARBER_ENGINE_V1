@@ -144,8 +144,11 @@ export const createChairBlock = async ({ ownerId, chairId, date, startTime, endT
     status:    { $in: ACTIVE_BOOKING_STATUSES },
   }).select("startTime endTime bufferTime").lean();
 
+  // Phase D fix — b.endTime is already buffer-inclusive (see
+  // chairTimeline.service.js's Phase D note); computeOccupiedEnd() must
+  // not be re-applied on top of stored booking data.
   const conflictingBooking = activeBookings.find((b) =>
-    overlaps(toAbsoluteInstant(b.startTime), computeOccupiedEnd(b.endTime, b.bufferTime), blockStart, blockEnd)
+    overlaps(toAbsoluteInstant(b.startTime), toAbsoluteInstant(b.endTime), blockStart, blockEnd)
   );
 
   if (conflictingBooking) {

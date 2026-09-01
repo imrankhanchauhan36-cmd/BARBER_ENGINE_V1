@@ -98,6 +98,22 @@ export const bookingSchemas = {
         "array.unique":   "Duplicate service selected — each service must be listed only once",
       }),
 
+    // Phase 5/C — optional. Absent: existing legacy behavior, byte for
+    // byte (lockSlot() never even checks this branch). A real Staff
+    // ObjectId: specific-professional booking. The literal string
+    // "ANY": backend-resolved deterministic selection
+    // (selectAnyProfessional() in professionalAvailability.service.js) —
+    // never persisted as-is, always resolved to a real professionalId
+    // before Booking.create(). This field was already fully supported
+    // by lockSlot() itself; it was only ever rejected here at the
+    // validation layer before reaching the controller.
+    professionalId: Joi.alternatives()
+      .try(objectId, Joi.string().valid("ANY"))
+      .optional()
+      .messages({
+        "alternatives.match": "professionalId must be a valid professional id or \"ANY\"",
+      }),
+
   }).unknown(false),
 
   //////////////////////////////////////////////////////////
