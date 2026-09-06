@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 import { verifySession } from "../services/session.service.js";
 import { generateAccessToken } from "../services/token.service.js";
 import logger from "../utils/logger.js";
@@ -98,21 +99,31 @@ export const protect = async (req, res, next) => {
 
     //////////////////////////////////////////////////////
     // VERIFY SESSION (ONLY IF NOT ALREADY VERIFIED)
+    //
+    // Reached whenever the access token itself was valid and NOT
+    // expired (the expired-token branch above already verified a
+    // session via the refresh token and set `session`, so this block
+    // is skipped in that case). A valid, unexpired, signature-checked
+    // access token is sufficient on its own for ordinary requests —
+    // no x-refresh-token is required here. We still need a LIVE read
+    // of the user (not just the JWT payload) so an immediate
+    // revocation (tokenVersion bump, account disable/delete) takes
+    // effect before the token's own natural expiry, same guarantee
+    // the refresh-token/session path below already provides — just
+    // sourced by a direct lookup instead of a refresh-token/session
+    // record, since none is required or available on a normal request.
     //////////////////////////////////////////////////////
 
     if (!session) {
-      const refreshToken =
-        req.cookies?.refreshToken || req.headers["x-refresh-token"];
+      const liveUser = await User.findById(decoded.id).select(
+        "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
+      );
 
-      if (!refreshToken) {
-        return next(Errors.unauthorized("Session missing"));
-      }
-
-      session = await verifySession(refreshToken);
-
-      if (!session || !session.user || !session.tokenHash) {
+      if (!liveUser) {
         return next(Errors.unauthorized("Session expired"));
       }
+
+      session = { user: liveUser };
     }
 
     const user = session.user;
