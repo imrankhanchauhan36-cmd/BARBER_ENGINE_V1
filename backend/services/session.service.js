@@ -8,7 +8,29 @@ import { generateAccessToken } from "./token.service.js";
 
 const SESSION_PREFIX = "session:";
 const USER_SESSION_PREFIX = "user_sessions:";
-const SESSION_TTL = 60 * 60 * 24 * 7; // 7 days
+
+// ROLLING window — reset to a fresh SESSION_TTL on every successful
+// rotateSession() call (see below). This is what actually governs a
+// genuinely-idle user: if the app makes zero requests for longer than
+// this, the last-set expiresAt lapses with nothing to renew it,
+// regardless of how far off the absolute ceiling still is. Raised
+// from 7 to 30 days (2026-09 session policy update) so that the
+// product requirement "15+ days idle must not force re-login" holds
+// with real margin, without weakening anything else — rotation,
+// single-use enforcement, and family-compromise/reuse detection
+// below are completely unchanged.
+const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days
+
+// ABSOLUTE ceiling — fixed once at createSession() time and carried
+// forward unchanged through every rotation (never extended by
+// activity). This is the real security backstop: even a user who
+// opens the app every single day is still forced through a genuine
+// re-login at this point. Previously derived as SESSION_TTL * 4,
+// which silently became 120 days the moment SESSION_TTL above grew —
+// pulled out as its own explicit, independent constant so the
+// absolute ceiling is a deliberate policy choice, not a side effect
+// of the rolling-window value.
+const SESSION_ABSOLUTE_TTL = 60 * 60 * 24 * 90; // 90 days
 
 // Legitimate concurrent duplicate refresh calls happen in practice —
 // e.g. a client's proactive pre-expiry timer racing a reactive
@@ -69,7 +91,7 @@ export const createSession = async (user, req) => {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL * 1000);
   const absoluteExpiresAt = new Date(
-    now.getTime() + SESSION_TTL * 4 * 1000
+    now.getTime() + SESSION_ABSOLUTE_TTL * 1000
   );
 
   const familyId = new mongoose.Types.ObjectId();

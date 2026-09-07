@@ -14,7 +14,7 @@ import redis, { isRedisReady } from "./config/redis.js";
 import ownerKycRoutes from "./modules/kyc/routes/ownerKyc.routes.js"; // ← NEW — Phase 6C owner KYC submission
 import adminRoutes from "./routes/admin.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
-import adminRatingRoutes from "./routes/adminRating.routes.js";
+import adminServiceRatingRoutes from "./routes/adminServiceRating.routes.js"; // ← Rating & Review Engine Phase 2 — replaces retired adminRating.routes.js
 import authRoutes from "./routes/auth.routes.js";
 import bookingRoutes from "./routes/booking.routes.js";
 import cityRoutes from "./routes/city.routes.js";
@@ -27,7 +27,7 @@ import userNotificationRoutes from "./routes/userNotification.routes.js";
 import deviceTokenRoutes from "./routes/deviceToken.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import payoutRoutes from "./routes/payout.routes.js";
-import ratingRoutes from "./routes/rating.routes.js";
+import serviceRatingRoutes from "./routes/serviceRating.routes.js"; // ← Rating & Review Engine Phase 2 — replaces retired rating.routes.js
 import reportRoutes from "./routes/reports.routes.js";
 import salonOnboardingRouter from "./routes/salon.onboarding.routes.js";
 import salonRoutes from "./routes/salon.routes.js";
@@ -248,7 +248,7 @@ app.use("/api/payments", protect, onboardingBypass, paymentRoutes);
 app.use("/api/payouts", protect, onboardingBypass, payoutRoutes);
 app.use("/api/salon/kyc", protect, onboardingBypass, ownerKycRoutes); // ← NEW — Phase 6C owner KYC submission
 app.use("/api/reports", protect, onboardingBypass, reportRoutes);
-app.use("/api/ratings", protect, onboardingBypass, ratingRoutes);
+app.use("/api/ratings", protect, onboardingBypass, serviceRatingRoutes);
 app.use("/api/salon-media", protect, onboardingBypass, salonMediaRoutes);
 app.use("/api/customers",  protect, onboardingBypass, customerRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -285,9 +285,19 @@ app.use("/api/support/admin", protect, onboardingBypass, supportAdminRoutes);
 
 ///////////////////////////////////////////////////////////
 // ADMIN ROUTES
+//
+// /api/admin/ratings is registered BEFORE the broad /api/admin
+// mount — adminRoutes (routes/admin.routes.js) owns its own
+// requireRole("ADMIN") gate and a catch-all 404 for any unmatched
+// sub-path, so if the broad mount ran first it would swallow every
+// /api/admin/ratings/* request before this more specific router ever
+// got a chance (same route-order defensiveness already applied to
+// the support module's admin routes above). Auth/role protection is
+// unchanged — adminServiceRatingRoutes still requires protect +
+// requireRole("ADMIN") exactly as before.
 ///////////////////////////////////////////////////////////
+app.use("/api/admin/ratings", protect, adminServiceRatingRoutes);
 app.use("/api/admin", protect, adminRoutes);
-app.use("/api/admin/ratings", protect, adminRatingRoutes);
 
 ///////////////////////////////////////////////////////////
 // MASTER ROUTES

@@ -3,7 +3,6 @@ import Booking from "../models/Booking.js";
 import Chair from "../models/Chair.js";
 import District from "../models/District.js";
 import Notification from "../models/Notification.js";
-import Rating from "../models/Rating.js";
 import Salon from "../models/Salon.js";
 import SalonEarnings from "../models/SalonEarnings.js";
 import Service from "../models/Service.js"; // ✅ NEW
@@ -11,6 +10,7 @@ import Staff from "../models/Staff.js";
 import State from "../models/State.js";
 import Transaction from "../models/Transaction.js";
 import { resolveScheduleDate } from "../utils/dateRange.helpers.js";
+import { getSalonSummary } from "../services/ratingAggregate.service.js";
 
 
 /**
@@ -122,7 +122,7 @@ export const getDashboardStats = async (req, res) => {
       nextBookings,
       ongoingBookings,
       services,
-      ratingResult,
+      ratingSummary,
       topServicesResult,
       unreadNotifications,
     ] = await Promise.all([
@@ -228,21 +228,12 @@ export const getDashboardStats = async (req, res) => {
         .sort({ createdAt: 1 })
         .lean(),
 
-      Rating.aggregate([
-        {
-          $match: {
-            salonId,
-            isHidden: false,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            averageRating: { $avg: "$rating" },
-            totalReviews: { $sum: 1 },
-          },
-        },
-      ]),
+      // R3.3-A: Rating Engine Phase 2 is authoritative — RatingAggregate
+      // is already kept correct (including isHidden adjustments) by
+      // jobs/ratingOutbox.job.js, so this is a single indexed lookup
+      // on the {salonId,type,targetId} unique index, not an aggregation
+      // over raw rows. Replaces the old, now-unwritten Rating model.
+      getSalonSummary(salonId),
 
       Booking.aggregate([
         {
@@ -327,8 +318,8 @@ export const getDashboardStats = async (req, res) => {
         nextBookings:   nextBookings         || [],
         ongoingBooking:  ongoingBookings?.[0] || null,
         ongoingBookings: ongoingBookings     || [],
-        averageRating:   Number(ratingResult?.[0]?.averageRating?.toFixed(1) || 0),
-        totalReviews:    ratingResult?.[0]?.totalReviews || 0,
+        averageRating:   ratingSummary.average,
+        totalReviews:    ratingSummary.count,
         topServices:     topServicesResult || [],
 
         // Consumed by DashboardHeader/DashboardBottomTab's unread badge

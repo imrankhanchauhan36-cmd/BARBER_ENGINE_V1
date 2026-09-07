@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
-import Rating from "../models/Rating.js";
+import ServiceRating, { RATING_TYPE } from "../models/ServiceRating.js";
 import Salon from "../models/Salon.js";
 import User from "../models/User.js";
 
@@ -173,16 +173,21 @@ export const getCustomerHistory = async (req, res) => {
       { bookingDate: 1, startTime: 1, endTime: 1, serviceRefs: 1, totalAmountInPaise: 1, status: 1, salonRef: 1 }
     ).populate("salonRef", "basicInfo.shopName").populate("serviceRefs", "name duration").sort({ bookingDate: -1 }).skip(skip).limit(limit).lean();
 
-    const reviews = await Rating.find(
-      { userId, salonId: { $in: salonIds } },
-      { rating: 1, review: 1, salonId: 1, createdAt: 1 }
+    // R3.3-A: old Rating model is no longer written to (its write route
+    // is retired) — ServiceRating is authoritative. A SALON-type row is
+    // the direct equivalent of one legacy Rating row: at most one per
+    // booking (unique on {bookingId,type,targetId,customerId}), and the
+    // only type that ever carries review text (see Phase 1 Decision 2).
+    const reviews = await ServiceRating.find(
+      { customerId: userId, salonId: { $in: salonIds }, type: RATING_TYPE.SALON },
+      { stars: 1, review: 1, salonId: 1, createdAt: 1 }
     ).populate("salonId", "basicInfo.shopName").sort({ createdAt: -1 }).lean();
 
     return res.status(200).json({
       success: true,
       data: {
         bookings: bookings.map((b) => ({ bookingId: b._id, bookingDate: b.bookingDate, startTime: b.startTime, endTime: b.endTime, salonName: b.salonRef?.basicInfo?.shopName || "Unknown", services: (b.serviceRefs || []).map((s) => ({ name: s.name, durationMinutes: s.duration })), amountRupees: toRupees(b.totalAmountInPaise), status: b.status })),
-        reviews:  reviews.map((r) => ({ reviewId: r._id, salonName: r.salonId?.basicInfo?.shopName || "Unknown", rating: r.rating, review: r.review || null, date: r.createdAt })),
+        reviews:  reviews.map((r) => ({ reviewId: r._id, salonName: r.salonId?.basicInfo?.shopName || "Unknown", rating: r.stars, review: r.review || null, date: r.createdAt })),
         pagination: { total: totalCount, page, limit, pages: Math.ceil(totalCount / limit) },
       },
     });
