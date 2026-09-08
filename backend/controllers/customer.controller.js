@@ -178,16 +178,24 @@ export const getCustomerHistory = async (req, res) => {
     // the direct equivalent of one legacy Rating row: at most one per
     // booking (unique on {bookingId,type,targetId,customerId}), and the
     // only type that ever carries review text (see Phase 1 Decision 2).
+    //
+    // S2 (Option C, approved): deliberately NOT filtering isHidden here
+    // — the owner may see a hidden review about their own customer,
+    // marked as such (see the `hidden` field below). This is a
+    // relationship-scoped private view, not a public review-list
+    // surface, matching the existing precedent already established by
+    // getMyRatingsHandler (GET /api/ratings/my), which likewise never
+    // filters isHidden for a customer viewing their own ratings.
     const reviews = await ServiceRating.find(
       { customerId: userId, salonId: { $in: salonIds }, type: RATING_TYPE.SALON },
-      { stars: 1, review: 1, salonId: 1, createdAt: 1 }
+      { stars: 1, review: 1, salonId: 1, createdAt: 1, isHidden: 1 }
     ).populate("salonId", "basicInfo.shopName").sort({ createdAt: -1 }).lean();
 
     return res.status(200).json({
       success: true,
       data: {
         bookings: bookings.map((b) => ({ bookingId: b._id, bookingDate: b.bookingDate, startTime: b.startTime, endTime: b.endTime, salonName: b.salonRef?.basicInfo?.shopName || "Unknown", services: (b.serviceRefs || []).map((s) => ({ name: s.name, durationMinutes: s.duration })), amountRupees: toRupees(b.totalAmountInPaise), status: b.status })),
-        reviews:  reviews.map((r) => ({ reviewId: r._id, salonName: r.salonId?.basicInfo?.shopName || "Unknown", rating: r.stars, review: r.review || null, date: r.createdAt })),
+        reviews:  reviews.map((r) => ({ reviewId: r._id, salonName: r.salonId?.basicInfo?.shopName || "Unknown", rating: r.stars, review: r.review || null, date: r.createdAt, hidden: r.isHidden === true })),
         pagination: { total: totalCount, page, limit, pages: Math.ceil(totalCount / limit) },
       },
     });

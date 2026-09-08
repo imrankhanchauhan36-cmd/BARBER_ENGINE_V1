@@ -13,6 +13,7 @@ import ServiceRating, { RATING_TYPE } from "../models/ServiceRating.js";
 import Service from "../models/Service.js";
 import Staff from "../models/Staff.js";
 import User from "../models/User.js";
+import Salon from "../models/Salon.js";
 import { getRatingEligibility } from "../services/ratingEligibility.service.js";
 import { submitRatings } from "../services/ratingSubmission.service.js";
 import {
@@ -51,6 +52,46 @@ async function enrichReviewRows(rows) {
   const users = await User.find({ _id: { $in: distinctCustomerIds } }).select("name").lean();
   const nameById = new Map(users.map((u) => [u._id.toString(), u.name]));
   return rows.map((row) => toReviewListItemDTO(row, nameById));
+}
+
+///////////////////////////////////////////////////////////
+// S3.1 — OWNER-scoping for the six public read endpoints below.
+//
+// These endpoints are shared: User App calls them today for public,
+// customer-facing review browsing (any salon, any service, any
+// professional — that's the intended, unchanged behavior for a
+// non-owner caller). A real cross-salon test (S3 audit) proved an
+// authenticated OWNER could call them for ANY salon, not just their
+// own, and get back real data. This guard closes that gap for OWNER
+// callers ONLY — a non-owner request takes none of this code and is
+// byte-for-byte unchanged.
+//
+// getOwnerSalonIds mirrors controllers/customer.controller.js's own
+// helper of the same name exactly (same one-line query) — duplicated
+// here rather than imported because that file is out of scope for
+// this change and does not export it; this is the same ownership
+// pattern, not a second ownership system.
+///////////////////////////////////////////////////////////
+async function getOwnerSalonIds(ownerId) {
+  const salons = await Salon.find({ ownerId }, { _id: 1 }).lean();
+  return salons.map((s) => s._id);
+}
+
+function isOwnerRequest(req) {
+  return String(req.user?.role).toUpperCase() === "OWNER";
+}
+
+// Throws 403 if the caller is an OWNER and `salonId` is not one of
+// their own salons. A no-op for any non-owner caller (including a
+// plain customer, or a request with no role at all) — their existing
+// public-safe behavior is completely untouched. Never distinguishes
+// "salon doesn't exist" from "belongs to someone else" for an owner
+// caller — both are the same 403, revealing nothing extra.
+async function assertOwnerCanAccessSalon(req, salonId) {
+  if (!isOwnerRequest(req)) return;
+  const ownedSalonIds = await getOwnerSalonIds(req.user._id);
+  const owns = ownedSalonIds.some((id) => id.toString() === String(salonId));
+  if (!owns) throw Errors.forbidden("You do not have access to this salon's ratings");
 }
 
 ///////////////////////////////////////////////////////////
@@ -137,6 +178,8 @@ export const getSalonReviewsHandler = async (req, res) => {
   const { salonId } = req.params;
   const { cursor, limit } = req.query;
 
+  await assertOwnerCanAccessSalon(req, salonId);
+
   const filter = { salonId, type: RATING_TYPE.SALON, isHidden: false };
   if (cursor && mongoose.isValidObjectId(cursor)) {
     filter._id = { $lt: new mongoose.Types.ObjectId(cursor) };
@@ -160,6 +203,8 @@ export const getSalonReviewsHandler = async (req, res) => {
 // GET /api/ratings/salon/:salonId/summary
 ///////////////////////////////////////////////////////////
 export const getSalonSummaryHandler = async (req, res) => {
+  await assertOwnerCanAccessSalon(req, req.params.salonId);
+
   const summary = await getSalonSummary(req.params.salonId);
   return successResponse(res, { message: "Salon rating summary fetched", data: toSummaryDTO(summary) });
 };
@@ -172,6 +217,8 @@ export const getServiceSummaryHandler = async (req, res) => {
 
   const service = await Service.findById(serviceId).select("salonId").lean();
   if (!service) throw Errors.notFound("Service not found");
+
+  await assertOwnerCanAccessSalon(req, service.salonId);
 
   const summary = await getServiceSummary({ salonId: service.salonId, serviceId });
   return successResponse(res, { message: "Service rating summary fetched", data: toSummaryDTO(summary) });
@@ -189,6 +236,8 @@ export const getServiceReviewsHandler = async (req, res) => {
 
   const service = await Service.findById(serviceId).select("name salonId").lean();
   if (!service) throw Errors.notFound("Service not found");
+
+  await assertOwnerCanAccessSalon(req, service.salonId);
 
   const filter = { salonId: service.salonId, type: RATING_TYPE.SERVICE, targetId: service._id, isHidden: false };
   if (cursor && mongoose.isValidObjectId(cursor)) {
@@ -218,6 +267,8 @@ export const getProfessionalSummaryHandler = async (req, res) => {
   const professional = await Staff.findById(professionalId).select("salonId").lean();
   if (!professional) throw Errors.notFound("Professional not found");
 
+  await assertOwnerCanAccessSalon(req, professional.salonId);
+
   const summary = await getProfessionalSummary({ salonId: professional.salonId, professionalId });
   return successResponse(res, { message: "Professional rating summary fetched", data: toSummaryDTO(summary) });
 };
@@ -234,6 +285,8 @@ export const getProfessionalReviewsHandler = async (req, res) => {
 
   const professional = await Staff.findById(professionalId).select("name photo salonId").lean();
   if (!professional) throw Errors.notFound("Professional not found");
+
+  await assertOwnerCanAccessSalon(req, professional.salonId);
 
   const filter = { salonId: professional.salonId, type: RATING_TYPE.PROFESSIONAL, targetId: professional._id, isHidden: false };
   if (cursor && mongoose.isValidObjectId(cursor)) {
