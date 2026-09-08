@@ -34,7 +34,7 @@ import WeeklyScheduleTemplate from "../models/WeeklyScheduleTemplate.js";
 import ProfessionalChairAssignment from "../models/ProfessionalChairAssignment.js";
 
 import { WEEKDAYS } from "../constants/weeklyScheduleTemplate.constants.js";
-import { ASSIGNMENT_SOURCE } from "../constants/professionalChairAssignment.constants.js";
+import { ASSIGNMENT_SOURCE, ASSIGNMENT_STATUS } from "../constants/professionalChairAssignment.constants.js";
 import { createAssignment } from "./professionalChairAssignment.service.js";
 import logger from "../utils/logger.js";
 
@@ -150,7 +150,7 @@ const classifyCreateError = (err) => {
 // 🚀 MATERIALIZE ONE ENTRY (one professional+chair+date combination)
 //////////////////////////////////////////////////////////////
 
-const materializeEntry = async ({ salon, date, weekday, templateId, entry }) => {
+const materializeEntry = async ({ salon, date, weekday, templateId, templateCreatedAt, entry }) => {
   const identity = {
     salonId: String(salon._id),
     templateId: String(templateId),
@@ -160,22 +160,46 @@ const materializeEntry = async ({ salon, date, weekday, templateId, entry }) => 
     chairId: String(entry.chairId),
   };
 
-  // Existing-row rule (LOCKED) — ANY row for this exact combination,
-  // regardless of status (ACTIVE or CANCELLED), blocks materialization.
-  // This is intentionally a SEPARATE check from checkConflicts()'s own
-  // Rule A/B (which only look at ACTIVE rows) — a cancelled owner
-  // exception must never be resurrected, and checkConflicts() alone
-  // cannot see it.
-  const existing = await ProfessionalChairAssignment.exists({
+  // Existing-row rule — an ACTIVE row for this exact combination always
+  // blocks materialization unconditionally (it's live, possibly
+  // already booked against — never overwritten). A CANCELLED row also
+  // blocks UNLESS it is stale pre-template history: if it was last
+  // touched (updatedAt) BEFORE this template version was even created,
+  // it cannot represent the owner's current intent for this date and
+  // must not be allowed to permanently veto the recurring schedule
+  // forever (the confirmed real-world bug this fix addresses). A
+  // CANCELLED row touched AT OR AFTER the template's own creation is,
+  // by definition, a genuine post-template date-specific exception
+  // (e.g. a C2 cancel performed once the recurring schedule already
+  // existed) and continues to block exactly as before — this is what
+  // keeps C2's exception semantics fully intact. Either way, the old
+  // row itself is NEVER read-modified-written, deleted, or resurrected
+  // here — only whether a NEW row may additionally be created.
+  const existing = await ProfessionalChairAssignment.findOne({
     salonId: salon._id,
     professionalId: entry.professionalId,
     chairId: entry.chairId,
     date,
-  });
+  }).select("status updatedAt").lean();
 
   if (existing) {
-    logger.info(`${JOB_NAME} skip`, { ...identity, result: "SKIPPED", reason: "ALREADY_EXISTS" });
-    return { result: "skippedExisting" };
+    const isStalePreTemplateCancellation =
+      existing.status === ASSIGNMENT_STATUS.CANCELLED &&
+      templateCreatedAt &&
+      existing.updatedAt < templateCreatedAt;
+
+    if (!isStalePreTemplateCancellation) {
+      logger.info(`${JOB_NAME} skip`, { ...identity, result: "SKIPPED", reason: "ALREADY_EXISTS", existingStatus: existing.status });
+      return { result: "skippedExisting" };
+    }
+
+    logger.info(`${JOB_NAME} stale pre-template cancellation overridden`, {
+      ...identity,
+      existingAssignmentUpdatedAt: existing.updatedAt,
+      templateCreatedAt,
+    });
+    // Fall through — the stale CANCELLED row does not block; attempt
+    // to materialize a new row via the normal path below.
   }
 
   try {
@@ -257,7 +281,12 @@ const materializeSalon = async (salon, counters) => {
     const entries = template.days?.[weekday]?.entries || [];
 
     for (const entry of entries) {
-      const { result } = await materializeEntry({ salon, date, weekday, templateId: template._id, entry });
+      const { result } = await materializeEntry({
+        salon, date, weekday,
+        templateId: template._id,
+        templateCreatedAt: template.createdAt,
+        entry,
+      });
       switch (result) {
         case "created":                 counters.created++; break;
         case "skippedExisting":         counters.skippedExisting++; break;
@@ -315,3 +344,12 @@ export const runMaterializerOnce = async () => {
   logger.info(`${JOB_NAME} run complete`, counters);
   return counters;
 };
+
+// Exported for the disposable-script verification methodology this
+// project uses (see jobs/ratingOutbox.job.js's identical pattern) —
+// lets a targeted test exercise materializeEntry()/materializeSalon()
+// against an isolated fixture directly, without invoking the full
+// runMaterializerOnce() sweep (which iterates every salon with an
+// ACTIVE template — including real, non-test salons). Never imported
+// by any route/controller/job.
+export const _internal = { materializeEntry, materializeSalon };

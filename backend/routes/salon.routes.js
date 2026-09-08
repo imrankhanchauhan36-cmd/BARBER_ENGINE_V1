@@ -12,6 +12,8 @@ import {
 import { getMySalon, getDashboardStats, getLiveSchedule, getWallet, updateChairPhoto, updateBasicInfo } from "../controllers/salon.me.controller.js";
 import { getBusinessPerformance } from "../controllers/salon.performance.controller.js";
 import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.holiday.controller.js";
+import { getBookingReadinessHandler } from "../controllers/salon.readiness.controller.js";
+import { getBookingWindow, updateBookingWindow } from "../controllers/salon.bookingWindow.controller.js";
 import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 import professionalRoutes from "./professional.routes.js";
 import professionalChairAssignmentRoutes from "./professionalChairAssignment.routes.js";
@@ -19,6 +21,8 @@ import weeklyScheduleTemplateRoutes from "./weeklyScheduleTemplate.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import { bookingWindowSchemas } from "../validators/salon.bookingWindow.validator.js";
 
 const router = express.Router();
 
@@ -66,6 +70,15 @@ ownerRouter.get("/wallet", getWallet); // ← ADD KARO
 ownerRouter.get("/holidays/:date", getHolidayOverride);
 ownerRouter.patch("/holidays/:date", setHolidayOverride);
 
+// Booking Readiness Engine — R2 (backend only, read-only). Composes
+// the existing, frozen Slot/Chair/Professional-Availability engines
+// via services/bookingReadiness.service.js — never a new availability
+// calculation. Mounted at /api/salon/owner/booking-readiness —
+// inherits protect + requireRole("OWNER") from this router; salonId
+// is always resolved server-side from the authenticated owner, never
+// accepted from the client.
+ownerRouter.get("/booking-readiness", getBookingReadinessHandler);
+
 // Chair Availability Engine — Phase 1 (backend only)
 // Mounted at /api/salon/owner/chairs/availability — inherits
 // protect + requireRole("OWNER") from this router.
@@ -96,6 +109,17 @@ ownerRouter.use("/professional-chair-assignments", professionalChairAssignmentRo
 // /api/salon/owner/weekly-schedule-templates — inherits protect +
 // requireRole("OWNER") from this router.
 ownerRouter.use("/weekly-schedule-templates", weeklyScheduleTemplateRoutes);
+
+// Booking Window — C4 Phase 3 (backend, single-field owner setting).
+// Salon.business.bookingWindowDays already existed since C4 Phase 2
+// (consumed by services/weeklyScheduleMaterializer.service.js) — this
+// only exposes it for the owner to read/change. Mounted at
+// /api/salon/owner/booking-window — inherits protect +
+// requireRole("OWNER") from this router; salonId is always resolved
+// server-side from the authenticated owner, never accepted from the
+// client.
+ownerRouter.get("/booking-window", getBookingWindow);
+ownerRouter.patch("/booking-window", validate(bookingWindowSchemas.update, "body"), updateBookingWindow);
 
 // Chair Photo — additive, sets the existing (previously write-less) Chair.photo field
 ownerRouter.patch("/chairs/:chairId/photo", updateChairPhoto);
