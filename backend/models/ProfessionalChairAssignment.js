@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import {
   ASSIGNMENT_STATUS,
   ASSIGNMENT_STATUS_VALUES,
+  ASSIGNMENT_SOURCE,
+  ASSIGNMENT_SOURCE_VALUES,
 } from "../constants/professionalChairAssignment.constants.js";
 
 //////////////////////////////////////////////////////////////
@@ -44,6 +46,22 @@ import {
 //   concrete row per date rather than a recurrence rule — there is
 //   no reserved-but-unused field here to seed a future recurrence
 //   engine, unlike ChairAvailabilityOverride's seriesId.
+//
+// NOTE 6 — C4 Phase 2, `source` field (additive). Attribution only —
+//   MANUAL (default, every existing/manual row) vs TEMPLATE (created
+//   by the not-yet-wired-in rolling-window materializer). Never read
+//   by checkConflicts(), the Slot Engine, or Booking. No migration/
+//   backfill was run for existing rows — they simply have no `source`
+//   key in the database at all and the schema default (MANUAL) is
+//   what Mongoose reports for them on read, exactly as if they'd
+//   always had it. A unique index on
+//   {salonId, professionalId, chairId, date} for race-safe
+//   materializer idempotency was AUDITED and APPROVED but is NOT
+//   added in this phase — a pre-existing duplicate group was found in
+//   production data (3 CANCELLED rows sharing one such key) that would
+//   make index creation fail; per the approved decision this was
+//   reported instead of silently resolved, and the index remains a
+//   separate, explicitly-gated follow-up.
 //
 //////////////////////////////////////////////////////////////
 
@@ -107,6 +125,15 @@ const ProfessionalChairAssignmentSchema = new mongoose.Schema(
     },
 
     //////////////////////////////////////////////////////////
+    // SOURCE — See NOTE 6. Attribution only, never a conflict/read gate.
+    //////////////////////////////////////////////////////////
+    source: {
+      type:    String,
+      enum:    ASSIGNMENT_SOURCE_VALUES,
+      default: ASSIGNMENT_SOURCE.MANUAL,
+    },
+
+    //////////////////////////////////////////////////////////
     // AUDIT
     //////////////////////////////////////////////////////////
     createdBy: {
@@ -140,6 +167,35 @@ ProfessionalChairAssignmentSchema.index({ chairId: 1, date: 1 });
 
 // Professional-conflict check (Rule A) + per-professional history.
 ProfessionalChairAssignmentSchema.index({ professionalId: 1, date: 1 });
+
+// C4 Phase 2 — DB-level race protection for the (not-yet-built) rolling
+// materializer, approved after a read-only production audit found a
+// pre-existing group of 3 CANCELLED historical rows sharing this exact
+// key (different time windows, same salon/professional/chair/date —
+// a real past sequence of cancelled attempts, not junk). A plain unique
+// index would have failed to create against that data and would also
+// have permanently blocked ever recording a second CANCELLED attempt
+// for the same combination again in the future.
+//
+// partialFilterExpression: {status: "ACTIVE"} solves both: only ACTIVE
+// rows are covered, so (a) the 3 existing CANCELLED rows are excluded
+// and remain completely untouched, and (b) at most one ACTIVE row can
+// ever exist per {salonId, professionalId, chairId, date} — which is
+// the actual invariant needed (two materializer workers, or a worker
+// racing a manual create, can never both land an ACTIVE row for the
+// same combination; MongoDB's own atomic index enforcement rejects the
+// second write with E11000). CANCELLED rows were already invisible to
+// every live conflict check (see NOTE 3) — this index simply extends
+// that same "ACTIVE-only" boundary to uniqueness as well, not a new
+// business rule.
+ProfessionalChairAssignmentSchema.index(
+  { salonId: 1, professionalId: 1, chairId: 1, date: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: ASSIGNMENT_STATUS.ACTIVE },
+    name: "salon_professional_chair_date_active_unique",
+  }
+);
 
 //////////////////////////////////////////////////////////////
 // EXPORT

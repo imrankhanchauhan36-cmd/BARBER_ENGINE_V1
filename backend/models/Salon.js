@@ -276,6 +276,22 @@ const SalonSchema = new mongoose.Schema(
         type:    Date,
         default: null,
       },
+
+      // C4 Phase 2 — additive. Consumed only by
+      // services/weeklyScheduleMaterializer.service.js to compute the
+      // rolling materialization window (today..today+N-1). Does NOT
+      // enforce anything on the customer booking path — backend
+      // booking-window enforcement is a separate, explicitly
+      // out-of-scope future phase. Max 30 is a deliberate, tighter
+      // ceiling than C1's own one-time MAX_ASSIGNMENT_RANGE_DAYS=62,
+      // since this window is a continuously-recreating DAILY cost
+      // rather than a single owner action.
+      bookingWindowDays: {
+        type:    Number,
+        default: 7,
+        min:     1,
+        max:     30,
+      },
     },
   
 

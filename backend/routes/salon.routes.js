@@ -15,6 +15,7 @@ import { setHolidayOverride, getHolidayOverride } from "../controllers/salon.hol
 import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 import professionalRoutes from "./professional.routes.js";
 import professionalChairAssignmentRoutes from "./professionalChairAssignment.routes.js";
+import weeklyScheduleTemplateRoutes from "./weeklyScheduleTemplate.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -86,6 +87,15 @@ ownerRouter.use("/professionals", professionalRoutes);
 // /api/salon/owner/professional-chair-assignments — inherits
 // protect + requireRole("OWNER") from this router.
 ownerRouter.use("/professional-chair-assignments", professionalChairAssignmentRoutes);
+
+// Weekly Schedule Template — C4 Phase 1 (backend, config storage
+// only). Versioned (effectiveFrom-dated) day-of-week staff→chair→time
+// PATTERN storage — pure configuration, never creates or reads
+// ProfessionalChairAssignment/Booking rows, no materializer/cron yet
+// (C4 Phase 2, not built). Mounted at
+// /api/salon/owner/weekly-schedule-templates — inherits protect +
+// requireRole("OWNER") from this router.
+ownerRouter.use("/weekly-schedule-templates", weeklyScheduleTemplateRoutes);
 
 // Chair Photo — additive, sets the existing (previously write-less) Chair.photo field
 ownerRouter.patch("/chairs/:chairId/photo", updateChairPhoto);

@@ -24,7 +24,7 @@ import ChairAvailabilityOverride from "../models/ChairAvailabilityOverride.js";
 import ProfessionalChairAssignment from "../models/ProfessionalChairAssignment.js";
 
 import { ACTIVE_BOOKING_STATUSES, CHAIR_AVAILABILITY_STATUS } from "../constants/chairAvailability.constants.js";
-import { ASSIGNMENT_STATUS } from "../constants/professionalChairAssignment.constants.js";
+import { ASSIGNMENT_STATUS, ASSIGNMENT_SOURCE } from "../constants/professionalChairAssignment.constants.js";
 import { computeOccupiedEnd, toISTDateTime, toAbsoluteInstant } from "./chairTimeline.service.js";
 import { Errors } from "../utils/response.js";
 
@@ -184,9 +184,16 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
 // validates + conflict-checks EVERY requested date with zero writes;
 // if ANY date fails, the entire request is rejected and NOTHING is
 // created. Only if every date clears does PASS 2 create all rows.
+//
+// `source` (C4 Phase 2, additive, defaults to MANUAL) — the ONLY
+// caller that ever passes "TEMPLATE" is
+// jobs/weeklyScheduleMaterializer.job.js. The owner-facing HTTP path
+// (professionalChairAssignment.controller.js) never sends this field
+// at all (it isn't in the request-body Joi schema), so every existing
+// caller is completely unaffected by this parameter's existence.
 //////////////////////////////////////////////////////////////
 
-export const createAssignment = async ({ ownerId, chairId, professionalId, date, startDate, endDate, startTime, endTime }) => {
+export const createAssignment = async ({ ownerId, chairId, professionalId, date, startDate, endDate, startTime, endTime, source = ASSIGNMENT_SOURCE.MANUAL }) => {
   const salon = await resolveOwnerSalon(ownerId);
 
   await assertChairEligible(salon._id, chairId);
@@ -214,7 +221,7 @@ export const createAssignment = async ({ ownerId, chairId, professionalId, date,
   for (const d of dates) {
     const row = await ProfessionalChairAssignment.create({
       salonId: salon._id, chairId, professionalId, date: d, startTime, endTime,
-      status: ASSIGNMENT_STATUS.ACTIVE, createdBy: ownerId, updatedBy: ownerId,
+      status: ASSIGNMENT_STATUS.ACTIVE, source, createdBy: ownerId, updatedBy: ownerId,
     });
     created.push(row.toObject());
   }

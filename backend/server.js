@@ -12,6 +12,7 @@ import { startReminderJob } from "./jobs/reminder.job.js";
 import { startServiceOverdueJob } from "./jobs/serviceOverdue.job.js";
 import { startSlaScannerJob } from "./jobs/slaScanner.job.js"; // ← Phase G Step 10 — wires up the Step 6-8 SLA scanner/escalation/notification chain, previously file-only
 import { startRatingOutboxJob } from "./jobs/ratingOutbox.job.js"; // ← Rating & Review Engine Phase 2 — distributed-safe RatingEvent outbox consumer
+import { startWeeklyScheduleMaterializerJob } from "./jobs/weeklyScheduleMaterializer.job.js"; // ← C4 Phase 2 — converts WeeklyScheduleTemplate into concrete ProfessionalChairAssignment rows for each salon's rolling booking window
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -173,6 +174,20 @@ const slaScannerJob = startSlaScannerJob(io);
 const ratingOutboxJob = startRatingOutboxJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7j: START WEEKLY SCHEDULE MATERIALIZER (C4 Phase 2)
+//
+// Converts each salon's WeeklyScheduleTemplate (C4 Phase 1) into
+// concrete ProfessionalChairAssignment rows for that salon's rolling
+// booking window (Salon.business.bookingWindowDays, default 7). Runs
+// once immediately, then daily. No io needed — no realtime emit. Pure
+// orchestration — reuses the existing, unmodified
+// professionalChairAssignment.service.js::createAssignment() for
+// every row it creates (see jobs/weeklyScheduleMaterializer.job.js).
+//////////////////////////////////////////////////////////////
+
+const weeklyScheduleMaterializerJob = startWeeklyScheduleMaterializerJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -183,7 +198,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -237,6 +252,9 @@ const shutdown = async (signal) => {
 
       ratingOutboxJob.stop();
       console.log("✅ Rating outbox job stopped");
+
+      weeklyScheduleMaterializerJob.stop();
+      console.log("✅ Weekly schedule materializer job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.
