@@ -18,6 +18,7 @@ import chairAvailabilityRoutes from "./chairAvailability.routes.js";
 import professionalRoutes from "./professional.routes.js";
 import professionalChairAssignmentRoutes from "./professionalChairAssignment.routes.js";
 import weeklyScheduleTemplateRoutes from "./weeklyScheduleTemplate.routes.js";
+import scheduleRoutes from "./schedule.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -109,6 +110,16 @@ ownerRouter.use("/professional-chair-assignments", professionalChairAssignmentRo
 // /api/salon/owner/weekly-schedule-templates — inherits protect +
 // requireRole("OWNER") from this router.
 ownerRouter.use("/weekly-schedule-templates", weeklyScheduleTemplateRoutes);
+
+// Unified Schedule — owner-facing composition layer over the existing
+// WeeklyScheduleTemplate + ProfessionalChairAssignment engines (see
+// services/schedule.service.js header). Adds no new model and no new
+// index; every write still flows through the existing, unmodified PCA
+// create/update/cancel functions and their Rules A/B/C/D. Mounted at
+// /api/salon/owner/schedule — inherits protect + requireRole("OWNER")
+// from this router; salonId is always resolved server-side from the
+// authenticated owner, never accepted from the client.
+ownerRouter.use("/schedule", scheduleRoutes);
 
 // Booking Window — C4 Phase 3 (backend, single-field owner setting).
 // Salon.business.bookingWindowDays already existed since C4 Phase 2

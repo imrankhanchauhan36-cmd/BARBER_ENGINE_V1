@@ -34,8 +34,20 @@ import { Errors } from "../utils/response.js";
 
 // Same local-duplication convention chairAvailability.service.js and
 // professional.service.js already use — independent copy, not shared.
-const resolveOwnerSalon = async (ownerId) => {
-  const salon = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").lean();
+//
+// `session` — optional (C4 Phase "Unified Schedule"), additive. Every
+// existing caller omits it and gets byte-identical behavior (Mongoose's
+// `.session(null)` is a documented no-op, equivalent to not calling
+// `.session()` at all). It exists solely so services/schedule.service.js
+// can wrap a genuinely multi-document change (a staff swap = cancel one
+// row + create another) in a real mongoose transaction, reusing the
+// exact session/transaction pattern already established in
+// controllers/booking.controller.js — never a new transaction
+// architecture. Conflict Rules A/B/C/D themselves are untouched; this
+// only makes their existing reads/writes transaction-aware when a
+// session is explicitly supplied.
+const resolveOwnerSalon = async (ownerId, session) => {
+  const salon = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").session(session || null).lean();
   if (!salon) throw Errors.notFound("Salon not found");
   return salon;
 };
@@ -98,7 +110,7 @@ const assertProfessionalEligible = async (salonId, professionalId) => {
 // read-only check, no writes.
 //////////////////////////////////////////////////////////////
 
-const checkConflicts = async ({ chairId, professionalId, date, startTime, endTime, excludeAssignmentId }) => {
+const checkConflicts = async ({ chairId, professionalId, date, startTime, endTime, excludeAssignmentId, session }) => {
   const proposedStart = toISTDateTime(date, startTime);
   const proposedEnd   = toISTDateTime(date, endTime);
 
@@ -108,7 +120,7 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
   // (this also naturally catches an exact same-chair duplicate) ──
   const professionalRows = await ProfessionalChairAssignment.find({
     professionalId, date, status: ASSIGNMENT_STATUS.ACTIVE, ...excludeFilter,
-  }).select("startTime endTime chairId").lean();
+  }).select("startTime endTime chairId").session(session || null).lean();
 
   const professionalConflict = professionalRows.find((row) =>
     overlaps(toISTDateTime(date, row.startTime), toISTDateTime(date, row.endTime), proposedStart, proposedEnd)
@@ -123,7 +135,7 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
   // ── RULE B — same chair, overlapping window, ANY professional ──
   const chairRows = await ProfessionalChairAssignment.find({
     chairId, date, status: ASSIGNMENT_STATUS.ACTIVE, ...excludeFilter,
-  }).select("startTime endTime professionalId").lean();
+  }).select("startTime endTime professionalId").session(session || null).lean();
 
   const chairConflict = chairRows.find((row) =>
     overlaps(toISTDateTime(date, row.startTime), toISTDateTime(date, row.endTime), proposedStart, proposedEnd)
@@ -145,7 +157,7 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
     chairRef:  chairId,
     startTime: { $gte: dayStart, $lt: dayEnd },
     status:    { $in: ACTIVE_BOOKING_STATUSES },
-  }).select("startTime endTime bufferTime").lean();
+  }).select("startTime endTime bufferTime").session(session || null).lean();
 
   // Phase D fix — b.endTime is already buffer-inclusive (see
   // chairTimeline.service.js's Phase D note); computeOccupiedEnd() must
@@ -163,7 +175,7 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
   // ── RULE D — overlapping ACTIVE ChairAvailabilityOverride block ──
   const activeBlocks = await ChairAvailabilityOverride.find({
     chairId, date, status: CHAIR_AVAILABILITY_STATUS.ACTIVE,
-  }).select("startTime endTime").lean();
+  }).select("startTime endTime").session(session || null).lean();
 
   const blockConflict = activeBlocks.find((b) =>
     overlaps(toISTDateTime(date, b.startTime), toISTDateTime(date, b.endTime), proposedStart, proposedEnd)
@@ -193,8 +205,8 @@ const checkConflicts = async ({ chairId, professionalId, date, startTime, endTim
 // caller is completely unaffected by this parameter's existence.
 //////////////////////////////////////////////////////////////
 
-export const createAssignment = async ({ ownerId, chairId, professionalId, date, startDate, endDate, startTime, endTime, source = ASSIGNMENT_SOURCE.MANUAL }) => {
-  const salon = await resolveOwnerSalon(ownerId);
+export const createAssignment = async ({ ownerId, chairId, professionalId, date, startDate, endDate, startTime, endTime, source = ASSIGNMENT_SOURCE.MANUAL, session }) => {
+  const salon = await resolveOwnerSalon(ownerId, session);
 
   await assertChairEligible(salon._id, chairId);
   await assertProfessionalEligible(salon._id, professionalId);
@@ -213,16 +225,23 @@ export const createAssignment = async ({ ownerId, chairId, professionalId, date,
 
   // PASS 1 — validate every date, write nothing yet.
   for (const d of dates) {
-    await checkConflicts({ chairId, professionalId, date: d, startTime, endTime });
+    await checkConflicts({ chairId, professionalId, date: d, startTime, endTime, session });
   }
 
-  // PASS 2 — every date is conflict-free; create all rows.
+  // PASS 2 — every date is conflict-free; create all rows. Array-form
+  // create (not the single-object form) is required for a document to
+  // participate in a session/transaction — behaves identically to the
+  // single-object form when `session` is omitted (the options object
+  // is simply empty), so every existing caller is unaffected.
   const created = [];
   for (const d of dates) {
-    const row = await ProfessionalChairAssignment.create({
-      salonId: salon._id, chairId, professionalId, date: d, startTime, endTime,
-      status: ASSIGNMENT_STATUS.ACTIVE, source, createdBy: ownerId, updatedBy: ownerId,
-    });
+    const [row] = await ProfessionalChairAssignment.create(
+      [{
+        salonId: salon._id, chairId, professionalId, date: d, startTime, endTime,
+        status: ASSIGNMENT_STATUS.ACTIVE, source, createdBy: ownerId, updatedBy: ownerId,
+      }],
+      session ? { session } : {}
+    );
     created.push(row.toObject());
   }
 
@@ -323,10 +342,10 @@ export const updateAssignment = async ({ ownerId, assignmentId, payload }) => {
 // 🚀 5. CANCEL (soft — status: CANCELLED, never deleted, idempotent)
 //////////////////////////////////////////////////////////////
 
-export const cancelAssignment = async ({ ownerId, assignmentId }) => {
-  const salon = await resolveOwnerSalon(ownerId);
+export const cancelAssignment = async ({ ownerId, assignmentId, session }) => {
+  const salon = await resolveOwnerSalon(ownerId, session);
 
-  const assignment = await ProfessionalChairAssignment.findOne({ _id: assignmentId, salonId: salon._id });
+  const assignment = await ProfessionalChairAssignment.findOne({ _id: assignmentId, salonId: salon._id }).session(session || null);
   if (!assignment) throw Errors.notFound("Assignment not found");
 
   // Idempotent no-op — same pattern chairAvailability.service.js uses.
@@ -336,7 +355,7 @@ export const cancelAssignment = async ({ ownerId, assignmentId }) => {
 
   assignment.status    = ASSIGNMENT_STATUS.CANCELLED;
   assignment.updatedBy = ownerId;
-  await assignment.save();
+  await assignment.save(session ? { session } : {});
 
   return assignment.toObject();
 };
