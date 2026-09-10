@@ -55,8 +55,10 @@ import callWebhookRoutes from "./modules/support/routes/callWebhook.routes.js"; 
 
 // 🛠️ Middlewares
 import { protect } from "./middlewares/auth.middleware.js";
+import { requireRole } from "./middlewares/role.middleware.js"; // ← P0-4 — GET /health/ops admin gate, same pattern as every /api/admin/* route
 import { onboardingBypass } from "./middlewares/onboardingBypass.middleware.js";
 import { errorHandler } from "./middlewares/errorHandler.js"; // ← NEW — Phase C: mounted globally, replaces the inline handler below
+import { getStatus as getJobHeartbeatStatus } from "./jobs/jobHeartbeat.js"; // ← P0-4 — background job monitoring, read-only
 
 const app = express();
 
@@ -179,6 +181,26 @@ app.get("/health", async (req, res) => {
     redis: redisStatus,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+  });
+});
+
+///////////////////////////////////////////////////////////
+// HEALTH CHECK — OPERATIONAL (P0-4 — background job monitoring)
+//
+// Read-only visibility into the 9 in-process background jobs'
+// heartbeat state (jobs/jobHeartbeat.js). Admin-only — job names/
+// timings are internal operational detail, not public information,
+// same reasoning as every other /api/admin/* route already being
+// gated behind protect + requireRole("ADMIN").
+///////////////////////////////////////////////////////////
+app.get("/health/ops", protect, requireRole("ADMIN"), (req, res) => {
+  const { overallStatus, evaluatedAt, jobs } = getJobHeartbeatStatus();
+
+  res.status(200).json({
+    success: true,
+    status: overallStatus,
+    evaluatedAt,
+    jobs,
   });
 });
 

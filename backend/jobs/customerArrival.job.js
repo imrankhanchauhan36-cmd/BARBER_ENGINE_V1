@@ -62,6 +62,7 @@
 
 import Booking          from "../models/Booking.js";
 import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -139,6 +140,7 @@ const runArrivalJob = async () => {
   isRunning = true;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now = new Date();
 
     // Hits the compound partial index:
@@ -157,6 +159,7 @@ const runArrivalJob = async () => {
     if (overdueBookings.length === 0) {
       // Nothing to process — no log noise in steady state
       isRunning = false;
+      recordSuccess(JOB_NAME);
       return;
     }
 
@@ -184,10 +187,12 @@ const runArrivalJob = async () => {
       `${JOB_NAME} Run complete — ` +
       `flagged: ${flaggedCount} | errors: ${errorCount}`
     );
+    recordSuccess(JOB_NAME);
 
   } catch (err) {
     // Top-level query failure (e.g. DB connection lost)
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

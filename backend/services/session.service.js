@@ -156,11 +156,12 @@ export const verifySession = async (rawToken) => {
       const parsed = JSON.parse(cached);
 
       const user = await User.findById(parsed.userId).select(
-        "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
+        "_id role tokenVersion isActive isDeleted accountStatus adminLevel countryRef stateRef districtRef cityRef"
       );
 
       if (!user) return null;
       if (!user.isActive || user.isDeleted) return null;
+      if (user.accountStatus === "SUSPENDED" || user.accountStatus === "BLOCKED") return null;
       if (Number(user.tokenVersion) !== Number(parsed.tokenVersion))
         return null;
 
@@ -198,11 +199,12 @@ export const verifySession = async (rawToken) => {
   if (compromisedFamily) return null;
 
   const user = await User.findById(tokenDoc.userRef).select(
-    "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
+    "_id role tokenVersion isActive isDeleted accountStatus adminLevel countryRef stateRef districtRef cityRef"
   );
 
   if (!user) return null;
   if (!user.isActive || user.isDeleted) return null;
+  if (user.accountStatus === "SUSPENDED" || user.accountStatus === "BLOCKED") return null;
   if (Number(user.tokenVersion) !== Number(tokenDoc.tokenVersion))
     return null;
 
@@ -282,11 +284,12 @@ export const rotateSession = async (rawToken, req) => {
   if (existingToken.isCompromised) return null;
 
   const user = await User.findById(existingToken.userRef).select(
-    "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
+    "_id role tokenVersion isActive isDeleted accountStatus adminLevel countryRef stateRef districtRef cityRef"
   );
 
   if (!user) return null;
   if (!user.isActive || user.isDeleted) return null;
+  if (user.accountStatus === "SUSPENDED" || user.accountStatus === "BLOCKED") return null;
   if (Number(user.tokenVersion) !== Number(existingToken.tokenVersion))
     return null;
 

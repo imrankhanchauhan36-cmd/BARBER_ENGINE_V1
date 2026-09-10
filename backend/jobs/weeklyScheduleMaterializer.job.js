@@ -60,6 +60,7 @@
 
 import { runMaterializerOnce } from "../services/weeklyScheduleMaterializer.service.js";
 import logger from "../utils/logger.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -86,13 +87,16 @@ const runJob = async () => {
 
   isRunning = true;
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     await runMaterializerOnce();
+    recordSuccess(JOB_NAME);
   } catch (err) {
     // Top-level failure (e.g. DB connection lost) — never silently
     // swallowed, but also never crashes the process; the next
     // scheduled tick (or the next server restart's immediate run)
     // will simply recompute the window fresh and catch up.
     logger.error(`${JOB_NAME} Run failed`, { message: err.message });
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

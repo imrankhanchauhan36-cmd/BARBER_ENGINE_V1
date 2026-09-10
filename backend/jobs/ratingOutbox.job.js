@@ -55,6 +55,7 @@ import RatingAggregate from "../models/RatingAggregate.js";
 import { RATING_TYPE } from "../models/ServiceRating.js";
 import Salon from "../models/Salon.js";
 import logger from "../utils/logger.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -288,6 +289,7 @@ async function runOutboxTick() {
   isRunning = true;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     let processedCount = 0;
     let failedCount = 0;
 
@@ -303,8 +305,10 @@ async function runOutboxTick() {
     if (processedCount > 0 || failedCount > 0) {
       logger.info(`${JOB_NAME} tick complete`, { processedCount, failedCount, worker: WORKER_ID });
     }
+    recordSuccess(JOB_NAME);
   } catch (err) {
     logger.error(`${JOB_NAME} tick failed`, { message: err.message });
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

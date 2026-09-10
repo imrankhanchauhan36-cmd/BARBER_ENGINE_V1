@@ -9,10 +9,20 @@
  * adminUpdateBookingStatus, getBookingsSummary) are byte-for-byte identical.
  */
 
+import mongoose from "mongoose"; // ← P0-1 — admin completion/cancellation now settle atomically
 import Booking, { BOOKING_STATUS } from "../models/Booking.js";
 import Salon from "../models/Salon.js";
 import Transaction, { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../models/Transaction.js"; // ← UPDATED (added named exports)
 import User from "../models/User.js";
+import WalletTransaction, {
+  WALLET_TXN_DIRECTION,
+  WALLET_TXN_SOURCE,
+  WALLET_TXN_STATUS,
+  WALLET_TXN_TYPE,
+} from "../models/WalletTransaction.js"; // ← P0-1 — admin cancellation refund, identical shape to booking.controller.js's cancelBooking()
+import CancellationPolicyService from "../services/CancellationPolicyService.js"; // ← P0-1
+import WalletBalanceService from "../services/WalletBalanceService.js"; // ← P0-1
+import { transitionBookingStatus, validateBookingTransition } from "../utils/bookingState.machine.js"; // ← P0-1 — canonical state machine
 import { Errors, successResponse } from "../utils/response.js";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -349,80 +359,242 @@ export const getBookingDetail = async (req, res, next) => {
  * INDIA + STATE only
  * =====================================================
  */
+/**
+ * =====================================================
+ * SHARED ADMIN CANCELLATION SEQUENCE (P0-1)
+ * =====================================================
+ * Used by BOTH adminCancelBooking and adminUpdateBookingStatus's
+ * CANCELLED branch, so the financial fix lives in exactly one place.
+ * Mirrors booking.controller.js's cancelBooking() exactly:
+ * CancellationPolicyService.evaluate() runs BEFORE the booking leaves
+ * its cancellable status, the same CONFIRMED-only wallet-action gate
+ * is preserved verbatim, and the same WalletBalanceService.debitPending()
+ * / WalletTransaction shape uses the identical idempotency keys the
+ * customer flow already uses. Booking + all financial writes commit
+ * as one atomic unit — the caller owns the session/transaction.
+ */
+async function performAdminCancellation({ booking, now, reason, adminUser, session }) {
+  const salonId = booking.salonRef?._id ?? booking.salonRef;
+
+  const {
+    refundPolicy,
+    serviceRefundPaise,
+    refundPaise,
+  } = CancellationPolicyService.evaluate({ booking, now });
+
+  // Preserves the exact customer-flow condition from cancelBooking() —
+  // only a CONFIRMED booking has money sitting in PENDING to claw
+  // back. Deliberately NOT widened to CHECKED_IN here, matching the
+  // frozen customer flow's own existing behavior exactly.
+  if (refundPaise > 0 && booking.status === BOOKING_STATUS.CONFIRMED) {
+    if (serviceRefundPaise > 0) {
+      await WalletBalanceService.debitPending({
+        salonId,
+        amountInPaise:  serviceRefundPaise,
+        action:         "REFUND",
+        entityType:     "BOOKING",
+        entityId:       booking._id,
+        idempotencyKey: `booking:refund:${booking._id}`,
+        session,
+        triggeredBy:    "SYSTEM",
+        remarks:        "Booking cancelled by admin — refund claws back salon's pending balance",
+      });
+    }
+
+    const userBefore = await User.findOne({ _id: booking.userRef, isDeleted: false })
+      .select("walletBalance")
+      .session(session);
+
+    const refundRupees = refundPaise / 100;
+    const balanceBeforeInPaise = Math.round((userBefore?.walletBalance || 0) * 100);
+
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: booking.userRef, isDeleted: false },
+      { $inc: { walletBalance: refundRupees } },
+      { new: true, session }
+    ).select("walletBalance");
+
+    await WalletTransaction.create(
+      [{
+        userId:        booking.userRef,
+        bookingId:     booking._id,
+        direction:     WALLET_TXN_DIRECTION.CREDIT,
+        type:          WALLET_TXN_TYPE.REFUND,
+        status:        WALLET_TXN_STATUS.SUCCESS,
+        source:        WALLET_TXN_SOURCE.BOOKING,
+        amountInPaise: refundPaise,
+        requestId:     `refund:${booking._id}`,
+        balanceBeforeInPaise,
+        balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
+        metadata:      { refundPolicy, bookingId: booking._id.toString(), executedVia: "ADMIN_PANEL" },
+      }],
+      { session }
+    );
+  }
+
+  // Financial outcome — persisted exactly as the customer flow does.
+  booking.cancellationPolicy  = refundPolicy;
+  booking.refundAmountInPaise = refundPaise;
+  booking.cancelledAt         = now;
+
+  // Admin-specific audit fields — unrelated to the financial fix,
+  // preserved exactly as the existing admin behavior already set them.
+  booking.cancelledBy  = adminUser._id;
+  booking.cancelReason = reason.trim();
+
+  await transitionBookingStatus({
+    booking,
+    nextStatus: BOOKING_STATUS.CANCELLED,
+    actor:      adminUser._id,
+    session,
+  });
+
+  return { refundPolicy, refundPaise };
+}
+
+/**
+ * =====================================================
+ * SHARED ADMIN COMPLETION SEQUENCE (P0-1)
+ * =====================================================
+ * Mirrors booking.controller.js's completeService() exactly: same
+ * 1-minute minimum-service-time guard, same PAID Transaction
+ * verification, same WalletBalanceService.releasePendingToAvailable()
+ * call with the identical idempotency key, same canonical
+ * transitionBookingStatus() call. Booking + wallet settlement commit
+ * as one atomic unit — the caller owns the session/transaction.
+ */
+async function performAdminCompletion({ booking, adminUser, session }) {
+  const salonId = booking.salonRef?._id ?? booking.salonRef;
+
+  const elapsedMinutes = (new Date() - booking.serviceStartedAt) / (1000 * 60);
+  if (elapsedMinutes < 1) {
+    throw Errors.forbidden("Minimum service time has not been met");
+  }
+
+  const paymentTxn = await Transaction.findOne({
+    bookingId: booking._id,
+    type:      TRANSACTION_TYPE.BOOKING,
+    status:    TRANSACTION_STATUS.PAID,
+  }).session(session);
+
+  if (!paymentTxn) {
+    throw Errors.conflict("Payment record not found — booking cannot be completed");
+  }
+
+  await WalletBalanceService.releasePendingToAvailable({
+    salonId,
+    amountInPaise:  paymentTxn.payoutAmount,
+    entityType:     "BOOKING",
+    entityId:       paymentTxn._id,
+    idempotencyKey: `booking:release:${booking._id}`,
+    session,
+    triggeredBy:    "SYSTEM",
+    remarks:        "Service completed by admin — funds released to available balance",
+  });
+
+  await transitionBookingStatus({
+    booking,
+    nextStatus: BOOKING_STATUS.COMPLETED,
+    actor:      adminUser._id,
+    session,
+  });
+}
+
 export const adminCancelBooking = async (req, res, next) => {
-  try {
-    if (!["INDIA", "STATE"].includes(req.user.adminLevel)) {
-      return next(Errors.forbidden("Insufficient privileges to cancel bookings"));
-    }
+  if (!["INDIA", "STATE"].includes(req.user.adminLevel)) {
+    return next(Errors.forbidden("Insufficient privileges to cancel bookings"));
+  }
 
-    const { reason } = req.body;
-    if (!reason?.trim()) return next(Errors.badRequest("Cancellation reason is required"));
-    if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid booking ID"));
+  const { reason } = req.body;
+  if (!reason?.trim()) return next(Errors.badRequest("Cancellation reason is required"));
+  if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid booking ID"));
 
-    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
-      .populate("salonRef", "location.territory.stateRef");
-    if (!booking) return next(Errors.notFound("Booking not found"));
+  // Same bounded retry as booking.controller.js's cancelBooking() —
+  // retries ONLY a genuine MongoDB TransientTransactionError (two
+  // concurrent cancel requests colliding at the physical write), never
+  // a business-validation/authorization/financial error.
+  const MAX_ATTEMPTS = 3;
 
-    // Jurisdiction scope guard — same rule getBookingDetail() already
-    // enforces for STATE admins (this file, above). The role check
-    // above only confirms adminLevel is INDIA/STATE; without this, a
-    // STATE admin could cancel any booking PAN-India, not just their
-    // own state's.
-    if (req.user.adminLevel === "STATE") {
-      const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
-      if (salonStateRef !== req.user.stateRef?.toString()) {
-        return next(Errors.forbidden("Access denied"));
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+        .populate("salonRef", "location.territory.stateRef")
+        .session(session);
+      if (!booking) throw Errors.notFound("Booking not found");
+
+      // Jurisdiction scope guard — same rule getBookingDetail() already
+      // enforces for STATE admins (this file, above). The role check
+      // above only confirms adminLevel is INDIA/STATE; without this, a
+      // STATE admin could cancel any booking PAN-India, not just their
+      // own state's.
+      if (req.user.adminLevel === "STATE") {
+        const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
+        if (salonStateRef !== req.user.stateRef?.toString()) {
+          throw Errors.forbidden("Access denied");
+        }
       }
+
+      // Canonical transition validation — replaces the old hand-rolled
+      // cancellableStatuses array. Admin can never cancel a booking the
+      // single source of truth (BOOKING_TRANSITIONS) says isn't
+      // reachable from its current status.
+      try {
+        validateBookingTransition(booking.status, BOOKING_STATUS.CANCELLED);
+      } catch (transitionErr) {
+        throw Errors.badRequest(transitionErr.message);
+      }
+
+      const now = new Date();
+
+      // ✅ FIX 4 — Enriched audit entry (unchanged from prior behavior)
+      booking.statusHistory.push({
+        status:    BOOKING_STATUS.CANCELLED,
+        changedAt: now,
+        changedBy: req.user._id,
+        meta: {
+          reason:          reason.trim(),
+          performedByRole: req.user.adminLevel,
+          source:          "ADMIN_PANEL",
+          ip:              req.ip ?? null,
+        },
+      });
+
+      await performAdminCancellation({ booking, now, reason, adminUser: req.user, session });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return successResponse(res, {
+        message: "Booking cancelled by admin",
+        data: {
+          id:          booking._id,
+          status:      booking.status,
+          cancelledAt: booking.cancelledAt,
+          cancelledBy: req.user.name,
+          adminLevel:  req.user.adminLevel,
+          reason:      reason.trim(),
+        },
+      });
+
+    } catch (err) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+      session.endSession();
+
+      const isTransientConflict =
+        typeof err.hasErrorLabel === "function" &&
+        err.hasErrorLabel("TransientTransactionError");
+
+      if (isTransientConflict && attempt < MAX_ATTEMPTS) {
+        continue;
+      }
+
+      return next(err);
     }
-
-    const cancellableStatuses = [
-      BOOKING_STATUS.HOLD,
-      BOOKING_STATUS.CONFIRMED,
-      BOOKING_STATUS.CHECKED_IN,
-    ];
-
-    if (!cancellableStatuses.includes(booking.status)) {
-      return next(Errors.badRequest(`Cannot cancel booking in ${booking.status} status`));
-    }
-
-    const now = new Date();
-    booking.status          = BOOKING_STATUS.CANCELLED;
-    booking.cancelledAt     = now;
-    booking.cancelledBy     = req.user._id;
-    booking.cancelReason    = reason.trim();
-    booking.statusChangedAt = now;
-    booking.statusChangedBy = req.user._id;
-
-    // ✅ FIX 4 — Enriched audit entry
-    booking.statusHistory.push({
-      status:    BOOKING_STATUS.CANCELLED,
-      changedAt: now,
-      changedBy: req.user._id,
-      // Extra audit fields stored in meta (schema allows mixed)
-      meta: {
-        reason:          reason.trim(),
-        performedByRole: req.user.adminLevel,
-        source:          "ADMIN_PANEL",
-        ip:              req.ip ?? null,
-      },
-    });
-
-    await booking.save();
-
-    return successResponse(res, {
-      message: "Booking cancelled by admin",
-      data: {
-        id:          booking._id,
-        status:      booking.status,
-        cancelledAt: booking.cancelledAt,
-        cancelledBy: req.user.name,
-        adminLevel:  req.user.adminLevel,
-        reason:      reason.trim(),
-      },
-    });
-
-  } catch (err) {
-    next(err);
   }
 };
 
@@ -434,85 +606,131 @@ export const adminCancelBooking = async (req, res, next) => {
  * =====================================================
  */
 export const adminUpdateBookingStatus = async (req, res, next) => {
-  try {
-    if (!["INDIA", "STATE"].includes(req.user.adminLevel)) {
-      return next(Errors.forbidden("Insufficient privileges to update booking status"));
-    }
+  if (!["INDIA", "STATE"].includes(req.user.adminLevel)) {
+    return next(Errors.forbidden("Insufficient privileges to update booking status"));
+  }
 
-    if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid booking ID"));
+  if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid booking ID"));
 
-    const { status, reason } = req.body;
+  const { status, reason } = req.body;
 
-    // ✅ Allowed admin transitions
-    const allowedTransitions = {
-      CONFIRMED:  ["CHECKED_IN", "CANCELLED"],
-      CHECKED_IN: ["ONGOING",    "CANCELLED"],
-      ONGOING:    ["COMPLETED"],
-      HOLD:       ["CANCELLED"],
-    };
+  // Admin-exposed transition policy — a deliberately narrower business
+  // policy than the full canonical state machine (e.g. admin cannot
+  // force HOLD→CONFIRMED or CONFIRMED→NO_SHOW via this endpoint).
+  // Every transition permitted here is additionally re-validated
+  // against canonical BOOKING_TRANSITIONS below (via
+  // validateBookingTransition/transitionBookingStatus), so admin can
+  // never be granted more than the single source of truth allows.
+  const allowedTransitions = {
+    CONFIRMED:  ["CHECKED_IN", "CANCELLED"],
+    CHECKED_IN: ["ONGOING",    "CANCELLED"],
+    ONGOING:    ["COMPLETED"],
+    HOLD:       ["CANCELLED"],
+  };
 
-    const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
-      .populate("salonRef", "location.territory.stateRef");
-    if (!booking) return next(Errors.notFound("Booking not found"));
+  // Retry only applies to the CANCELLED path, matching cancelBooking()'s
+  // own scope — completion follows completeService()'s single-attempt
+  // style, and the plain CHECKED_IN/ONGOING transitions never needed
+  // retry before either.
+  const MAX_ATTEMPTS = status === "CANCELLED" ? 3 : 1;
 
-    // Jurisdiction scope guard — same rule getBookingDetail() already
-    // enforces for STATE admins (this file, above). The role check
-    // above only confirms adminLevel is INDIA/STATE; without this, a
-    // STATE admin could transition any booking PAN-India, not just
-    // their own state's.
-    if (req.user.adminLevel === "STATE") {
-      const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
-      if (salonStateRef !== req.user.stateRef?.toString()) {
-        return next(Errors.forbidden("Access denied"));
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const booking = await Booking.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+        .populate("salonRef", "location.territory.stateRef")
+        .session(session);
+      if (!booking) throw Errors.notFound("Booking not found");
+
+      // Jurisdiction scope guard — same rule getBookingDetail() already
+      // enforces for STATE admins (this file, above). The role check
+      // above only confirms adminLevel is INDIA/STATE; without this, a
+      // STATE admin could transition any booking PAN-India, not just
+      // their own state's.
+      if (req.user.adminLevel === "STATE") {
+        const salonStateRef = booking.salonRef?.location?.territory?.stateRef?.toString();
+        if (salonStateRef !== req.user.stateRef?.toString()) {
+          throw Errors.forbidden("Access denied");
+        }
       }
+
+      const allowed = allowedTransitions[booking.status] || [];
+      if (!allowed.includes(status)) {
+        throw Errors.badRequest(
+          `Cannot transition from ${booking.status} to ${status}. Allowed: ${allowed.join(", ") || "none"}`
+        );
+      }
+
+      if (status === "CANCELLED" && !reason?.trim()) {
+        throw Errors.badRequest("Reason is required for cancellation");
+      }
+
+      // Canonical transition validation — replaces the old hand-rolled
+      // allowedTransitions-only check as the actual enforcement
+      // mechanism; admin's own map above stays as a narrower business
+      // policy, never a competing source of truth.
+      try {
+        validateBookingTransition(booking.status, status);
+      } catch (transitionErr) {
+        throw Errors.badRequest(transitionErr.message);
+      }
+
+      const now = new Date();
+      booking.statusHistory.push({
+        status,
+        changedAt: now,
+        changedBy: req.user._id,
+      });
+
+      if (status === "CANCELLED") {
+        await performAdminCancellation({ booking, now, reason, adminUser: req.user, session });
+      } else if (status === "COMPLETED") {
+        await performAdminCompletion({ booking, adminUser: req.user, session });
+      } else {
+        // CHECKED_IN / ONGOING — no financial component, same as
+        // before; routed through the canonical transitionBookingStatus()
+        // so per-state timestamps (checkedInAt/serviceStartedAt) are
+        // set by the single source of truth instead of duplicated here.
+        await transitionBookingStatus({
+          booking,
+          nextStatus: status,
+          actor:      req.user._id,
+          session,
+        });
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return successResponse(res, {
+        message: `Booking status updated to ${status}`,
+        data: {
+          id:         booking._id,
+          status:     booking.status,
+          updatedBy:  req.user.name,
+          adminLevel: req.user.adminLevel,
+          reason:     reason?.trim() || null,
+        },
+      });
+
+    } catch (err) {
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
+      session.endSession();
+
+      const isTransientConflict =
+        typeof err.hasErrorLabel === "function" &&
+        err.hasErrorLabel("TransientTransactionError");
+
+      if (isTransientConflict && attempt < MAX_ATTEMPTS) {
+        continue;
+      }
+
+      return next(err);
     }
-
-    const allowed = allowedTransitions[booking.status] || [];
-    if (!allowed.includes(status)) {
-      return next(Errors.badRequest(
-        `Cannot transition from ${booking.status} to ${status}. Allowed: ${allowed.join(", ") || "none"}`
-      ));
-    }
-
-    if (["CANCELLED"].includes(status) && !reason?.trim()) {
-      return next(Errors.badRequest("Reason is required for cancellation"));
-    }
-
-    const now = new Date();
-    booking.status          = status;
-    booking.statusChangedAt = now;
-    booking.statusChangedBy = req.user._id;
-
-    if (status === "CANCELLED") {
-      booking.cancelledAt  = now;
-      booking.cancelledBy  = req.user._id;
-      booking.cancelReason = reason?.trim() || null;
-    }
-    if (status === "CHECKED_IN")  booking.checkedInAt      = now;
-    if (status === "ONGOING")     booking.serviceStartedAt = now;
-    if (status === "COMPLETED")   booking.completedAt      = now;
-
-    booking.statusHistory.push({
-      status,
-      changedAt: now,
-      changedBy: req.user._id,
-    });
-
-    await booking.save();
-
-    return successResponse(res, {
-      message: `Booking status updated to ${status}`,
-      data: {
-        id:         booking._id,
-        status:     booking.status,
-        updatedBy:  req.user.name,
-        adminLevel: req.user.adminLevel,
-        reason:     reason?.trim() || null,
-      },
-    });
-
-  } catch (err) {
-    next(err);
   }
 };
 

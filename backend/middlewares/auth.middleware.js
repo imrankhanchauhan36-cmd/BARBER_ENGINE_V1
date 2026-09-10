@@ -116,7 +116,7 @@ export const protect = async (req, res, next) => {
 
     if (!session) {
       const liveUser = await User.findById(decoded.id).select(
-        "_id role tokenVersion isActive isDeleted adminLevel countryRef stateRef districtRef cityRef"
+        "_id role tokenVersion isActive isDeleted accountStatus adminLevel countryRef stateRef districtRef cityRef"
       );
 
       if (!liveUser) {
@@ -162,6 +162,18 @@ export const protect = async (req, res, next) => {
         userId: user._id.toString(),
       });
       return next(Errors.forbidden("Account removed"));
+    }
+
+    // SECURITY (P0-2): accountStatus is checked independently of the
+    // tokenVersion kill-switch above (defense-in-depth) — a status
+    // missing/undefined on a legacy document is treated as ACTIVE
+    // (the schema default), so only an explicit restriction blocks.
+    if (user.accountStatus === "SUSPENDED" || user.accountStatus === "BLOCKED") {
+      logger.warn("Blocked request from restricted account", {
+        userId: user._id.toString(),
+        accountStatus: user.accountStatus,
+      });
+      return next(Errors.forbidden(`Account ${user.accountStatus.toLowerCase()}`));
     }
 
     //////////////////////////////////////////////////////

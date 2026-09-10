@@ -107,6 +107,7 @@ import { invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
 import { emitToRoom } from "../socket/index.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -457,6 +458,7 @@ const runAutoCompleteJob = async () => {
   let iterations      = 0;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now   = new Date();
     const query = buildAutoCompleteQuery(now);
 
@@ -518,9 +520,11 @@ const runAutoCompleteJob = async () => {
         `completed: ${totalCompleted} | skipped: ${totalSkipped} | errors: ${totalErrors}`
       );
     }
+    recordSuccess(JOB_NAME);
 
   } catch (err) {
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

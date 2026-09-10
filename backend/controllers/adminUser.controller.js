@@ -269,19 +269,51 @@ export const updateUserStatus = async (req, res, next) => {
       }
     }
 
+    // SECURITY (P0-2): force existing sessions — REST, refresh, and
+    // socket — to re-authenticate the moment an account is actually
+    // restricted, by bumping the same tokenVersion kill-switch
+    // protect()/session.service.js/socket auth already check on every
+    // request. Only bumped on a REAL transition INTO a restricted
+    // status — never for a no-op re-set of the same status (no
+    // additional invalidation needed), and never on reactivation to
+    // ACTIVE (must NOT undo the invalidation already applied when the
+    // account was first restricted).
+    const isNewRestriction =
+      ["SUSPENDED", "BLOCKED"].includes(status) && status !== user.accountStatus;
+
+    const updateOperation = {
+      $set: {
+        accountStatus:      status,
+        status,
+        statusUpdatedBy:    req.user._id,
+        statusUpdatedAt:    new Date(),
+        statusUpdateReason: reason?.trim() || null,
+      },
+    };
+    if (isNewRestriction) {
+      updateOperation.$inc = { tokenVersion: 1 };
+    }
+
     const updated = await User.findByIdAndUpdate(
       req.params.id,
-      {
-        $set: {
-          accountStatus:      status,
-          status,
-          statusUpdatedBy:    req.user._id,
-          statusUpdatedAt:    new Date(),
-          statusUpdateReason: reason?.trim() || null,
-        },
-      },
+      updateOperation,
       { new: true }
     ).select("_id name phone accountStatus statusUpdatedBy statusUpdatedAt statusUpdateReason");
+
+    // SECURITY (P0-2): close the residual gap where an already-connected
+    // socket kept working after tokenVersion invalidated REST/refresh —
+    // force-disconnect every live socket for this user (all devices,
+    // via the room every socket already joins) on the same real
+    // restriction transition as the tokenVersion bump above. DB write
+    // has already succeeded at this point, so a socket-layer failure
+    // here must never fail this otherwise-successful request.
+    if (isNewRestriction) {
+      try {
+        req.app.get("io")?.in(`user:${updated._id}`).disconnectSockets(true);
+      } catch (err) {
+        // best-effort only — suspension/block itself already succeeded
+      }
+    }
 
     // TODO Phase 14 — AuditLog.create({
     //   action:    "USER_STATUS_UPDATE",

@@ -153,6 +153,7 @@ import { recordSupportAuditEvent } from "../modules/support/services/supportAudi
 import { escalateSlaBreach } from "../modules/support/services/slaEscalation.service.js";
 import { notifySlaWarningOrBreach } from "../modules/support/services/slaNotification.service.js";
 import { ACTOR_TYPE, AUDIT_ACTION, TICKET_STATUS } from "../modules/support/constants/support.constants.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -356,6 +357,7 @@ const runSlaScannerJob = async () => {
   let iterations = 0;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now = new Date();
     const query = buildEligibleTicketQuery();
 
@@ -401,8 +403,10 @@ const runSlaScannerJob = async () => {
         `${JOB_NAME} Run complete — scanned: ${totalTicketsScanned} | events recorded: ${totalEvents} | escalations: ${totalEscalations} | errors: ${totalErrors}`
       );
     }
+    recordSuccess(JOB_NAME);
   } catch (err) {
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

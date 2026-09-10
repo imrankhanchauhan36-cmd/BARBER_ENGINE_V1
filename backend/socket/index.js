@@ -207,13 +207,20 @@ const authMiddleware = async (socket, next) => {
   // flow to do a real verifySession() with.
   let user;
   try {
-    user = await User.findById(userId).select("tokenVersion isActive isDeleted");
+    user = await User.findById(userId).select("tokenVersion isActive isDeleted accountStatus");
   } catch (err) {
     console.warn("[Socket] User lookup failed during auth:", err.message);
     return next(new Error("AUTH_FAILED"));
   }
 
   if (!user || !user.isActive || user.isDeleted) {
+    return next(new Error("AUTH_FAILED"));
+  }
+
+  // SECURITY (P0-2): same restriction check as REST protect() — a
+  // suspended/blocked account must not be able to open a NEW socket
+  // connection, even with a cryptographically-valid, unexpired JWT.
+  if (user.accountStatus === "SUSPENDED" || user.accountStatus === "BLOCKED") {
     return next(new Error("AUTH_FAILED"));
   }
 

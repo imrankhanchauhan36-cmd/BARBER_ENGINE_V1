@@ -53,6 +53,7 @@ import mongoose          from "mongoose";
 import Booking           from "../models/Booking.js";
 import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
 import { emitToRoom }    from "../socket/index.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -156,6 +157,7 @@ const runExpiryJob = async () => {
   isRunning = true;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now = new Date();
 
     // Find stale HOLD bookings — hits the partial index on
@@ -172,6 +174,7 @@ const runExpiryJob = async () => {
     if (expiredHolds.length === 0) {
       // Nothing to process — no log noise in steady state
       isRunning = false;
+      recordSuccess(JOB_NAME);
       return;
     }
 
@@ -202,10 +205,12 @@ const runExpiryJob = async () => {
       `${JOB_NAME} Run complete — ` +
       `expired: ${expiredCount} | skipped: ${skippedCount} | errors: ${errorCount}`
     );
+    recordSuccess(JOB_NAME);
 
   } catch (err) {
     // Catch top-level query failure (e.g. DB connection lost)
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

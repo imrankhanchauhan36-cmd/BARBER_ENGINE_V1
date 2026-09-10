@@ -47,6 +47,7 @@ import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -136,6 +137,7 @@ const runReminderJob = async () => {
   isRunning = true;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now = new Date();
 
     const [thirtyMin, fiveMin] = await Promise.all([
@@ -166,8 +168,10 @@ const runReminderJob = async () => {
         `5min: ${fiveMin.sentCount} sent | errors: ${totalErrors}`
       );
     }
+    recordSuccess(JOB_NAME);
   } catch (err) {
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }

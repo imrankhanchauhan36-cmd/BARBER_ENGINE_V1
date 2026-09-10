@@ -66,6 +66,7 @@ import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notifica
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
 import { emitToRoom } from "../socket/index.js";
+import { recordStart, recordSuccess, recordFailure } from "./jobHeartbeat.js";
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -176,6 +177,7 @@ const runAutoStartJob = async () => {
   let iterations   = 0;
 
   try {
+    recordStart(JOB_NAME, { intervalMs: INTERVAL_MS });
     const now = new Date();
 
     while (iterations < MAX_ITERATIONS_PER_RUN) {
@@ -213,8 +215,10 @@ const runAutoStartJob = async () => {
         `${JOB_NAME} Run complete — started: ${totalStarted} | skipped: ${totalSkipped} | errors: ${totalErrors}`
       );
     }
+    recordSuccess(JOB_NAME);
   } catch (err) {
     console.error(`${JOB_NAME} Query failed:`, err.message);
+    recordFailure(JOB_NAME, err);
   } finally {
     isRunning = false;
   }
