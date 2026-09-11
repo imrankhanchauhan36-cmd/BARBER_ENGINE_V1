@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
+import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
 import {
   createRazorpayOrder,
   fetchRazorpayPayment,
@@ -58,6 +59,21 @@ export const createOrder = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "You are not authorized to pay for this booking",
+      });
+    }
+
+    // U1 PAYMENT SAFETY — only a booking still awaiting payment (HOLD)
+    // may have a new Razorpay order created for it. Closes the
+    // dominant real-world double-charge path: a client retry after
+    // this booking has already been confirmed (or moved to any other
+    // status) must never be allowed to mint a second payable order.
+    // This does not by itself prevent two truly simultaneous
+    // createOrder calls while the booking is still genuinely HOLD —
+    // that residual race is documented, not silently claimed fixed.
+    if (booking.status !== BOOKING_STATUS.HOLD) {
+      return res.status(409).json({
+        success: false,
+        message: "Booking is not awaiting payment",
       });
     }
 

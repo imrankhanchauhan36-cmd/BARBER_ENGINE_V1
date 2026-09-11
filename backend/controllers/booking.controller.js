@@ -802,10 +802,27 @@ export const lockSlot = async (req, res) => {
 //////////////////////////////////////////////////////////////
 
 export const confirmBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // U1 PAYMENT SAFETY — bounded retry, same pattern as cancelBooking
+  // (see that function's own comment for the full rationale). A
+  // genuine concurrent-write collision on this booking (two /confirm
+  // calls racing) is correctly aborted by MongoDB's own transaction
+  // conflict detection, not corrupted. Retrying lets the loser
+  // re-read the now-updated document fresh and land on the existing
+  // deterministic rejection paths below instead of a raw 500.
+  //
+  // IMPORTANT: this retry does NOT and cannot undo an external
+  // Razorpay charge that already succeeded before the losing
+  // transaction was aborted — if the loser's payment was a genuine,
+  // distinct Razorpay payment, that charge already happened at the
+  // gateway. This only makes our own backend's response deterministic,
+  // not a guarantee against an external double charge.
+  const MAX_ATTEMPTS = 3;
 
-  try {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
     const {
       bookingId,
       paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET" | "MOCK_RAZORPAY" (test bypass only — see verifyRazorpaySignature)
@@ -1197,12 +1214,56 @@ export const confirmBooking = async (req, res) => {
     }
     session.endSession();
 
+    // Genuine concurrent-write collision (see comment above the
+    // retry loop) — retry the whole attempt on a fresh session
+    // rather than surface it. Every other error (not found,
+    // unauthorized, invalid state, payment/wallet failures, etc.)
+    // falls through unchanged to the existing response below.
+    const isTransientConflict =
+      typeof error.hasErrorLabel === "function" &&
+      error.hasErrorLabel("TransientTransactionError");
+
+    if (isTransientConflict && attempt < MAX_ATTEMPTS) {
+      continue;
+    }
+
+    if (isTransientConflict) {
+      // Exhausted retries on a genuine conflict (rare — would need
+      // 3 consecutive collisions). Still not a raw driver error to
+      // the client: a clean, retryable 409 the client's own retry
+      // (same Idempotency-Key) can safely resolve.
+      console.error("confirmBooking error (transient conflict, retries exhausted):", error);
+      return res.status(409).json({
+        success: false,
+        message: "This booking is being updated. Please try again in a moment.",
+      });
+    }
+
+    // validateBookingTransition (utils/bookingState.machine.js) throws
+    // a bare Error (no .status) for "current === next" instead of
+    // returning false — the `if (!validateBookingTransition(...))`
+    // guard above it is therefore unreachable for this exact case.
+    // Surfaces here specifically because a retried attempt (after the
+    // concurrency conflict above) legitimately re-validates against
+    // the booking's now-current status and finds it's already
+    // CONFIRMED. Reworded to match checkBookingState middleware's
+    // existing "Invalid booking state: <STATUS>" shape
+    // (bookingState.middleware.js:19-22) — same pattern already
+    // applied in cancelBooking for the identical underlying issue.
+    if (error.message?.startsWith("Booking already in state:")) {
+      const status = error.message.replace("Booking already in state: ", "");
+      return res.status(400).json({
+        success: false,
+        message: `Invalid booking state: ${status}`,
+      });
+    }
 
     console.error("confirmBooking error:", error);
     return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Booking confirmation failed",
     });
+    }
   }
 };
 
