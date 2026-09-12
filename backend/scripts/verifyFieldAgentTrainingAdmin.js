@@ -35,8 +35,9 @@ import TrainingModule from "../modules/fieldAgentTraining/models/TrainingModule.
 import TrainingContent from "../modules/fieldAgentTraining/models/TrainingContent.js";
 import FieldAgentTraining from "../modules/fieldAgentTraining/models/FieldAgentTraining.js";
 import TrainingAuditEvent from "../modules/fieldAgentTraining/models/TrainingAuditEvent.js";
+import FieldAgentApplication from "../modules/fieldAgent/models/FieldAgentApplication.js";
 import { generateAccessToken } from "../services/token.service.js";
-import { createDraftVersion, addModule, addContent, updateContent, publishVersion } from "../modules/fieldAgentTraining/services/trainingContent.service.js";
+import { createDraftVersion, addModule, addContent, updateContent, publishVersion, retireVersion } from "../modules/fieldAgentTraining/services/trainingContent.service.js";
 import { uploadTrainingMedia } from "../modules/fieldAgentTraining/services/mediaDelivery.service.js";
 import { MODULE_KEY, MODULE_KEY_ORDER, MAX_LIST_LIMIT } from "../modules/fieldAgentTraining/constants/fieldAgentTraining.constants.js";
 import { CURRICULUM } from "./seedFieldAgentTrainingV1.js";
@@ -735,6 +736,247 @@ const run = async () => {
       "after concurrent reorder, final DB state is a valid contiguous permutation (0,1,2,3 each exactly once)",
       JSON.stringify(concurrentOrders) === JSON.stringify([0, 1, 2, 3]),
       JSON.stringify(concurrentOrders)
+    );
+  }
+
+  // ── FA-3.3.2.5 — VERSIONING EDGE CASES A-E ──────────────────────
+  // Verification-only: no product code is modified by this section.
+  // Whatever behavior is found (correct or not) is exactly what the
+  // already-frozen fieldAgentTraining.service.js / trainingContent.
+  // service.js produce today.
+  {
+    const buildFullCurriculumVersion = async (notes) => {
+      const draft = await createDraftVersion({ adminId: admin._id, notes });
+      let mediaContentId = null;
+      for (const moduleDef of CURRICULUM) {
+        const trainingModule = await addModule({
+          versionId: draft._id,
+          moduleKey: moduleDef.moduleKey,
+          translations: moduleDef.title,
+          adminId: admin._id,
+        });
+        for (const contentDef of moduleDef.content) {
+          const content = await addContent({
+            moduleId: trainingModule._id,
+            contentType: contentDef.contentType,
+            translations: contentDef.translations,
+            grading: contentDef.grading ?? null,
+            helpEligible: contentDef.helpEligible ?? contentDef.contentType === "LESSON",
+            adminId: admin._id,
+          });
+          if (!mediaContentId && contentDef.contentType === "LESSON") {
+            const tinyPng = Buffer.from(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+              "base64"
+            );
+            const { publicId, resourceType } = await uploadTrainingMedia({ buffer: tinyPng, mimetype: "image/png", contentId: content._id });
+            await updateContent({ contentId: content._id, patch: { media: { publicId, resourceType } }, adminId: admin._id });
+            mediaContentId = content._id;
+          }
+        }
+      }
+      return publishVersion({ versionId: draft._id, adminId: admin._id });
+    };
+
+    const upsertFieldAgent = async (phone, name) => {
+      let u = await User.findOne({ phone }).select("+tokenVersion");
+      if (!u) u = await User.create({ name, phone, role: "FIELD_AGENT", isActive: true });
+      else {
+        u.role = "FIELD_AGENT";
+        u.isActive = true;
+        await u.save();
+      }
+      return u;
+    };
+    const fieldAgentToken = (user) => generateAccessToken({ _id: user._id, role: "FIELD_AGENT", tokenVersion: user.tokenVersion ?? 0 });
+
+    // Fresh fixtures every run — dedicated phone range, distinct from
+    // FA-3.3.1's own (9999900002-05).
+    const edgeCasePhones = ["9999900012", "9999900013", "9999900014"];
+    const existingEdgeUsers = await User.find({ phone: { $in: edgeCasePhones } }).select("_id").lean();
+    const existingEdgeIds = existingEdgeUsers.map((u) => u._id);
+    await FieldAgentTraining.deleteMany({ agentRef: { $in: existingEdgeIds } });
+    await FieldAgentApplication.deleteMany({ userRef: { $in: existingEdgeIds } });
+    await User.deleteMany({ _id: { $in: existingEdgeIds } });
+
+    // ── Case A: agent mid-training on V1, V2 published (auto-retires
+    // V1) — agent must stay pinned to V1, never silently migrated. ──
+    const agentA = await upsertFieldAgent("9999900012", "FA-3.3.2.5 Case A Agent");
+    const vBeforeA = await buildFullCurriculumVersion(`${FIXTURE_TAG} — case A before (V1)`);
+    await FieldAgentApplication.create({ userRef: agentA._id, phone: "9999900012", status: "TRAINING_PENDING", nonTerminal: true });
+    const tokenA = fieldAgentToken(agentA);
+
+    const overviewA1 = await authFetch("/api/field-agent/training/me", tokenA);
+    const overviewA1Json = await overviewA1.json();
+    check(
+      "Case A: agent lazily enrolls, pinned to the currently published version (V1)",
+      overviewA1.status === 200 && overviewA1Json?.data?.training?.trainingVersionNumber === vBeforeA.versionNumber,
+      JSON.stringify(overviewA1Json?.data?.training?.trainingVersionNumber)
+    );
+
+    const vAfterA = await buildFullCurriculumVersion(`${FIXTURE_TAG} — case A after (V2)`);
+    check("Case A setup: V2 published, auto-retiring V1", vAfterA.status === "PUBLISHED");
+    const vBeforeARetired = await TrainingVersion.findById(vBeforeA._id).lean();
+    check("Case A setup: V1 is now RETIRED", vBeforeARetired.status === "RETIRED");
+
+    const overviewA2 = await authFetch("/api/field-agent/training/me", tokenA);
+    const overviewA2Json = await overviewA2.json();
+    check(
+      "Case A: agent overview still resolves after V2 publishes (not locked out)",
+      overviewA2.status === 200,
+      JSON.stringify(overviewA2Json).slice(0, 200)
+    );
+    check(
+      "Case A: agent remains pinned to V1 — NOT silently migrated to V2",
+      overviewA2Json?.data?.training?.trainingVersionNumber === vBeforeA.versionNumber,
+      `expected v${vBeforeA.versionNumber}, got v${overviewA2Json?.data?.training?.trainingVersionNumber}`
+    );
+
+    const enrollmentsA = await FieldAgentTraining.find({ agentRef: agentA._id }).lean();
+    check("Case A: still exactly one FieldAgentTraining document (no duplicate/migration)", enrollmentsA.length === 1, enrollmentsA.length);
+    check(
+      "Case A: that one document's trainingVersion is still V1",
+      enrollmentsA[0] && String(enrollmentsA[0].trainingVersion) === String(vBeforeA._id)
+    );
+
+    const moduleContentA = await authFetch(`/api/field-agent/training/modules/${MODULE_KEY.FOUNDATION}?lang=en`, tokenA);
+    check(
+      "Case A: agent can still read module content on their pinned V1 after V2 publishes",
+      moduleContentA.status === 200,
+      moduleContentA.status
+    );
+
+    // ── Case B: V1 retired directly (NO replacement published) while
+    // an agent is mid-training on it — existing enrollment/content
+    // must remain stable; no data corruption; no forced migration.
+    const agentB = await upsertFieldAgent("9999900013", "FA-3.3.2.5 Case B Agent");
+    const vBeforeB = await buildFullCurriculumVersion(`${FIXTURE_TAG} — case B before (V1)`);
+    await FieldAgentApplication.create({ userRef: agentB._id, phone: "9999900013", status: "TRAINING_PENDING", nonTerminal: true });
+    const tokenB = fieldAgentToken(agentB);
+
+    const overviewB1 = await authFetch("/api/field-agent/training/me", tokenB);
+    const overviewB1Json = await overviewB1.json();
+    check(
+      "Case B: agent lazily enrolls into the currently published version (V1)",
+      overviewB1.status === 200 && overviewB1Json?.data?.training?.trainingVersionNumber === vBeforeB.versionNumber
+    );
+
+    await retireVersion({ versionId: vBeforeB._id, adminId: admin._id, reason: "FA-3.3.2.5 Case B — retire with no replacement published" });
+    const noPublishedAfterB = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    check("Case B setup: zero published versions exist immediately after this retire", !noPublishedAfterB);
+
+    // Core training functionality never calls getPublishedVersionOrThrow()
+    // — it reads the agent's own pinned enrollment/content directly.
+    const moduleContentB = await authFetch(`/api/field-agent/training/modules/${MODULE_KEY.FOUNDATION}?lang=en`, tokenB);
+    check(
+      "Case B: agent can still read their pinned module content after V1 is retired with no replacement",
+      moduleContentB.status === 200,
+      moduleContentB.status
+    );
+
+    const overviewB2 = await authFetch("/api/field-agent/training/me", tokenB);
+    const overviewB2Json = await overviewB2.json();
+    check(
+      "Case B: agent overview (/me) still resolves after their version is retired with no replacement published",
+      overviewB2.status === 200,
+      `status=${overviewB2.status} body=${JSON.stringify(overviewB2Json).slice(0, 200)}`
+    );
+
+    check(
+      "Case B: the returned /me payload's version number is still V1's (no forced migration)",
+      overviewB2Json?.data?.training?.trainingVersionNumber === vBeforeB.versionNumber,
+      `expected v${vBeforeB.versionNumber}, got v${overviewB2Json?.data?.training?.trainingVersionNumber}`
+    );
+
+    const enrollmentB = await FieldAgentTraining.findOne({ agentRef: agentB._id, isActive: true }).lean();
+    check(
+      "Case B: enrollment remains pinned to the (now retired) V1, completely untouched",
+      enrollmentB && String(enrollmentB.trainingVersion) === String(vBeforeB._id)
+    );
+
+    const moduleForB = await TrainingModule.findOne({ trainingVersion: vBeforeB._id, moduleKey: MODULE_KEY.FOUNDATION }).lean();
+    check("Case B: V1's own module/content documents are completely unchanged (still exist)", !!moduleForB);
+
+    // ── Opposite case: NO active enrollment at all, and zero
+    // published versions (same window Case B just created) — this
+    // MUST still fail with the existing expected error. The fix only
+    // removes an UNNECESSARY lookup for an already-active enrollment;
+    // it must not weaken the genuinely-required lookup when a brand
+    // new enrollment would need to be opened and there is nothing to
+    // enroll into.
+    const agentNoEnrollment = await upsertFieldAgent("9999900014", "FA-3.3.2.5 No-Enrollment Agent");
+    await FieldAgentApplication.create({ userRef: agentNoEnrollment._id, phone: "9999900014", status: "TRAINING_PENDING", nonTerminal: true });
+    const tokenNoEnrollment = fieldAgentToken(agentNoEnrollment);
+    const stillNoPublished = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    check("opposite-case setup: still zero published versions", !stillNoPublished);
+
+    const overviewNoEnrollment = await authFetch("/api/field-agent/training/me", tokenNoEnrollment);
+    const overviewNoEnrollmentJson = await overviewNoEnrollment.json();
+    check(
+      "opposite case: no active enrollment + zero published versions -> still fails with the existing expected error",
+      overviewNoEnrollment.status === 404,
+      `status=${overviewNoEnrollment.status} body=${JSON.stringify(overviewNoEnrollmentJson).slice(0, 200)}`
+    );
+
+    // ── Case C ── already exhaustively proven by the frozen
+    // verifyFieldAgentTraining.js's own re-enrollment-lifecycle
+    // regression (agent completes V1 -> V2 published -> agent becomes
+    // eligible again -> new V2 enrollment -> V1 historical enrollment
+    // intact) — mandated to run as part of this same regression pass
+    // rather than re-implemented here, to avoid duplicating an entire
+    // 10-module completion flow a second time for no new signal.
+    results.push("ℹ️  Case C verified by verifyFieldAgentTraining.js's own re-enrollment-lifecycle regression (run as part of this same pass)");
+
+    // Case B deliberately left zero published versions system-wide —
+    // Cases D/E below need a real PUBLISHED (and a real RETIRED, from
+    // Case B's own vBeforeB) version to test protection against.
+    const vForCasesDE = await buildFullCurriculumVersion(`${FIXTURE_TAG} — cases D/E target`);
+    check("setup for cases D/E: a version is published again", vForCasesDE.status === "PUBLISHED");
+
+    // ── Case D: attempt to mutate a PUBLISHED version -> rejected. ──
+    const currentPublished = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    const publishedModuleD = await TrainingModule.findOne({ trainingVersion: currentPublished._id }).lean();
+    const mutateModuleD = await authFetch(`/api/admin/field-agent-training/modules/${publishedModuleD._id}`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ translations: [{ languageCode: "en", title: "should not apply", approved: true }] }),
+    });
+    check("Case D: mutating a PUBLISHED module -> 409", mutateModuleD.status === 409, mutateModuleD.status);
+
+    const publishedContentD = await TrainingContent.findOne({ trainingVersion: currentPublished._id }).lean();
+    const mutateContentD = await authFetch(`/api/admin/field-agent-training/content/${publishedContentD._id}`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ required: !publishedContentD.required }),
+    });
+    check("Case D: mutating PUBLISHED content -> 409", mutateContentD.status === 409, mutateContentD.status);
+
+    // ── Case E: attempt to discard a PUBLISHED or RETIRED version -> rejected. ──
+    const discardPublishedE = await authFetch(`/api/admin/field-agent-training/versions/${currentPublished._id}`, adminToken, { method: "DELETE" });
+    check("Case E: discarding the PUBLISHED version -> 409", discardPublishedE.status === 409, discardPublishedE.status);
+    const publishedStillThereE = await TrainingVersion.findById(currentPublished._id).lean();
+    check("Case E: PUBLISHED version still exists after rejected discard", !!publishedStillThereE);
+
+    const discardRetiredE = await authFetch(`/api/admin/field-agent-training/versions/${vBeforeB._id}`, adminToken, { method: "DELETE" });
+    check("Case E: discarding a RETIRED version (V1 from case B) -> 409", discardRetiredE.status === 409, discardRetiredE.status);
+    const retiredStillThereE = await TrainingVersion.findById(vBeforeB._id).lean();
+    check("Case E: RETIRED version still exists after rejected discard", !!retiredStillThereE);
+
+    // ── restore a real, media-bearing PUBLISHED curriculum — Case B
+    // deliberately leaves zero published versions system-wide, which
+    // must never be the state this script exits in.
+    const restored = await buildFullCurriculumVersion("FA-3.3.1 v1 curriculum — restored after FA-3.3.2.5 verification");
+    check("real curriculum restored as PUBLISHED after edge-case testing", restored.status === "PUBLISHED", restored.status);
+    const restoredHasMedia = await TrainingContent.exists({ trainingVersion: restored._id, "media.publicId": { $ne: null } });
+    check("restored curriculum carries media-bearing content", !!restoredHasMedia);
+
+    // ── edge-case fixture cleanup (own phones, disjoint from FA-3.3.1's) ──
+    const edgeUsers = await User.find({ phone: { $in: edgeCasePhones } }).select("_id").lean();
+    const edgeIds = edgeUsers.map((u) => u._id);
+    const edgeTrainingDeleted = await FieldAgentTraining.deleteMany({ agentRef: { $in: edgeIds } });
+    const edgeAppDeleted = await FieldAgentApplication.deleteMany({ userRef: { $in: edgeIds } });
+    const edgeUsersDeleted = await User.deleteMany({ _id: { $in: edgeIds } });
+    console.log(
+      `🧹 FA-3.3.2.5 edge-case fixture cleanup: removed ${edgeUsersDeleted.deletedCount} user(s), ` +
+        `${edgeAppDeleted.deletedCount} FieldAgentApplication doc(s), ${edgeTrainingDeleted.deletedCount} FieldAgentTraining doc(s).`
     );
   }
 

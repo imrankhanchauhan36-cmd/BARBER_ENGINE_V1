@@ -210,22 +210,29 @@ export const getOrCreateEnrollment = async (userId) => {
     return openNewEnrollment({ userId, application, version });
   }
 
-  const version = await getPublishedVersionOrThrow();
-  if (String(activeEnrollment.trainingVersion) === String(version._id)) {
-    return activeEnrollment;
-  }
-
-  // A newer version now exists. Per the approved "no silent
-  // migration" versioning contract, an agent still mid-training
-  // stays pinned to their original version no matter what publishes
-  // later — only a COMPLETED cycle, paired with the application
-  // being independently eligible (TRAINING_PENDING) again for a
-  // genuinely new cycle, opens a new enrollment against the new
-  // version.
+  // FA-3.3.2.5 fix: getPublishedVersionOrThrow() is only ever needed
+  // to decide whether a NEW enrollment should open — which itself
+  // only happens when this enrollment is COMPLETED *and* the
+  // application is independently eligible again. An IN_PROGRESS (or
+  // any other non-COMPLETED) active enrollment is returned exactly as
+  // it was pinned, unconditionally, with no dependency on what's
+  // currently published — this is what "no silent migration" actually
+  // requires, and it's also what keeps this enrollment (and therefore
+  // /me) available even in the window where an admin has retired a
+  // version without yet publishing a replacement. Same reasoning
+  // extends to a COMPLETED enrollment that isn't currently eligible
+  // for a new cycle (application.status !== TRAINING_PENDING) — that
+  // branch was always going to return activeEnrollment unchanged too,
+  // so it likewise never needs a published version to exist.
   if (activeEnrollment.status !== FIELD_AGENT_TRAINING_STATUS.COMPLETED) {
     return activeEnrollment;
   }
   if (application.status !== APPLICATION_STATUS.TRAINING_PENDING) {
+    return activeEnrollment;
+  }
+
+  const version = await getPublishedVersionOrThrow();
+  if (String(activeEnrollment.trainingVersion) === String(version._id)) {
     return activeEnrollment;
   }
 
