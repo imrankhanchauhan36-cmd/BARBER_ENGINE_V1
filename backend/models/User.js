@@ -94,7 +94,7 @@ const UserSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["USER", "OWNER", "BARBER", "ADMIN", "FIELD_STAFF", "AGENT", "SUPPORT_ADMIN"],
+      enum: ["USER", "OWNER", "BARBER", "ADMIN", "FIELD_STAFF", "AGENT", "SUPPORT_ADMIN", "FIELD_AGENT"],
       default: "USER",
       required: true,
       // ❌ removed index (duplicate issue fix)

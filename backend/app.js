@@ -40,6 +40,8 @@ import supportCustomerRoutes from "./modules/support/routes/supportCustomer.rout
 import supportAgentRoutes from "./modules/support/routes/agentSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
 import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
 import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
+import fieldAgentAuthRoutes from "./modules/fieldAgent/routes/fieldAgentAuth.routes.js"; // ← NEW — FA-2 Field Agent OTP apply/login
+import fieldAgentRoutes from "./modules/fieldAgent/routes/fieldAgent.routes.js"; // ← NEW — FA-2 Field Agent Application Engine
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -218,6 +220,12 @@ app.use("/api/admin-auth", adminAuthRoutes);
 // reaching supportAuthRoutes. No protect/onboardingBypass here — same
 // as /api/auth and /api/admin-auth above.
 app.use("/api/support/auth", supportAuthRoutes);
+// FA-2 — public (pre-authentication) OTP apply/login for Field
+// Agents. Same reasoning as /api/auth and /api/support/auth
+// immediately above: must be mounted here, before the generic
+// app.use("/api", protect, ...) mount further below, since send-otp/
+// verify-otp have no session yet. No protect/onboardingBypass here.
+app.use("/api/field-agent/auth", fieldAgentAuthRoutes);
 // Phase H Step 9 — same reasoning as /api/support/auth immediately
 // above: an inbound email webhook has no user session at all, so it
 // must be mounted here, before the generic protect-wrapping mounts
@@ -283,6 +291,11 @@ app.use("/api/upload", uploadRoutes);
 // routes — see PUBLIC ROUTES section above.)
 ///////////////////////////////////////////////////////////
 app.use("/api/support/customer", protect, onboardingBypass, supportCustomerRoutes);
+// FA-2 — authenticated Field Agent application endpoints (own
+// application CRUD only). requireRole("FIELD_AGENT") is applied
+// inside fieldAgent.routes.js itself, same pattern as
+// supportCustomer.routes.js's own internal requireRole("USER","OWNER").
+app.use("/api/field-agent", protect, onboardingBypass, fieldAgentRoutes);
 app.use("/api/support/agent", protect, onboardingBypass, supportAgentRoutes);
 // Mounted BEFORE the broader /api/support/admin prefix, deliberately —
 // /api/support/admin/sla-policies would otherwise first enter
