@@ -21,12 +21,146 @@ import {
   MODULE_KEY,
   MODULE_KEY_ORDER,
   CONTENT_TYPE,
+  HELP_ELIGIBLE_MODULE_KEYS,
+  PASSING_SCORE_MIN,
+  PASSING_SCORE_MAX,
+  WATCHABLE_MEDIA_RESOURCE_TYPES,
   TRAINING_AUDIT_ACTOR_TYPE,
   TRAINING_AUDIT_ACTION,
   TRAINING_AUDIT_ENTITY_TYPE,
 } from "../constants/fieldAgentTraining.constants.js";
 
 const GRADED_TYPES = [CONTENT_TYPE.KNOWLEDGE_CHECK, CONTENT_TYPE.PRACTICAL_SCENARIO];
+
+// ─── FA-3.3.2.1 — AUTHOR-TIME + PUBLISH-TIME SHARED VALIDATORS ─────
+// Each is a pure no-op for content types it doesn't apply to, so every
+// call site can call all three unconditionally without a switch.
+
+// SINGLE_CHOICE: correctOptionIndex must be a valid index into every
+// approved translation's options array — not just English's — so a
+// rubric that's valid against English but out-of-bounds against an
+// approved Hindi option list is still rejected (approved plan: FA-3.3.2.1.B).
+// CHECKLIST: correctKeys are index-position strings by convention
+// (see fieldAgentTraining.service.js#gradeSubmission's own header) —
+// every entry must be numeric and in-bounds against every approved
+// translation's options; duplicates are REJECTED, never silently
+// deduplicated, per the approved plan's explicit "prefer rejection".
+const validateGradingRubric = ({ contentType, grading, translations }) => {
+  if (!GRADED_TYPES.includes(contentType)) return;
+
+  if (!grading || !grading.type) {
+    throw Errors.badRequest(`${contentType} content requires a grading rubric`);
+  }
+
+  const approvedOptionSets = (translations || [])
+    .filter((t) => t.approved && Array.isArray(t.options))
+    .map((t) => t.options);
+
+  if (grading.type === "SINGLE_CHOICE") {
+    const idx = grading.correctOptionIndex;
+    if (!Number.isInteger(idx) || idx < 0) {
+      throw Errors.badRequest("grading.correctOptionIndex must be a non-negative integer");
+    }
+    for (const options of approvedOptionSets) {
+      if (idx >= options.length) {
+        throw Errors.badRequest(
+          `grading.correctOptionIndex (${idx}) is out of bounds for an approved translation with ${options.length} option(s)`
+        );
+      }
+    }
+  } else if (grading.type === "CHECKLIST") {
+    const keys = grading.correctKeys;
+    if (!Array.isArray(keys) || keys.length === 0) {
+      throw Errors.badRequest("grading.correctKeys must be a non-empty array");
+    }
+    const seen = new Set();
+    for (const key of keys) {
+      const keyStr = String(key);
+      if (!/^\d+$/.test(keyStr)) {
+        throw Errors.badRequest(`grading.correctKeys entry "${keyStr}" is not a valid option index`);
+      }
+      if (seen.has(keyStr)) {
+        throw Errors.badRequest(`grading.correctKeys contains a duplicate entry "${keyStr}"`);
+      }
+      seen.add(keyStr);
+
+      const numericIdx = Number(keyStr);
+      for (const options of approvedOptionSets) {
+        if (numericIdx >= options.length) {
+          throw Errors.badRequest(
+            `grading.correctKeys entry "${keyStr}" is out of bounds for an approved translation with ${options.length} option(s)`
+          );
+        }
+      }
+    }
+  } else {
+    throw Errors.badRequest(`Unknown grading rubric type "${grading.type}"`);
+  }
+};
+
+// A passingScore of 0 would let any submission pass — see constants
+// file header for the full rationale.
+const validatePassingScore = ({ contentType, passingScore }) => {
+  if (!GRADED_TYPES.includes(contentType)) return;
+  if (passingScore == null || passingScore < PASSING_SCORE_MIN || passingScore > PASSING_SCORE_MAX) {
+    throw Errors.badRequest(
+      `passingScore must be between ${PASSING_SCORE_MIN} and ${PASSING_SCORE_MAX} for ${contentType} content`
+    );
+  }
+};
+
+// 0/null remain fully legal (instant-complete on view, unchanged) — a
+// POSITIVE threshold requires media to exist AND be an actually
+// watchable resource type (approved plan correction: presence of
+// media.publicId alone is not sufficient — an image or PDF has no
+// watch-time semantics).
+const validateWatchThreshold = ({ contentType, watchThresholdSeconds, media }) => {
+  if (contentType !== CONTENT_TYPE.LESSON) return;
+  if (!watchThresholdSeconds || watchThresholdSeconds <= 0) return;
+
+  if (!media?.publicId) {
+    throw Errors.badRequest("watchThresholdSeconds > 0 requires media to be attached first");
+  }
+  if (!WATCHABLE_MEDIA_RESOURCE_TYPES.includes(media.resourceType)) {
+    throw Errors.badRequest(
+      `watchThresholdSeconds > 0 requires a watchable media type (${WATCHABLE_MEDIA_RESOURCE_TYPES.join(", ")}) — current media is "${media.resourceType}"`
+    );
+  }
+};
+
+// Every mandatory module must carry an approved English title —
+// display-metadata completeness, checked only at publish (not at
+// author-time, since a module is created before any content exists
+// and forcing translation-first authoring order would be arbitrary).
+const validateModuleTranslations = (modules) => {
+  for (const m of modules) {
+    const hasApprovedEnglish = (m.translations || []).some((t) => t.languageCode === "en" && t.approved);
+    if (!hasApprovedEnglish) {
+      throw Errors.conflict(`Module ${m.moduleKey} has no approved 'en' translation — cannot publish`);
+    }
+  }
+};
+
+// Non-blocking advisory only — per the approved plan, Help coverage is
+// a warning, never a hard publish failure, and no new mandatory
+// curriculum rule is introduced.
+const computeHelpCoverageWarnings = async (versionId) => {
+  const helpModules = await TrainingModule.find({
+    trainingVersion: versionId,
+    moduleKey: { $in: HELP_ELIGIBLE_MODULE_KEYS },
+  })
+    .select("_id")
+    .lean();
+
+  const helpEligibleCount = await TrainingContent.countDocuments({
+    trainingModule: { $in: helpModules.map((m) => m._id) },
+    helpEligible: true,
+  });
+
+  return helpEligibleCount === 0
+    ? ["No helpEligible content exists in any Help-scoped module — Field Agent Help will be empty for this version."]
+    : [];
+};
 
 const writeAudit = (fields, opts = {}) => TrainingAuditEvent.create([fields], opts).catch((err) => {
   console.error("❌ FA-3.3 TrainingAuditEvent write failed:", err.message || err);
@@ -169,12 +303,20 @@ export const addContent = async ({
   const version = await getVersionOrThrow(trainingModule.trainingVersion);
   assertDraft(version);
 
-  if (GRADED_TYPES.includes(contentType) && (!grading || !grading.type)) {
-    throw Errors.badRequest(`${contentType} content requires a grading rubric`);
-  }
+  const resolvedTranslations = translations ?? [];
+  const resolvedMedia = media ?? {};
+  const resolvedWatchThreshold = watchThresholdSeconds ?? null;
+  const resolvedGrading = grading ?? null;
+  const resolvedPassingScore = passingScore ?? (GRADED_TYPES.includes(contentType) ? 100 : null);
+  const resolvedRequired = required ?? contentType !== CONTENT_TYPE.REFERENCE;
+
+  // FA-3.3.2.1 — author-time parity with the publish gate: fail here,
+  // not only at publish, so an admin gets immediate feedback.
+  validateGradingRubric({ contentType, grading: resolvedGrading, translations: resolvedTranslations });
+  validatePassingScore({ contentType, passingScore: resolvedPassingScore });
+  validateWatchThreshold({ contentType, watchThresholdSeconds: resolvedWatchThreshold, media: resolvedMedia });
 
   const existingCount = await TrainingContent.countDocuments({ trainingModule: moduleId });
-  const resolvedRequired = required ?? contentType !== CONTENT_TYPE.REFERENCE;
 
   const content = await TrainingContent.create({
     trainingVersion: trainingModule.trainingVersion,
@@ -182,11 +324,11 @@ export const addContent = async ({
     contentType,
     order: existingCount,
     required: resolvedRequired,
-    translations: translations ?? [],
-    media: media ?? {},
-    watchThresholdSeconds: watchThresholdSeconds ?? null,
-    grading: grading ?? null,
-    passingScore: passingScore ?? (GRADED_TYPES.includes(contentType) ? 100 : null),
+    translations: resolvedTranslations,
+    media: resolvedMedia,
+    watchThresholdSeconds: resolvedWatchThreshold,
+    grading: resolvedGrading,
+    passingScore: resolvedPassingScore,
     helpEligible: Boolean(helpEligible),
   });
 
@@ -223,6 +365,12 @@ export const updateContent = async ({ contentId, patch, adminId }) => {
   for (const field of allowedFields) {
     if (patch[field] !== undefined) content[field] = patch[field];
   }
+
+  // FA-3.3.2.1 — validate the FINAL merged state (contentType is
+  // immutable, never in allowedFields, so it's always the original).
+  validateGradingRubric({ contentType: content.contentType, grading: content.grading, translations: content.translations });
+  validatePassingScore({ contentType: content.contentType, passingScore: content.passingScore });
+  validateWatchThreshold({ contentType: content.contentType, watchThresholdSeconds: content.watchThresholdSeconds, media: content.media });
 
   await content.save();
 
@@ -274,6 +422,10 @@ const assertVersionPublishable = async (versionId) => {
     }
   }
 
+  // FA-3.3.2.1.A — module-level translation completeness (Hindi
+  // stays optional; only an approved English title is mandatory).
+  validateModuleTranslations(modules);
+
   const content = await TrainingContent.find({ trainingVersion: versionId }).select("+grading").lean();
   const contentByModule = new Map();
   for (const c of content) {
@@ -293,17 +445,31 @@ const assertVersionPublishable = async (versionId) => {
       if (!hasApprovedDefault) {
         throw Errors.conflict(`Content ${c._id} in module ${m.moduleKey} has no approved 'en' translation`);
       }
-      if (GRADED_TYPES.includes(c.contentType) && (!c.grading || !c.grading.type)) {
-        throw Errors.conflict(`Content ${c._id} in module ${m.moduleKey} is missing a grading rubric`);
+      // FA-3.3.2.1.B/C/D — full rubric-bounds, passing-score, and
+      // watch-threshold/media-type validation, redundant with (but
+      // not weaker than) the author-time checks in addContent/
+      // updateContent — this is the defense-in-depth backstop, e.g.
+      // against a future media-removal path (FA-3.3.2.3) leaving a
+      // stale positive threshold with no watchable media attached.
+      try {
+        validateGradingRubric({ contentType: c.contentType, grading: c.grading, translations: c.translations });
+        validatePassingScore({ contentType: c.contentType, passingScore: c.passingScore });
+        validateWatchThreshold({ contentType: c.contentType, watchThresholdSeconds: c.watchThresholdSeconds, media: c.media });
+      } catch (err) {
+        throw Errors.conflict(`Content ${c._id} in module ${m.moduleKey}: ${err.message}`);
       }
     }
   }
+
+  // FA-3.3.2.1.E — advisory only, never blocks publish.
+  const warnings = await computeHelpCoverageWarnings(versionId);
+  return { warnings };
 };
 
 export const publishVersion = async ({ versionId, adminId }) => {
   const version = await getVersionOrThrow(versionId);
   assertDraft(version);
-  await assertVersionPublishable(versionId);
+  const { warnings } = await assertVersionPublishable(versionId);
 
   const session = await mongoose.startSession();
   try {
@@ -344,7 +510,7 @@ export const publishVersion = async ({ versionId, adminId }) => {
           actorRef: adminId,
           actorType: TRAINING_AUDIT_ACTOR_TYPE.ADMIN,
           action: TRAINING_AUDIT_ACTION.VERSION_PUBLISHED,
-          newValue: { versionNumber: version.versionNumber },
+          newValue: { versionNumber: version.versionNumber, warnings },
         },
       ],
       { session }
@@ -358,6 +524,18 @@ export const publishVersion = async ({ versionId, adminId }) => {
     session.endSession();
   }
 
+  // Backward-compatible return contract: `version` itself, exactly as
+  // before FA-3.3.2.1 — the frozen seedFieldAgentTrainingV1.js calls
+  // this function directly and reads `published.versionNumber`, and
+  // must keep working completely unmodified. `warnings` is attached
+  // as a plain, non-schema property for in-process callers only (it
+  // is never part of `version`'s own JSON/toObject serialization,
+  // which mongoose derives strictly from schema paths) —
+  // publishVersionHandler reads `version._warnings` directly and
+  // places it as a sibling key in its own response payload; nothing
+  // downstream ever relies on this document's own serialized form to
+  // carry it.
+  version._warnings = warnings;
   return version;
 };
 

@@ -133,7 +133,13 @@ export const uploadContentMediaHandler = async (req, res, next) => {
 export const publishVersionHandler = async (req, res, next) => {
   try {
     const version = await publishVersion({ versionId: req.params.versionId, adminId: req.user._id });
-    return successResponse(res, { message: "Training version published", data: { version } });
+    // FA-3.3.2.1 — warnings (e.g. zero Help-eligible content) are
+    // advisory only, never a publish failure; surfaced here as a
+    // sibling response key, not part of `version`'s own serialization.
+    return successResponse(res, {
+      message: "Training version published",
+      data: { version, warnings: version._warnings ?? [] },
+    });
   } catch (err) {
     return next(err);
   }

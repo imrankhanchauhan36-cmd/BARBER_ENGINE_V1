@@ -149,3 +149,19 @@ export const HELP_ELIGIBLE_MODULE_KEYS = Object.freeze([
   MODULE_KEY.TROUBLESHOOTING_SUPPORT,
   MODULE_KEY.COMPLIANCE_CONDUCT,
 ]);
+
+// FA-3.3.2.1 — publish-gate hardening. A graded item's passingScore of
+// 0 would let any submission (even a wrong one scoring 0) "pass",
+// trivializing grading — bounds are enforced at both author-time
+// (addContent/updateContent) and publish-time (assertVersionPublishable).
+export const PASSING_SCORE_MIN = 1;
+export const PASSING_SCORE_MAX = 100;
+
+// FA-3.3.2.1 — of the resource types mediaDelivery.service.js already
+// allows (image/video/raw, see its ALLOWED_MIME_TYPES), only "video"
+// has a meaningful watch-time duration. A positive
+// TrainingContent.watchThresholdSeconds on a LESSON whose attached
+// media is an image or a PDF is meaningless — this constant documents
+// that existing distinction, it does not introduce a new media type
+// or architecture.
+export const WATCHABLE_MEDIA_RESOURCE_TYPES = Object.freeze(["video"]);
