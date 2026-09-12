@@ -6,7 +6,22 @@
  * v1.1 — Added 3 new VERIFICATION_ACTION values for the owner-facing
  * submission flow (IDENTITY_SUBMITTED, BANK_SUBMITTED, KYC_SUBMITTED).
  * Purely additive — every existing constant and value is unchanged.
+ *
+ * FA-3.1 — Added APPLICANT_TYPE (OWNER default, FIELD_AGENT new).
+ * Purely additive, same pattern as v1.1 above — every existing
+ * constant and value is unchanged.
  */
+
+// ─── Applicant Type ──────────────────────────────────────
+// ← NEW (FA-3.1). The KYC module was originally Salon-Owner-only
+// (every record implicitly assumed to belong to an OWNER). This
+// discriminator lets a KYC record belong to a different actor type
+// without renaming/removing the existing `ownerId` field or its
+// uniqueness constraint — see models/KYC.js.
+export const APPLICANT_TYPE = {
+  OWNER:       "OWNER",
+  FIELD_AGENT: "FIELD_AGENT",
+};
 
 // ─── KYC Status ──────────────────────────────────────────
 export const KYC_STATUS = {

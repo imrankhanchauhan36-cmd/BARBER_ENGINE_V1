@@ -18,10 +18,20 @@
  * that attack surface by design rather than relying on convention.
  *
  * No other field, index, or behavior in this file changed.
+ *
+ * FA-3.1 — Added `applicantType` (additive, defaults every existing
+ * and new OWNER record to "OWNER" — no migration required, since
+ * Mongoose applies schema defaults on read for a field genuinely
+ * absent from a stored document). `ownerId` itself is NOT renamed and
+ * its `unique: true` constraint is NOT touched — a User can still
+ * only ever have exactly one KYC record, regardless of applicant
+ * type, which is correct since a User has exactly one `role` at a
+ * time elsewhere in this codebase.
  */
 
 import mongoose from "mongoose";
 import {
+    APPLICANT_TYPE,
     KYC_STATUS,
     RISK_FLAG,
     VERIFICATION_LEVEL,
@@ -62,6 +72,18 @@ const KYCSchema = new mongoose.Schema(
       required: true,
       unique:   true,
       index:    true,
+    },
+
+    ///////////////////////////////////////////////////
+    // APPLICANT TYPE — FA-3.1, additive
+    // Server-controlled only (see kyc.service.js's getOrCreateKYC) —
+    // never read from client input anywhere in this module.
+    ///////////////////////////////////////////////////
+    applicantType: {
+      type:    String,
+      enum:    Object.values(APPLICANT_TYPE),
+      default: APPLICANT_TYPE.OWNER,
+      index:   true,
     },
 
     ///////////////////////////////////////////////////

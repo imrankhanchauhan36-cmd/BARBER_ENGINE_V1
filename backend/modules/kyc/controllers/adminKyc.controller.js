@@ -13,7 +13,7 @@ import User from "../../../models/User.js";
 import NotificationService from "../../../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../../../utils/response.js";
-import { KYC_STATUS } from "../constants/kyc.constants.js";
+import { APPLICANT_TYPE, KYC_STATUS } from "../constants/kyc.constants.js";
 import { toDetailDTO, toListDTO, toSummaryDTO } from "../dto/adminKyc.dto.js";
 import KYC from "../models/KYC.js";
 import { approveKYC, assignKYC, getKYCLogs, rejectKYC, requestReupload } from "../services/kyc.service.js";
@@ -47,8 +47,25 @@ const getScopedOwnerIds = async (admin) => {
 };
 
 // ✅ Fix 2 — Reusable scope guard for write operations
+//
+// FA-3.1 — getScopedOwnerIds() resolves territory via Salon documents
+// (Salon.location.territory.*) — a Field Agent owns no Salon, so that
+// resolution can never correctly include a Field Agent's ownerId.
+// Field Agent geo-scoping depends on FA-5's zone assignment, which
+// does not exist yet. Rather than let a STATE/DISTRICT admin be
+// silently excluded (Salon lookup returns nothing, `ownerIds` never
+// contains the id, guard would already throw "outside scope" as a
+// side effect) or guess an incorrect scoping rule, this fails
+// CLOSED explicitly and says why — same net effect as before for a
+// STATE/DISTRICT admin, but intentional and documented rather than
+// incidental. INDIA-level admins are unaffected (early return above,
+// unchanged). OWNER records take the exact original code path,
+// byte-for-byte.
 const assertKYCInScope = async (kyc, admin) => {
-  if (admin.adminLevel === "INDIA") return; // no restriction
+  if (admin.adminLevel === "INDIA") return; // no restriction — unchanged
+  if (kyc.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
+    throw Errors.forbidden("Field Agent KYC scoping is not yet available at this admin level");
+  }
   const ownerIds = await getScopedOwnerIds(admin);
   const ownerId  = kyc.ownerId?._id?.toString() || kyc.ownerId?.toString();
   if (!ownerIds?.includes(ownerId)) {
@@ -120,7 +137,11 @@ export const listKYCForAdmin = async (req, res, next) => {
     if (search?.trim()) {
       const s = search.trim();
       const ownerFilter = {
-        role:      { $in: ["OWNER"] }, // extend here if role names change
+        // FA-3.1 — widened from ["OWNER"] so Field Agent KYC records
+        // become findable by name/phone/email search once they exist.
+        // Purely additive to the search predicate; the route's own
+        // requireRole/requireAdminLevel authorization is unchanged.
+        role:      { $in: ["OWNER", "FIELD_AGENT"] },
         isDeleted: { $ne: true },
         $or: [
           { name:  { $regex: s, $options: "i" } },
@@ -252,7 +273,14 @@ export const approveKYCHandler = async (req, res, next) => {
     // 📬 NOTIFICATION (non-blocking, after write)
     //////////////////////////////////////////////////////
 
-    const kycSalon = await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean();
+    // FA-3.1 — explicitly OWNER-only: a Field Agent has no Salon, so
+    // this lookup would already return null and skip silently for
+    // one, but gating on applicantType makes that intentional rather
+    // than incidental. Field Agent's own notification path is a
+    // future phase (FA-3.2+), not implemented here.
+    const kycSalon = kyc.applicantType === APPLICANT_TYPE.OWNER
+      ? await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean()
+      : null;
     if (kycSalon) {
       await NotificationService.send({
         recipientId:   kycSalon._id,
@@ -308,7 +336,14 @@ export const rejectKYCHandler = async (req, res, next) => {
     // 📬 NOTIFICATION (non-blocking, after write)
     //////////////////////////////////////////////////////
 
-    const kycSalon = await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean();
+    // FA-3.1 — explicitly OWNER-only: a Field Agent has no Salon, so
+    // this lookup would already return null and skip silently for
+    // one, but gating on applicantType makes that intentional rather
+    // than incidental. Field Agent's own notification path is a
+    // future phase (FA-3.2+), not implemented here.
+    const kycSalon = kyc.applicantType === APPLICANT_TYPE.OWNER
+      ? await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean()
+      : null;
     if (kycSalon) {
       await NotificationService.send({
         recipientId:   kycSalon._id,

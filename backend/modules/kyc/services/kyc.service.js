@@ -33,6 +33,7 @@
 
 import mongoose from "mongoose";
 import {
+    APPLICANT_TYPE,
     KYC_EXPIRY_DAYS,
     KYC_STATUS,
     VERIFICATION_ACTION,
@@ -60,14 +61,21 @@ const log = async (session, { kycId, ownerId, action, triggeredBy, triggeredByRo
 /**
  * Get or create KYC record for owner
  * ✅ v1.1 — fixed ASI bug (see file header)
+ *
+ * FA-3.1 — added optional `applicantType` (defaults to OWNER, so
+ * every existing call site — ownerKyc.service.js's own
+ * getOrCreateKYC(ownerId) single-arg calls — is completely unaffected
+ * and continues to create OWNER records exactly as before). Only used
+ * on first-creation; a pre-existing record's applicantType is never
+ * overwritten by a later call with a different value here.
  */
-export const getOrCreateKYC = async (ownerId) => {
+export const getOrCreateKYC = async (ownerId, applicantType = APPLICANT_TYPE.OWNER) => {
   let kyc = await KYC.findOne({ ownerId, isDeleted: { $ne: true } })
   if (!kyc) {
     const session = await mongoose.startSession()
     try {
       session.startTransaction();
-      const [created] = await KYC.create([{ ownerId, status: KYC_STATUS.DRAFT }], { session })
+      const [created] = await KYC.create([{ ownerId, applicantType, status: KYC_STATUS.DRAFT }], { session })
       kyc = created
       await log(session, {
         kycId: kyc._id, ownerId,
