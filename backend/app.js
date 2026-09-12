@@ -43,6 +43,9 @@ import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"
 import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
 import fieldAgentAuthRoutes from "./modules/fieldAgent/routes/fieldAgentAuth.routes.js"; // ← NEW — FA-2 Field Agent OTP apply/login
 import fieldAgentRoutes from "./modules/fieldAgent/routes/fieldAgent.routes.js"; // ← NEW — FA-2 Field Agent Application Engine
+import fieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/fieldAgentTraining.routes.js"; // ← NEW — FA-3.3 Field Agent Training Engine
+import fieldAgentHelpRoutes from "./modules/fieldAgentTraining/routes/fieldAgentHelp.routes.js"; // ← NEW — FA-3.3 Field Agent Help (curated operational reference)
+import adminFieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/adminTraining.routes.js"; // ← NEW — FA-3.3 admin curriculum authoring/governance
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -298,6 +301,11 @@ app.use("/api/support/customer", protect, onboardingBypass, supportCustomerRoute
 // inside fieldAgent.routes.js itself, same pattern as
 // supportCustomer.routes.js's own internal requireRole("USER","OWNER").
 app.use("/api/field-agent", protect, onboardingBypass, fieldAgentRoutes);
+// FA-3.3 — authenticated Field Agent training + help endpoints.
+// requireRole("FIELD_AGENT") is applied inside each route file
+// itself, same pattern as fieldAgentRoutes above.
+app.use("/api/field-agent/training", protect, onboardingBypass, fieldAgentTrainingRoutes);
+app.use("/api/field-agent/help", protect, onboardingBypass, fieldAgentHelpRoutes);
 app.use("/api/support/agent", protect, onboardingBypass, supportAgentRoutes);
 // Mounted BEFORE the broader /api/support/admin prefix, deliberately —
 // /api/support/admin/sla-policies would otherwise first enter
@@ -334,6 +342,11 @@ app.use("/api/support/admin", protect, onboardingBypass, supportAdminRoutes);
 // requireRole("ADMIN") exactly as before.
 ///////////////////////////////////////////////////////////
 app.use("/api/admin/ratings", protect, adminServiceRatingRoutes);
+// FA-3.3 — admin curriculum authoring/governance. requireAdminLevel is
+// applied per-route inside adminTraining.routes.js itself (write ops
+// need INDIA level, read ops allow INDIA/STATE/DISTRICT), same
+// pattern as routes/location.routes.js.
+app.use("/api/admin/field-agent-training", protect, adminFieldAgentTrainingRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
