@@ -95,6 +95,25 @@ export const AUDIT_ACTION = Object.freeze({
   APPLICATION_UPDATED: "APPLICATION_UPDATED",
   APPLICATION_SUBMITTED: "APPLICATION_SUBMITTED",
   APPLICATION_WITHDRAWN: "APPLICATION_WITHDRAWN",
+  // FA-3.4.1 — additive only, approved in FA-3.4 PLAN V2 §10/§17.
+  // TestVersion lifecycle events written by
+  // modules/fieldAgentTest/services/testContent.service.js into this
+  // same, frozen FieldAgentAuditEvent collection (entityType
+  // "TEST_VERSION") rather than a new parallel audit collection.
+  TEST_VERSION_PUBLISHED: "TEST_VERSION_PUBLISHED",
+  TEST_VERSION_RETIRED: "TEST_VERSION_RETIRED",
+  // FA-3.4.3 — additive only, approved in FA-3.4 PLAN V2 §17 and this
+  // work package's own explicit instruction. Written by
+  // modules/fieldAgentTest/services/fieldAgentTest.service.js
+  // (startTestAttempt/submitTestAttempt), inside the same transaction
+  // as the TestAttempt write itself (entityType "TEST_ATTEMPT"),
+  // actorType AGENT. TEST_STARTED fires only on an actual new
+  // TestAttempt document being created, never on the idempotent
+  // "return the existing active attempt" path; TEST_SUBMITTED fires
+  // only once per successful finalization (see that service's own
+  // inline comments for the exact idempotency/concurrency reasoning).
+  TEST_STARTED: "TEST_STARTED",
+  TEST_SUBMITTED: "TEST_SUBMITTED",
 });
 
 export const FIELD_AGENT_OTP_ROLE = "FIELD_AGENT";

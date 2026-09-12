@@ -46,6 +46,8 @@ import fieldAgentRoutes from "./modules/fieldAgent/routes/fieldAgent.routes.js";
 import fieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/fieldAgentTraining.routes.js"; // ← NEW — FA-3.3 Field Agent Training Engine
 import fieldAgentHelpRoutes from "./modules/fieldAgentTraining/routes/fieldAgentHelp.routes.js"; // ← NEW — FA-3.3 Field Agent Help (curated operational reference)
 import adminFieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/adminTraining.routes.js"; // ← NEW — FA-3.3 admin curriculum authoring/governance
+import adminFieldAgentTestRoutes from "./modules/fieldAgentTest/routes/adminTest.routes.js"; // ← NEW — FA-3.4.1 admin exam authoring/governance
+import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -306,6 +308,10 @@ app.use("/api/field-agent", protect, onboardingBypass, fieldAgentRoutes);
 // itself, same pattern as fieldAgentRoutes above.
 app.use("/api/field-agent/training", protect, onboardingBypass, fieldAgentTrainingRoutes);
 app.use("/api/field-agent/help", protect, onboardingBypass, fieldAgentHelpRoutes);
+// FA-3.4.3 — authenticated Field Agent mandatory-test endpoints. Same
+// protect/onboardingBypass-at-mount + requireRole-inside-route-file
+// pattern as fieldAgentTrainingRoutes above.
+app.use("/api/field-agent/test", protect, onboardingBypass, fieldAgentTestRoutes);
 app.use("/api/support/agent", protect, onboardingBypass, supportAgentRoutes);
 // Mounted BEFORE the broader /api/support/admin prefix, deliberately —
 // /api/support/admin/sla-policies would otherwise first enter
@@ -347,6 +353,11 @@ app.use("/api/admin/ratings", protect, adminServiceRatingRoutes);
 // need INDIA level, read ops allow INDIA/STATE/DISTRICT), same
 // pattern as routes/location.routes.js.
 app.use("/api/admin/field-agent-training", protect, adminFieldAgentTrainingRoutes);
+// FA-3.4.1 — admin exam authoring/governance. Same requireAdminLevel
+// per-route pattern as adminFieldAgentTrainingRoutes above (write ops
+// need INDIA level, read ops allow INDIA/STATE/DISTRICT). Agent-facing
+// test-taking routes do not exist yet (FA-3.4.3).
+app.use("/api/admin/field-agent-test", protect, adminFieldAgentTestRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
