@@ -18,8 +18,10 @@ import {
   updateContent,
   setContentMedia,
   deleteContent,
+  reorderModuleContent,
   publishVersion,
   retireVersion,
+  discardDraftVersion,
   listAgentProgress,
   getAgentProgressDetail,
   listAgentTrainingHistory,
@@ -109,6 +111,19 @@ export const deleteContentHandler = async (req, res, next) => {
   }
 };
 
+export const reorderModuleContentHandler = async (req, res, next) => {
+  try {
+    const content = await reorderModuleContent({
+      moduleId: req.params.moduleId,
+      orderedContentIds: req.body.orderedContentIds,
+      adminId: req.user._id,
+    });
+    return successResponse(res, { message: "Content reordered", data: { content } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 export const uploadContentMediaHandler = async (req, res, next) => {
   try {
     if (!req.file) return next(Errors.badRequest("No media file uploaded"));
@@ -166,6 +181,15 @@ export const retireVersionHandler = async (req, res, next) => {
       reason: req.body.reason,
     });
     return successResponse(res, { message: "Training version retired", data: { version } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const discardDraftVersionHandler = async (req, res, next) => {
+  try {
+    const result = await discardDraftVersion({ versionId: req.params.versionId, adminId: req.user._id });
+    return successResponse(res, { message: "Draft training version discarded", data: result });
   } catch (err) {
     return next(err);
   }

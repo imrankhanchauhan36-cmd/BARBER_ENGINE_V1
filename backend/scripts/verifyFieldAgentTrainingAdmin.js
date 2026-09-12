@@ -541,6 +541,203 @@ const run = async () => {
     );
   }
 
+  // ── FA-3.3.2.2 — DRAFT DISCARD + CONTENT REORDER ────────────────
+  {
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64"
+    );
+    const uploadMedia = (contentId, filename = "test.png") => {
+      const form = new FormData();
+      form.append("media", new Blob([tinyPng], { type: "image/png" }), filename);
+      return fetch(url(`/api/admin/field-agent-training/content/${contentId}/media`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: form,
+      });
+    };
+    const addLessonTo = async (moduleId, title) => {
+      const res = await authFetch(`/api/admin/field-agent-training/modules/${moduleId}/content`, adminToken, {
+        method: "POST",
+        body: JSON.stringify({ contentType: "LESSON", translations: [{ languageCode: "en", title, body: title, approved: true }] }),
+      });
+      return (await res.json())?.data?.content;
+    };
+
+    // ── discard: success path, real media cleanup ──
+    const discardDraft = await createTaggedDraft("draft discard - success path");
+    const { module: discardMod } = await addTaggedModule(discardDraft._id, MODULE_KEY.FOUNDATION);
+    const discardLesson = await addLessonTo(discardMod._id, "to be discarded");
+    const uploadForDiscard = await uploadMedia(discardLesson._id, "discard-me.png");
+    const uploadForDiscardJson = await uploadForDiscard.json();
+    const discardedPublicId = uploadForDiscardJson?.data?.content?.media?.publicId;
+    check("media uploaded to draft-about-to-be-discarded", uploadForDiscard.status === 200 && !!discardedPublicId);
+
+    const discardRes = await authFetch(`/api/admin/field-agent-training/versions/${discardDraft._id}`, adminToken, { method: "DELETE" });
+    const discardJson = await discardRes.json();
+    check("discarding a genuine DRAFT succeeds", discardRes.status === 200, JSON.stringify(discardJson).slice(0, 200));
+    check(
+      "discard cleanup: unreferenced media destroyed (real Cloudinary call)",
+      discardJson?.data?.mediaCleanup?.some((m) => m.publicId === discardedPublicId && m.status === "success"),
+      JSON.stringify(discardJson?.data?.mediaCleanup)
+    );
+
+    const versionGone = await TrainingVersion.findById(discardDraft._id).lean();
+    const modulesGone = await TrainingModule.countDocuments({ trainingVersion: discardDraft._id });
+    const contentGone = await TrainingContent.countDocuments({ trainingVersion: discardDraft._id });
+    check("discarded version no longer exists", !versionGone);
+    check("discard leaves zero orphan TrainingModule rows", modulesGone === 0, modulesGone);
+    check("discard leaves zero orphan TrainingContent rows", contentGone === 0, contentGone);
+
+    const discardAudit = await TrainingAuditEvent.findOne({ entityType: "TRAINING_VERSION", entityId: discardDraft._id, action: "VERSION_DISCARDED" }).lean();
+    check(
+      "VERSION_DISCARDED audit event recorded with module/content counts",
+      discardAudit?.oldValue?.moduleCount === 1 && discardAudit?.oldValue?.contentCount === 1,
+      JSON.stringify(discardAudit?.oldValue)
+    );
+
+    // ── discard idempotency: second call -> 404 ──
+    const discardAgain = await authFetch(`/api/admin/field-agent-training/versions/${discardDraft._id}`, adminToken, { method: "DELETE" });
+    check("re-discarding an already-discarded version -> 404 (idempotent-safe)", discardAgain.status === 404, discardAgain.status);
+
+    // ── discard rejected on PUBLISHED / RETIRED ──
+    const publishedVersionForDiscard = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    const discardPublished = await authFetch(`/api/admin/field-agent-training/versions/${publishedVersionForDiscard._id}`, adminToken, { method: "DELETE" });
+    check("discarding a PUBLISHED version -> 409, nothing deleted", discardPublished.status === 409, discardPublished.status);
+    const publishedStillThere = await TrainingVersion.findById(publishedVersionForDiscard._id).lean();
+    check("PUBLISHED version still exists after rejected discard", !!publishedStillThere);
+
+    const retiredVersionForDiscard = await TrainingVersion.findOne({ status: "RETIRED" }).lean();
+    const discardRetired = await authFetch(`/api/admin/field-agent-training/versions/${retiredVersionForDiscard._id}`, adminToken, { method: "DELETE" });
+    check("discarding a RETIRED version -> 409, nothing deleted", discardRetired.status === 409, discardRetired.status);
+    const retiredStillThere = await TrainingVersion.findById(retiredVersionForDiscard._id).lean();
+    check("RETIRED version still exists after rejected discard", !!retiredStillThere);
+
+    // ── discard: shared publicId across two DRAFT versions -> cleanup skipped ──
+    // (deferred from FA-3.3.2.3 pending discardDraftVersion's existence —
+    // reuses the identical isPublicIdReferencedElsewhere machinery)
+    const survivorDraft = await createTaggedDraft("discard shared-media survivor");
+    const { module: survivorMod } = await addTaggedModule(survivorDraft._id, MODULE_KEY.FOUNDATION);
+    const survivorLesson = await addLessonTo(survivorMod._id, "survivor");
+    const survivorUpload = await uploadMedia(survivorLesson._id, "survivor.png");
+    const survivorMedia = (await survivorUpload.json())?.data?.content?.media;
+    check("survivor draft's media uploaded", survivorUpload.status === 200 && !!survivorMedia?.publicId);
+
+    const sharedDraft = await createTaggedDraft("discard shared-media victim");
+    const { module: sharedMod } = await addTaggedModule(sharedDraft._id, MODULE_KEY.FOUNDATION);
+    const sharedLesson = await addLessonTo(sharedMod._id, "shares survivor's media");
+    // Real uploads always get a unique publicId — this cross-version
+    // share can only be constructed directly in the DB (see the same
+    // rationale in the FA-3.3.2.3 section above).
+    await TrainingContent.updateOne({ _id: sharedLesson._id }, { $set: { media: survivorMedia } });
+
+    const discardShared = await authFetch(`/api/admin/field-agent-training/versions/${sharedDraft._id}`, adminToken, { method: "DELETE" });
+    const discardSharedJson = await discardShared.json();
+    check("discarding a version whose media is shared elsewhere still succeeds", discardShared.status === 200, discardShared.status);
+    check(
+      "shared media cleanup is SKIPPED during discard (not destroyed), reason recorded",
+      discardSharedJson?.data?.mediaCleanup?.some((m) => m.publicId === survivorMedia.publicId && m.status === "skipped" && !!m.reason),
+      JSON.stringify(discardSharedJson?.data?.mediaCleanup)
+    );
+    const survivorAfterDiscard = await TrainingContent.findById(survivorLesson._id).lean();
+    check("the surviving draft's own media reference is untouched", survivorAfterDiscard.media?.publicId === survivorMedia.publicId);
+
+    // clean up the survivor draft directly (not itself under test here)
+    await TrainingContent.deleteMany({ trainingVersion: survivorDraft._id });
+    await TrainingModule.deleteMany({ trainingVersion: survivorDraft._id });
+    await TrainingVersion.deleteOne({ _id: survivorDraft._id });
+
+    // ── reorder: the exact example from the approved plan ──
+    // Before: A=0 B=1 C=2 D=3 — Move D to position 1 — After: A=0 D=1 B=2 C=3
+    const reorderDraft = await createTaggedDraft("content reorder");
+    const { module: reorderMod } = await addTaggedModule(reorderDraft._id, MODULE_KEY.FOUNDATION);
+    const A = await addLessonTo(reorderMod._id, "A");
+    const B = await addLessonTo(reorderMod._id, "B");
+    const C = await addLessonTo(reorderMod._id, "C");
+    const D = await addLessonTo(reorderMod._id, "D");
+
+    const beforeReorder = await TrainingContent.find({ trainingModule: reorderMod._id }).sort({ order: 1 }).select("_id order").lean();
+    check(
+      "before reorder: A=0 B=1 C=2 D=3",
+      beforeReorder.map((c) => String(c._id)).join(",") === [A._id, B._id, C._id, D._id].map(String).join(","),
+      JSON.stringify(beforeReorder)
+    );
+
+    const reorderRes = await authFetch(`/api/admin/field-agent-training/modules/${reorderMod._id}/reorder-content`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ orderedContentIds: [A._id, D._id, B._id, C._id] }),
+    });
+    check("reorder request succeeds", reorderRes.status === 200, reorderRes.status);
+
+    const afterReorder = await TrainingContent.find({ trainingModule: reorderMod._id }).select("_id order").lean();
+    const orderById = Object.fromEntries(afterReorder.map((c) => [String(c._id), c.order]));
+    check(
+      "after reorder: A=0 D=1 B=2 C=3 — exact example from the approved plan",
+      orderById[String(A._id)] === 0 && orderById[String(D._id)] === 1 && orderById[String(B._id)] === 2 && orderById[String(C._id)] === 3,
+      JSON.stringify(orderById)
+    );
+    const orderValues = Object.values(orderById).sort((a, b) => a - b);
+    check("reordered orders are contiguous 0..n-1 with no duplicates/gaps", JSON.stringify(orderValues) === JSON.stringify([0, 1, 2, 3]));
+
+    const reorderAudit = await TrainingAuditEvent.findOne({ entityType: "TRAINING_MODULE", entityId: reorderMod._id, action: "MODULE_UPDATED" })
+      .sort({ createdAt: -1 })
+      .lean();
+    check(
+      "reorder is audited (MODULE_UPDATED, before/after content order)",
+      !!reorderAudit?.newValue?.contentOrder,
+      JSON.stringify(reorderAudit?.newValue)
+    );
+
+    // ── reorder rejected: mismatched id set ──
+    const badReorder = await authFetch(`/api/admin/field-agent-training/modules/${reorderMod._id}/reorder-content`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ orderedContentIds: [A._id, B._id, C._id] }), // missing D
+    });
+    check("reorder with a missing id -> 400", badReorder.status === 400, badReorder.status);
+
+    // ── reorder rejected on PUBLISHED content ──
+    const publishedModule = await TrainingModule.findOne({ trainingVersion: publishedVersionForDiscard._id }).lean();
+    const publishedModuleContentIds = (await TrainingContent.find({ trainingModule: publishedModule._id }).select("_id").lean()).map((c) => c._id);
+    const reorderPublished = await authFetch(`/api/admin/field-agent-training/modules/${publishedModule._id}/reorder-content`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ orderedContentIds: publishedModuleContentIds.slice().reverse() }),
+    });
+    check("reordering PUBLISHED content -> 409", reorderPublished.status === 409, reorderPublished.status);
+
+    // ── concurrent reorder: two overlapping requests never corrupt ordering ──
+    const concurrentDraft = await createTaggedDraft("concurrent reorder");
+    const { module: concurrentMod } = await addTaggedModule(concurrentDraft._id, MODULE_KEY.FOUNDATION);
+    const cA = await addLessonTo(concurrentMod._id, "A");
+    const cB = await addLessonTo(concurrentMod._id, "B");
+    const cC = await addLessonTo(concurrentMod._id, "C");
+    const cD = await addLessonTo(concurrentMod._id, "D");
+    const ids = [cA._id, cB._id, cC._id, cD._id];
+
+    const reorderCall = (orderedContentIds) =>
+      authFetch(`/api/admin/field-agent-training/modules/${concurrentMod._id}/reorder-content`, adminToken, {
+        method: "PATCH",
+        body: JSON.stringify({ orderedContentIds }),
+      });
+
+    const [concurrent1, concurrent2] = await Promise.all([
+      reorderCall([ids[3], ids[2], ids[1], ids[0]]),
+      reorderCall([ids[1], ids[0], ids[3], ids[2]]),
+    ]);
+    check(
+      "concurrent reorder: at least one request succeeds (the other may 409-retry-exhausted, never corrupts data)",
+      concurrent1.status === 200 || concurrent2.status === 200,
+      `${concurrent1.status} / ${concurrent2.status}`
+    );
+
+    const afterConcurrent = await TrainingContent.find({ trainingModule: concurrentMod._id }).select("order").lean();
+    const concurrentOrders = afterConcurrent.map((c) => c.order).sort((a, b) => a - b);
+    check(
+      "after concurrent reorder, final DB state is a valid contiguous permutation (0,1,2,3 each exactly once)",
+      JSON.stringify(concurrentOrders) === JSON.stringify([0, 1, 2, 3]),
+      JSON.stringify(concurrentOrders)
+    );
+  }
+
   // ── CLEANUP — remove every DRAFT test-fixture version tagged above ──
   // Only DRAFT-status tagged versions are deleted — this is a hard
   // safety guard, not a formality: one tagged fixture (the English-

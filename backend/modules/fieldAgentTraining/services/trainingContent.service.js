@@ -542,6 +542,103 @@ export const deleteContent = async ({ contentId, adminId }) => {
   });
 };
 
+// ─── CONTENT REORDER (DRAFT versions only) ────────────────────────
+// FA-3.3.2.2. Two-phase atomic reorder within one transaction: phase
+// 1 moves every item in the module to a temporary, guaranteed-unique
+// NEGATIVE order (clearing the {trainingModule,order} unique index's
+// collision space); phase 2 assigns the real, contiguous, 0-based
+// target order. This is the same "flip inside a transaction so the
+// unique index never sees a collision" idiom already proven for
+// FieldAgentTraining.isActive during FA-3.3.1's own correction round
+// — a naive single-pass reassignment would collide with whichever
+// item currently holds the target order value.
+//
+// Concurrency: a write conflict from a second, overlapping reorder on
+// the same module is retried with a fresh transaction (bounded, 3
+// attempts) before surfacing 409 asking the caller to refetch and
+// retry — MongoDB transactions serialize conflicting writes to the
+// same documents, they don't silently corrupt them.
+const MAX_REORDER_ATTEMPTS = 3;
+
+export const reorderModuleContent = async ({ moduleId, orderedContentIds, adminId }) => {
+  const trainingModule = await TrainingModule.findById(moduleId);
+  if (!trainingModule) throw Errors.notFound("Training module not found");
+
+  const version = await getVersionOrThrow(trainingModule.trainingVersion);
+  assertDraft(version);
+
+  const existing = await TrainingContent.find({ trainingModule: moduleId }).select("_id order").lean();
+  const existingIds = existing.map((c) => String(c._id));
+  const requestedIds = orderedContentIds.map(String);
+
+  const isExactPermutation =
+    requestedIds.length === existingIds.length &&
+    new Set(requestedIds).size === requestedIds.length &&
+    existingIds.every((id) => requestedIds.includes(id));
+  if (!isExactPermutation) {
+    throw Errors.badRequest(
+      "orderedContentIds must be exactly a permutation of this module's existing content ids — no missing, extra, or duplicate entries"
+    );
+  }
+
+  const oldOrder = Object.fromEntries(existing.map((c) => [String(c._id), c.order]));
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= MAX_REORDER_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      for (let i = 0; i < requestedIds.length; i++) {
+        await TrainingContent.updateOne(
+          { _id: requestedIds[i], trainingModule: moduleId },
+          { $set: { order: -(i + 1) } },
+          { session }
+        );
+      }
+      for (let i = 0; i < requestedIds.length; i++) {
+        await TrainingContent.updateOne(
+          { _id: requestedIds[i], trainingModule: moduleId },
+          { $set: { order: i } },
+          { session }
+        );
+      }
+
+      await session.commitTransaction();
+      lastErr = null;
+      break;
+    } catch (err) {
+      await session.abortTransaction();
+      lastErr = err;
+      const isWriteConflict = err.code === 112 || err.codeName === "WriteConflict";
+      if (!isWriteConflict) break;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  if (lastErr) {
+    if (lastErr.code === 112 || lastErr.codeName === "WriteConflict") {
+      throw Errors.conflict("Reorder could not complete due to a concurrent update on this module — refetch and retry");
+    }
+    throw lastErr;
+  }
+
+  const newOrder = Object.fromEntries(requestedIds.map((id, i) => [id, i]));
+
+  await writeAudit({
+    entityType: TRAINING_AUDIT_ENTITY_TYPE.TRAINING_MODULE,
+    entityId: moduleId,
+    actorRef: adminId,
+    actorType: TRAINING_AUDIT_ACTOR_TYPE.ADMIN,
+    action: TRAINING_AUDIT_ACTION.MODULE_UPDATED,
+    oldValue: { contentOrder: oldOrder },
+    newValue: { contentOrder: newOrder },
+  });
+
+  return TrainingContent.find({ trainingModule: moduleId }).sort({ order: 1 }).lean();
+};
+
 // ─── PUBLISH / RETIRE ─────────────────────────────────────────────
 
 const assertVersionPublishable = async (versionId) => {
@@ -696,6 +793,86 @@ export const retireVersion = async ({ versionId, adminId, reason }) => {
   });
 
   return version;
+};
+
+// ─── DRAFT DISCARD (DRAFT versions only) ──────────────────────────
+// FA-3.3.2.2. Permanently deletes a DRAFT version and everything
+// under it — genuinely destructive, unlike retire (status flip,
+// preserves data). The single status check below, read from the live
+// document (never inferred from the id alone), is what makes
+// "PUBLISHED cannot be discarded" and "RETIRED cannot be discarded"
+// structurally true.
+//
+// The three deletes are one all-or-nothing transaction — no partial
+// deletion is possible even on crash, so no orphan TrainingModule/
+// TrainingContent row can ever result from this. Cloudinary cleanup
+// happens strictly AFTER that transaction commits (same distributed-
+// consistency rule as setContentMedia/FA-3.3.2.3: MongoDB
+// authoritative, Cloudinary best-effort, a cleanup failure never
+// reopens or fails the discard), reusing the exact same
+// isPublicIdReferencedElsewhere/deleteTrainingMedia machinery —
+// scoped to "does any OTHER version's content still reference this
+// asset", since everything that referenced it FROM this version was
+// just deleted together.
+//
+// Idempotency: re-invoking with the same versionId after a successful
+// discard returns 404 (the resource is genuinely gone) — the correct,
+// expected "safe to call again" behavior for a destructive operation.
+//
+// TrainingAuditEvent rows referencing this version are never deleted
+// — audit logs legitimately outlive the entities they describe.
+export const discardDraftVersion = async ({ versionId, adminId }) => {
+  const version = await getVersionOrThrow(versionId);
+  if (version.status !== TRAINING_VERSION_STATUS.DRAFT) {
+    throw Errors.conflict(`Version ${version.versionNumber} is ${version.status}, not DRAFT — it cannot be discarded`);
+  }
+
+  const versionNumber = version.versionNumber;
+  const contentSnapshot = await TrainingContent.find({ trainingVersion: versionId }).select("media").lean();
+  const moduleCount = await TrainingModule.countDocuments({ trainingVersion: versionId });
+  const contentCount = contentSnapshot.length;
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    await TrainingContent.deleteMany({ trainingVersion: versionId }, { session });
+    await TrainingModule.deleteMany({ trainingVersion: versionId }, { session });
+    await TrainingVersion.deleteOne({ _id: versionId }, { session });
+    await session.commitTransaction();
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+
+  const distinctMedia = new Map();
+  for (const c of contentSnapshot) {
+    if (c.media?.publicId) distinctMedia.set(c.media.publicId, c.media);
+  }
+
+  const mediaCleanup = [];
+  for (const media of distinctMedia.values()) {
+    const stillReferenced = await isPublicIdReferencedElsewhere(media.publicId, { trainingVersion: { $ne: versionId } });
+    if (stillReferenced) {
+      mediaCleanup.push({ publicId: media.publicId, status: "skipped", reason: "publicId still referenced by another TrainingContent document" });
+      continue;
+    }
+    const result = await deleteTrainingMedia(media);
+    mediaCleanup.push({ publicId: media.publicId, status: result.success ? "success" : "failed", error: result.error ?? null });
+  }
+
+  await writeAudit({
+    entityType: TRAINING_AUDIT_ENTITY_TYPE.TRAINING_VERSION,
+    entityId: versionId,
+    actorRef: adminId,
+    actorType: TRAINING_AUDIT_ACTOR_TYPE.ADMIN,
+    action: TRAINING_AUDIT_ACTION.VERSION_DISCARDED,
+    oldValue: { versionNumber, moduleCount, contentCount },
+    newValue: { mediaCleanup },
+  });
+
+  return { versionNumber, moduleCount, contentCount, mediaCleanup };
 };
 
 // ─── ADMIN READ: AGENT PROGRESS / AUDIT ───────────────────────────

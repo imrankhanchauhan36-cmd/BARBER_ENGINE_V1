@@ -99,6 +99,13 @@ export const trainingContentSchemas = {
     reason: Joi.string().trim().max(500).allow(null, ""),
   }).unknown(false),
 
+  // FA-3.3.2.2 — the service layer performs the authoritative
+  // exact-permutation check (this only validates shape: a non-empty
+  // array of well-formed ids).
+  reorderContent: Joi.object({
+    orderedContentIds: Joi.array().items(objectId).min(1).required(),
+  }).unknown(false),
+
   overrideCompletion: Joi.object({
     agentUserId: objectId.required(),
     contentId: objectId.required(),

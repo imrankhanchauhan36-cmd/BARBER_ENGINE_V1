@@ -37,10 +37,12 @@ import {
   addContentHandler,
   updateContentHandler,
   deleteContentHandler,
+  reorderModuleContentHandler,
   uploadContentMediaHandler,
   removeContentMediaHandler,
   publishVersionHandler,
   retireVersionHandler,
+  discardDraftVersionHandler,
   listAgentProgressHandler,
   getAgentProgressDetailHandler,
   listAgentTrainingHistoryHandler,
@@ -90,6 +92,15 @@ router.post(
   validate(trainingContentSchemas.retireVersion),
   retireVersionHandler
 );
+// FA-3.3.2.2 — discardDraftVersion itself re-reads the live document
+// and refuses anything not DRAFT (409) — this route adds no separate
+// status check, it's the service's own hard guarantee.
+router.delete(
+  "/versions/:versionId",
+  requireAdminLevel(...WRITE_LEVELS),
+  validate(trainingContentSchemas.versionIdParam, "params"),
+  discardDraftVersionHandler
+);
 
 // ─── Modules ──────────────────────────────────────────────────────
 router.post(
@@ -127,6 +138,13 @@ router.delete(
   requireAdminLevel(...WRITE_LEVELS),
   validate(trainingContentSchemas.contentIdParam, "params"),
   deleteContentHandler
+);
+router.patch(
+  "/modules/:moduleId/reorder-content",
+  requireAdminLevel(...WRITE_LEVELS),
+  validate(trainingContentSchemas.moduleIdParam, "params"),
+  validate(trainingContentSchemas.reorderContent),
+  reorderModuleContentHandler
 );
 router.post(
   "/content/:contentId/media",

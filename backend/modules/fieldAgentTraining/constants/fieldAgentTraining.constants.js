@@ -112,6 +112,13 @@ export const TRAINING_AUDIT_ACTION = Object.freeze({
   VERSION_CREATED: "VERSION_CREATED",
   VERSION_PUBLISHED: "VERSION_PUBLISHED",
   VERSION_RETIRED: "VERSION_RETIRED",
+  // FA-3.3.2.2 — genuinely distinct from VERSION_RETIRED: retiring
+  // preserves the version (status flip only); discarding permanently
+  // deletes a DRAFT and everything under it. Reusing VERSION_RETIRED
+  // for a destructive action would misrepresent what happened in a
+  // compliance record, which is why this is the one narrow exception
+  // to "no new audit-action granularity" for this phase.
+  VERSION_DISCARDED: "VERSION_DISCARDED",
   MODULE_CREATED: "MODULE_CREATED",
   MODULE_UPDATED: "MODULE_UPDATED",
   CONTENT_CREATED: "CONTENT_CREATED",
