@@ -16,6 +16,7 @@ import TrainingModule from "../models/TrainingModule.js";
 import TrainingContent from "../models/TrainingContent.js";
 import FieldAgentTraining from "../models/FieldAgentTraining.js";
 import TrainingAuditEvent from "../models/TrainingAuditEvent.js";
+import { deleteTrainingMedia } from "./mediaDelivery.service.js";
 import {
   TRAINING_VERSION_STATUS,
   MODULE_KEY,
@@ -364,6 +365,23 @@ export const addContent = async ({
   return content;
 };
 
+// FA-3.3.2.3 — the ADMIN HTTP API's generic `PATCH /content/:contentId`
+// rejects a `media` field with 400 at the Joi layer (see
+// trainingContent.validator.js's `.forbidden()`) — that is the actual
+// enforcement of "generic media mutation must be explicitly rejected,
+// not silently ignored," since a 400 is inherently an HTTP-facing
+// concept. This function is also called directly, bypassing HTTP/Joi
+// entirely, by two already-frozen internal scripts
+// (seedFieldAgentTrainingV1.js, verifyFieldAgentTraining.js) that
+// predate this hardening and must keep working unmodified. Rather
+// than throw for those trusted internal callers (which would break
+// them) or silently reapply the old unsafe direct-assignment (which
+// would reopen the exact integrity gap this subphase closes), a
+// supplied `media` field here is routed through the IDENTICAL
+// reference-checked, Cloudinary-safe logic setContentMedia uses
+// (`applyMediaMutation` below) — there is still exactly one
+// implementation of "how media may be safely mutated," reachable from
+// two entry points instead of duplicated or bypassed.
 export const updateContent = async ({ contentId, patch, adminId }) => {
   const content = await TrainingContent.findById(contentId).select("+grading");
   if (!content) throw Errors.notFound("Training content not found");
@@ -375,7 +393,6 @@ export const updateContent = async ({ contentId, patch, adminId }) => {
 
   const allowedFields = [
     "translations",
-    "media",
     "watchThresholdSeconds",
     "grading",
     "passingScore",
@@ -386,13 +403,22 @@ export const updateContent = async ({ contentId, patch, adminId }) => {
     if (patch[field] !== undefined) content[field] = patch[field];
   }
 
+  const oldMedia = content.media?.publicId ? { publicId: content.media.publicId, resourceType: content.media.resourceType } : null;
+  const mediaSupplied = patch.media !== undefined;
+  if (mediaSupplied) {
+    content.media = patch.media ?? { publicId: null, resourceType: null };
+  }
+
   // FA-3.3.2.1 — validate the FINAL merged state (contentType is
   // immutable, never in allowedFields, so it's always the original).
   validateGradingRubric({ contentType: content.contentType, grading: content.grading, translations: content.translations });
   validatePassingScore({ contentType: content.contentType, passingScore: content.passingScore });
   validateWatchThreshold({ contentType: content.contentType, watchThresholdSeconds: content.watchThresholdSeconds, media: content.media });
 
+  // MongoDB write FIRST — authoritative.
   await content.save();
+
+  const cloudinaryCleanup = mediaSupplied ? await applyMediaCleanup({ contentId: content._id, oldMedia, newMedia: content.media }) : null;
 
   await writeAudit({
     entityType: TRAINING_AUDIT_ENTITY_TYPE.TRAINING_CONTENT,
@@ -401,7 +427,97 @@ export const updateContent = async ({ contentId, patch, adminId }) => {
     actorType: TRAINING_AUDIT_ACTOR_TYPE.ADMIN,
     action: TRAINING_AUDIT_ACTION.CONTENT_UPDATED,
     oldValue,
-    newValue: content.toObject(),
+    newValue: cloudinaryCleanup ? { ...content.toObject(), cloudinaryCleanup } : content.toObject(),
+  });
+
+  return content;
+};
+
+// ─── MEDIA — SINGLE MUTATION CHOKE POINT (DRAFT versions only) ────
+// FA-3.3.2.3. Every media set/replace/remove flows through here, and
+// only here — closing the FA-3.3.2 audit's own flagged risk that a
+// raw JSON `updateContent` could set an arbitrary, never-uploaded
+// `publicId` (that path is now a hard 400 — see updateContent above
+// and the Joi schema).
+//
+// Distributed-consistency rule (approved plan, non-negotiable):
+//   1. MongoDB is authoritative — the DB write always happens first.
+//   2. Cloudinary cleanup happens strictly AFTER that write succeeds,
+//      never before, never inside a transaction with it (Cloudinary
+//      cannot participate in Mongo's two-phase commit).
+//   3. A Cloudinary failure NEVER rolls back or fails this request —
+//      the DB state is already correct and committed by that point.
+//   4. Every cleanup attempt (success, skip, or failure) is recorded
+//      in the same CONTENT_UPDATED audit event's newValue — no new
+//      audit action is introduced for this.
+//   5. Before ever destroying an old publicId, verify no OTHER
+//      TrainingContent document still references it — if one does,
+//      the delete is skipped, never attempted, and the skip is itself
+//      audited with its reason. This is defense-in-depth: normal
+//      operation never produces a shared publicId (each Cloudinary
+//      upload gets a fresh, auto-generated id scoped to its own
+//      content folder), especially now that the only path that could
+//      previously set an arbitrary reused publicId (raw JSON
+//      updateContent) is closed — but the check costs one cheap
+//      countDocuments query and removes any doubt.
+const isPublicIdReferencedElsewhere = async (publicId, excludeQuery) => {
+  const count = await TrainingContent.countDocuments({ "media.publicId": publicId, ...excludeQuery });
+  return count > 0;
+};
+
+// Called strictly AFTER the DB has already been updated to stop
+// referencing `oldMedia` — decides whether the now-superseded/removed
+// asset is safe to destroy, and returns the cleanup outcome for the
+// caller to fold into its own audit event. The single implementation
+// of "how a superseded media asset may be safely cleaned up," shared
+// by setContentMedia and updateContent (see that function's own
+// header for why it also needs this).
+const applyMediaCleanup = async ({ contentId, oldMedia, newMedia }) => {
+  if (!oldMedia?.publicId || oldMedia.publicId === newMedia?.publicId) return null;
+
+  const stillReferenced = await isPublicIdReferencedElsewhere(oldMedia.publicId, { _id: { $ne: contentId } });
+  if (stillReferenced) {
+    return { status: "skipped", reason: "publicId still referenced by another TrainingContent document" };
+  }
+  const result = await deleteTrainingMedia(oldMedia);
+  return result.success ? { status: "success" } : { status: "failed", error: result.error };
+};
+
+// `media` is `{publicId, resourceType}` to set/replace, or `null`/
+// omitted to remove. Reused by both the upload handler (replace) and
+// the remove handler — see adminTraining.controller.js.
+export const setContentMedia = async ({ contentId, media, adminId }) => {
+  const content = await TrainingContent.findById(contentId).select("+grading");
+  if (!content) throw Errors.notFound("Training content not found");
+
+  const version = await getVersionOrThrow(content.trainingVersion);
+  assertDraft(version);
+
+  const oldValue = content.toObject();
+  const oldMedia = content.media?.publicId ? { publicId: content.media.publicId, resourceType: content.media.resourceType } : null;
+  const newMedia = media ?? { publicId: null, resourceType: null };
+
+  content.media = newMedia;
+
+  // FA-3.3.2.1's frozen rule, reused unmodified: removing/replacing
+  // media on a LESSON must never silently leave a positive
+  // watchThresholdSeconds pointing at no watchable media.
+  validateWatchThreshold({ contentType: content.contentType, watchThresholdSeconds: content.watchThresholdSeconds, media: content.media });
+
+  // MongoDB write FIRST — authoritative, and the only thing that
+  // determines what the system believes exists.
+  await content.save();
+
+  const cloudinaryCleanup = await applyMediaCleanup({ contentId: content._id, oldMedia, newMedia });
+
+  await writeAudit({
+    entityType: TRAINING_AUDIT_ENTITY_TYPE.TRAINING_CONTENT,
+    entityId: content._id,
+    actorRef: adminId,
+    actorType: TRAINING_AUDIT_ACTOR_TYPE.ADMIN,
+    action: TRAINING_AUDIT_ACTION.CONTENT_UPDATED,
+    oldValue,
+    newValue: cloudinaryCleanup ? { ...content.toObject(), cloudinaryCleanup } : content.toObject(),
   });
 
   return content;

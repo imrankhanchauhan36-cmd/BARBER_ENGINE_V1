@@ -16,6 +16,7 @@ import {
   updateModule,
   addContent,
   updateContent,
+  setContentMedia,
   deleteContent,
   publishVersion,
   retireVersion,
@@ -118,13 +119,25 @@ export const uploadContentMediaHandler = async (req, res, next) => {
       contentId: req.params.contentId,
     });
 
-    const content = await updateContent({
+    // FA-3.3.2.3 — setContentMedia is the single media mutation choke
+    // point (replaces the old generic updateContent({patch:{media}})
+    // call, which is now a hard 400 for exactly this reason).
+    const content = await setContentMedia({
       contentId: req.params.contentId,
-      patch: { media: { publicId, resourceType } },
+      media: { publicId, resourceType },
       adminId: req.user._id,
     });
 
     return successResponse(res, { message: "Media uploaded", data: { content } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const removeContentMediaHandler = async (req, res, next) => {
+  try {
+    const content = await setContentMedia({ contentId: req.params.contentId, media: null, adminId: req.user._id });
+    return successResponse(res, { message: "Media removed", data: { content } });
   } catch (err) {
     return next(err);
   }

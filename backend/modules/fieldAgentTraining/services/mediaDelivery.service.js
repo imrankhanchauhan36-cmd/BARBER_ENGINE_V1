@@ -59,6 +59,24 @@ export const uploadTrainingMedia = async ({ buffer, mimetype, contentId }) => {
   return { publicId: result.public_id, resourceType };
 };
 
+// FA-3.3.2.3 — best-effort deletion of a superseded/removed
+// authenticated asset. NEVER throws: MongoDB is authoritative and
+// this is always called strictly AFTER the DB write that stops
+// referencing the asset already succeeded — a Cloudinary failure here
+// must never roll back or fail that already-successful DB mutation.
+// The caller (trainingContent.service.js#setContentMedia) is
+// responsible for (a) verifying no other TrainingContent document
+// still references this publicId before ever calling this, and
+// (b) recording the {success,error} result into the audit trail.
+export const deleteTrainingMedia = async ({ publicId, resourceType }) => {
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: "authenticated" });
+    return { success: true, error: null };
+  } catch (err) {
+    return { success: false, error: err.message || String(err) };
+  }
+};
+
 // Mints a fresh, short-TTL signed delivery URL. Caller
 // (fieldAgentTraining.service.js) is responsible for writing the
 // MEDIA_ACCESS_GRANTED audit event — kept separate here so this

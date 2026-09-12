@@ -38,6 +38,7 @@ import {
   updateContentHandler,
   deleteContentHandler,
   uploadContentMediaHandler,
+  removeContentMediaHandler,
   publishVersionHandler,
   retireVersionHandler,
   listAgentProgressHandler,
@@ -133,6 +134,12 @@ router.post(
   validate(trainingContentSchemas.contentIdParam, "params"),
   upload.single("media"),
   uploadContentMediaHandler
+);
+router.delete(
+  "/content/:contentId/media",
+  requireAdminLevel(...WRITE_LEVELS),
+  validate(trainingContentSchemas.contentIdParam, "params"),
+  removeContentMediaHandler
 );
 
 // ─── Progress / Audit (read-only) ─────────────────────────────────

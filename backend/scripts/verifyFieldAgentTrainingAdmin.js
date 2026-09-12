@@ -373,6 +373,174 @@ const run = async () => {
     );
   }
 
+  // ── FA-3.3.2.3 — MEDIA LIFECYCLE + CLEANUP ──────────────────────
+  {
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64"
+    );
+    const uploadMedia = (contentId, filename = "test.png") => {
+      const form = new FormData();
+      form.append("media", new Blob([tinyPng], { type: "image/png" }), filename);
+      return fetch(url(`/api/admin/field-agent-training/content/${contentId}/media`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: form,
+      });
+    };
+    const latestAudit = (entityId) =>
+      TrainingAuditEvent.findOne({ entityType: "TRAINING_CONTENT", entityId, action: "CONTENT_UPDATED" }).sort({ createdAt: -1 }).lean();
+
+    const draft = await createTaggedDraft("media lifecycle");
+    const { module: mod } = await addTaggedModule(draft._id, MODULE_KEY.FOUNDATION);
+
+    const addLesson = async (title) => {
+      const res = await authFetch(`/api/admin/field-agent-training/modules/${mod._id}/content`, adminToken, {
+        method: "POST",
+        body: JSON.stringify({ contentType: "LESSON", translations: [{ languageCode: "en", title, body: title, approved: true }] }),
+      });
+      return (await res.json())?.data?.content;
+    };
+    const lesson1 = await addLesson("L1");
+    const lesson2 = await addLesson("L2");
+
+    // ── Correction 2: generic PATCH with media -> 400, unrelated PATCH still works ──
+    const patchWithMedia = await authFetch(`/api/admin/field-agent-training/content/${lesson1._id}`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ media: { publicId: "x", resourceType: "video" } }),
+    });
+    check("generic PATCH with media field -> 400", patchWithMedia.status === 400, patchWithMedia.status);
+
+    const patchNoMedia = await authFetch(`/api/admin/field-agent-training/content/${lesson1._id}`, adminToken, {
+      method: "PATCH",
+      body: JSON.stringify({ translations: [{ languageCode: "en", title: "L1 updated", body: "L1 updated", approved: true }] }),
+    });
+    check("generic PATCH without media still succeeds", patchNoMedia.status === 200, patchNoMedia.status);
+
+    // ── upload (setContentMedia choke point) + replace + cleanup success ──
+    const upload1 = await uploadMedia(lesson1._id, "first.png");
+    const upload1Json = await upload1.json();
+    const firstPublicId = upload1Json?.data?.content?.media?.publicId;
+    check("media upload via dedicated endpoint succeeds", upload1.status === 200 && !!firstPublicId, JSON.stringify(upload1Json).slice(0, 200));
+
+    const replace1 = await uploadMedia(lesson1._id, "second.png");
+    const replace1Json = await replace1.json();
+    check(
+      "media replace succeeds with a genuinely new publicId",
+      replace1.status === 200 && replace1Json?.data?.content?.media?.publicId !== firstPublicId
+    );
+    const auditAfterReplace = await latestAudit(lesson1._id);
+    check(
+      "replace: superseded asset cleanup audited as success (real Cloudinary destroy)",
+      auditAfterReplace?.newValue?.cloudinaryCleanup?.status === "success",
+      JSON.stringify(auditAfterReplace?.newValue?.cloudinaryCleanup)
+    );
+
+    // ── removal ──
+    const remove1 = await authFetch(`/api/admin/field-agent-training/content/${lesson1._id}/media`, adminToken, { method: "DELETE" });
+    const remove1Json = await remove1.json();
+    check(
+      "media removal via DELETE succeeds, publicId cleared",
+      remove1.status === 200 && remove1Json?.data?.content?.media?.publicId == null,
+      remove1.status
+    );
+    const auditAfterRemove = await latestAudit(lesson1._id);
+    check(
+      "removal: cleanup audited as success (real Cloudinary destroy)",
+      auditAfterRemove?.newValue?.cloudinaryCleanup?.status === "success",
+      JSON.stringify(auditAfterRemove?.newValue?.cloudinaryCleanup)
+    );
+
+    // ── Correction 1: shared publicId -> destroy skipped, not attempted ──
+    // Real uploads always get a fresh, unique publicId, so a shared
+    // reference can only be constructed directly in the DB — this
+    // reproduces the edge case the reference-check defends against
+    // (defense-in-depth), which the real API surface cannot itself
+    // produce once Correction 2 is in effect.
+    const upload2 = await uploadMedia(lesson2._id, "shared.png");
+    const upload2Json = await upload2.json();
+    const sharedMedia = upload2Json?.data?.content?.media;
+    check("second media upload succeeds (setup for shared-publicId test)", upload2.status === 200 && !!sharedMedia?.publicId);
+
+    await TrainingContent.updateOne({ _id: lesson1._id }, { $set: { media: sharedMedia } });
+
+    const removeShared = await authFetch(`/api/admin/field-agent-training/content/${lesson1._id}/media`, adminToken, { method: "DELETE" });
+    check("removing shared-publicId media still succeeds (DB updated)", removeShared.status === 200, removeShared.status);
+
+    const auditAfterSharedRemove = await latestAudit(lesson1._id);
+    check(
+      "shared publicId removal is SKIPPED (not destroyed), reason recorded",
+      auditAfterSharedRemove?.newValue?.cloudinaryCleanup?.status === "skipped" && !!auditAfterSharedRemove?.newValue?.cloudinaryCleanup?.reason,
+      JSON.stringify(auditAfterSharedRemove?.newValue?.cloudinaryCleanup)
+    );
+
+    const lesson2AfterSkip = await TrainingContent.findById(lesson2._id).lean();
+    check(
+      "the OTHER content item's shared asset survives untouched",
+      lesson2AfterSkip.media?.publicId === sharedMedia.publicId
+    );
+
+    // ── real Cloudinary cleanup failure (genuine API error, not mocked) ──
+    // Empirically confirmed before writing this test: Cloudinary's
+    // destroy API treats an already-nonexistent publicId as a
+    // successful no-op (NOT an error), but genuinely rejects an
+    // invalid resource_type value with a real HTTP error. Corrupting
+    // the stored resourceType directly in the DB (application code can
+    // never produce this — mediaSchema's enum constrains it at every
+    // real write path) is what makes the upcoming destroy call
+    // genuinely fail, for real, against Cloudinary's real API.
+    const upload3 = await uploadMedia(lesson2._id, "willbecorrupted.png");
+    const upload3Json = await upload3.json();
+    check("third media upload succeeds (setup for real-failure test)", upload3.status === 200);
+
+    await TrainingContent.updateOne({ _id: lesson2._id }, { $set: { "media.resourceType": "not-a-real-type" } });
+
+    const replaceTriggeringFailure = await uploadMedia(lesson2._id, "newmedia.png");
+    const replaceFailureJson = await replaceTriggeringFailure.json();
+    check(
+      "request still succeeds even when the real Cloudinary cleanup call fails",
+      replaceTriggeringFailure.status === 200,
+      JSON.stringify(replaceFailureJson).slice(0, 200)
+    );
+
+    const lesson2AfterFailure = await TrainingContent.findById(lesson2._id).lean();
+    check(
+      "DB media field correctly updated to the NEW media despite the cleanup failure (MongoDB authoritative)",
+      lesson2AfterFailure.media?.publicId === replaceFailureJson?.data?.content?.media?.publicId &&
+        lesson2AfterFailure.media.publicId !== sharedMedia.publicId
+    );
+
+    const auditAfterFailure = await latestAudit(lesson2._id);
+    check(
+      "the real Cloudinary cleanup failure is recorded in the audit trail",
+      auditAfterFailure?.newValue?.cloudinaryCleanup?.status === "failed" && !!auditAfterFailure?.newValue?.cloudinaryCleanup?.error,
+      JSON.stringify(auditAfterFailure?.newValue?.cloudinaryCleanup)
+    );
+
+    // ── published content: media mutation rejected, nothing destroyed ──
+    const publishedVersion = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    const publishedMediaContent = await TrainingContent.findOne({
+      trainingVersion: publishedVersion._id,
+      "media.publicId": { $ne: null },
+    }).lean();
+    const beforePublicId = publishedMediaContent?.media?.publicId;
+
+    const removeOnPublished = await authFetch(`/api/admin/field-agent-training/content/${publishedMediaContent._id}/media`, adminToken, {
+      method: "DELETE",
+    });
+    check("removing media from PUBLISHED content -> 409", removeOnPublished.status === 409, removeOnPublished.status);
+
+    const uploadOnPublished = await uploadMedia(publishedMediaContent._id, "shouldfail.png");
+    check("uploading media to PUBLISHED content -> 409", uploadOnPublished.status === 409, uploadOnPublished.status);
+
+    const publishedMediaAfter = await TrainingContent.findById(publishedMediaContent._id).lean();
+    check(
+      "PUBLISHED content's original media publicId is completely untouched (assertDraft blocks before any Cloudinary call)",
+      publishedMediaAfter.media?.publicId === beforePublicId,
+      `before=${beforePublicId} after=${publishedMediaAfter.media?.publicId}`
+    );
+  }
+
   // ── CLEANUP — remove every DRAFT test-fixture version tagged above ──
   // Only DRAFT-status tagged versions are deleted — this is a hard
   // safety guard, not a formality: one tagged fixture (the English-

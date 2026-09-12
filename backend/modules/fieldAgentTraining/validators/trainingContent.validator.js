@@ -77,9 +77,17 @@ export const trainingContentSchemas = {
     helpEligible: Joi.boolean().optional(),
   }).unknown(false),
 
+  // FA-3.3.2.3 — `media` is explicitly FORBIDDEN here (not merely
+  // omitted from the allowed keys — `.forbidden()` produces a clear
+  // 400 naming the field, distinct from a generic "unknown key"
+  // rejection). `content.media` has exactly one mutation choke point:
+  // setContentMedia, reached only via the dedicated
+  // POST/DELETE .../content/:contentId/media routes below.
   updateContent: Joi.object({
     translations: Joi.array().items(translationSchema).min(1).optional(),
-    media: mediaSchema.optional(),
+    media: Joi.any().forbidden().messages({
+      "any.unknown": "media cannot be set via updateContent — use POST or DELETE .../content/:contentId/media instead",
+    }),
     watchThresholdSeconds: Joi.number().integer().min(0).allow(null).optional(),
     grading: gradingSchema.allow(null).optional(),
     passingScore: Joi.number().min(0).max(100).allow(null).optional(),
