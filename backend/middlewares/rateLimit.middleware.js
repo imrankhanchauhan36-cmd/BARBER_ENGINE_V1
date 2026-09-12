@@ -82,3 +82,41 @@ export const bookingRateLimiter = rateLimit({
     message: "Too many requests. Please slow down.",
   },
 });
+
+//////////////////////////////////////////////////////////////
+// 🪪 FA-3.2 — FIELD AGENT KYC LIMITS (Field-Agent-scoped only —
+// Owner/admin KYC endpoints are NOT retrofitted with rate limiting
+// in this phase, per the approved FA-3.2 plan)
+//////////////////////////////////////////////////////////////
+
+export const fieldAgentKycSubmissionRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 1000, // 1 min
+  max: 10,
+  message: {
+    success: false,
+    message: "Too many KYC submission requests. Please wait.",
+  },
+});
+
+export const fieldAgentKycDocumentRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 1000, // 1 min
+  max: 10,
+  message: {
+    success: false,
+    message: "Too many document upload requests. Please wait.",
+  },
+});
+
+// Stricter — each call may hit the real Surepass API, which has a
+// financial/rate cost, unlike the two limiters above.
+export const fieldAgentKycProviderRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: {
+    success: false,
+    message: "Too many automatic verification attempts. Please try again later or continue with Manual KYC.",
+  },
+});

@@ -13,6 +13,7 @@ import { startServiceOverdueJob } from "./jobs/serviceOverdue.job.js";
 import { startSlaScannerJob } from "./jobs/slaScanner.job.js"; // ← Phase G Step 10 — wires up the Step 6-8 SLA scanner/escalation/notification chain, previously file-only
 import { startRatingOutboxJob } from "./jobs/ratingOutbox.job.js"; // ← Rating & Review Engine Phase 2 — distributed-safe RatingEvent outbox consumer
 import { startWeeklyScheduleMaterializerJob } from "./jobs/weeklyScheduleMaterializer.job.js"; // ← C4 Phase 2 — converts WeeklyScheduleTemplate into concrete ProfessionalChairAssignment rows for each salon's rolling booking window
+import { startFieldAgentKycSyncJob } from "./modules/kyc/jobs/fieldAgentKycSync.job.js"; // ← FA-3.2 consistency layer — durable FieldAgentKycSyncEvent outbox consumer + reconciliation
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -188,6 +189,18 @@ const ratingOutboxJob = startRatingOutboxJob();
 const weeklyScheduleMaterializerJob = startWeeklyScheduleMaterializerJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7k: START FIELD AGENT KYC SYNC (FA-3.2 Consistency Layer)
+//
+// Consumer (every 15s) applies FieldAgentKycSyncEvent rows onto the
+// FA-2 FieldAgentApplication lifecycle; reconciliation (every 3 min)
+// recovers any event the fast path in fieldAgentKyc.service.js failed
+// to durably record, using durable VerificationLog evidence. No io
+// needed — no realtime emit. See modules/kyc/jobs/fieldAgentKycSync.job.js.
+//////////////////////////////////////////////////////////////
+
+const fieldAgentKycSyncJob = startFieldAgentKycSyncJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -198,7 +211,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -255,6 +268,9 @@ const shutdown = async (signal) => {
 
       weeklyScheduleMaterializerJob.stop();
       console.log("✅ Weekly schedule materializer job stopped");
+
+      fieldAgentKycSyncJob.stop();
+      console.log("✅ Field Agent KYC sync job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

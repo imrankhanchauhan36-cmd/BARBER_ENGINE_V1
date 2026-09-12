@@ -49,8 +49,26 @@ const calcKYCStatus = (level, currentStatus) => {
 /**
  * ─── VERIFY PAN ──────────────────────────────────────────
  * Uses Surepass if token available, else manual
+ *
+ * FA-3.2 — added optional actorId/actorRole/actorIsAdmin, all
+ * defaulting to the existing adminId/adminLevel/true so every existing
+ * (admin) caller is completely unaffected and produces byte-identical
+ * verifiedBy/triggeredBy/triggeredByRole output. A non-admin caller
+ * (Field Agent self-serve verification) passes actorIsAdmin:false so
+ * this KYC record's verifiedBy is NOT falsely credited to a non-admin
+ * actor — the true source of truth for "how was this verified" remains
+ * verification.pan.verificationSource (SUREPASS/MANUAL), untouched by
+ * any of these actor-attribution parameters. Provider selection
+ * (useAPI below) and the resulting success/source/status are entirely
+ * unaffected by who the actor is.
  */
-export const verifyPAN = async ({ kyc, panNumber, nameOnPAN, adminId, adminLevel, requestId }) => {
+export const verifyPAN = async ({
+  kyc, panNumber, nameOnPAN, requestId,
+  adminId, adminLevel,
+  actorId = adminId,
+  actorRole = adminLevel,
+  actorIsAdmin = true,
+}) => {
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
@@ -72,7 +90,7 @@ export const verifyPAN = async ({ kyc, panNumber, nameOnPAN, adminId, adminLevel
     kyc.verification.pan.status            = result.status;
     kyc.verification.pan.verified          = result.success;
     kyc.verification.pan.verifiedAt        = result.success ? new Date() : null;
-    kyc.verification.pan.verifiedBy        = adminId;
+    kyc.verification.pan.verifiedBy        = actorIsAdmin ? actorId : null;
     kyc.verification.pan.verificationSource = result.source;
     kyc.verification.pan.remarks           = result.remarks;
 
@@ -88,8 +106,8 @@ export const verifyPAN = async ({ kyc, panNumber, nameOnPAN, adminId, adminLevel
       ownerId:         kyc.ownerId,
       action:          result.success ? VERIFICATION_ACTION.PAN_VERIFIED : VERIFICATION_ACTION.DOCUMENT_REJECTED,
       source:          result.source,
-      triggeredBy:     adminId,
-      triggeredByRole: adminLevel,
+      triggeredBy:     actorId,
+      triggeredByRole: actorRole,
       field:           "pan",
       newValue:        maskedPAN,
       success:         result.success,

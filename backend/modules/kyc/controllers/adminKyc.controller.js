@@ -16,6 +16,7 @@ import { Errors, successResponse } from "../../../utils/response.js";
 import { APPLICANT_TYPE, KYC_STATUS } from "../constants/kyc.constants.js";
 import { toDetailDTO, toListDTO, toSummaryDTO } from "../dto/adminKyc.dto.js";
 import KYC from "../models/KYC.js";
+import { syncFieldAgentApplicationOnApproval, syncFieldAgentApplicationOnRejection } from "../services/fieldAgentKyc.service.js";
 import { approveKYC, assignKYC, getKYCLogs, rejectKYC, requestReupload } from "../services/kyc.service.js";
 import { verifyAadhaar, verifyBank, verifyPAN } from "../services/verification.service.js";
 import { validateApprove, validateAssign, validateReject, validateRequestReupload } from "../validators/kyc.validator.js";
@@ -297,6 +298,18 @@ export const approveKYCHandler = async (req, res, next) => {
       });
     }
 
+    //////////////////////////////////////////////////////
+    // 🔗 FA-3.2 — FIELD AGENT APPLICATION LIFECYCLE SYNC (durable event,
+    // not a direct mutation — the actual FieldAgentApplication
+    // transition happens later in modules/kyc/jobs/fieldAgentKycSync
+    // .job.js's consumer. Non-blocking, after write — mirrors the
+    // notification block above. See fieldAgentKyc.service.js's file
+    // header for the full rationale.)
+    //////////////////////////////////////////////////////
+    if (updated.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
+      await syncFieldAgentApplicationOnApproval(updated);
+    }
+
     return successResponse(res, {
       message: "KYC approved successfully",
       data: { id: updated._id, status: updated.status, approvedAt: updated.approvedAt, expiresAt: updated.expiresAt },
@@ -358,6 +371,15 @@ export const rejectKYCHandler = async (req, res, next) => {
         actionUrl:     "/kyc",
         meta:          { kycId: updated._id },
       });
+    }
+
+    //////////////////////////////////////////////////////
+    // 🔗 FA-3.2 — FIELD AGENT APPLICATION LIFECYCLE SYNC
+    // (non-blocking, after write — see approveKYCHandler's identical
+    // comment above for the full rationale.)
+    //////////////////////////////////////////////////////
+    if (updated.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
+      await syncFieldAgentApplicationOnRejection(updated);
     }
 
     return successResponse(res, {

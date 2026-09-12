@@ -12,6 +12,7 @@ import redis, { isRedisReady } from "./config/redis.js";
 
 // 🛣️ Routes
 import ownerKycRoutes from "./modules/kyc/routes/ownerKyc.routes.js"; // ← NEW — Phase 6C owner KYC submission
+import fieldAgentKycRoutes from "./modules/kyc/routes/fieldAgentKyc.routes.js"; // ← NEW — FA-3.2 Field Agent KYC submission
 import adminRoutes from "./routes/admin.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import adminServiceRatingRoutes from "./routes/adminServiceRating.routes.js"; // ← Rating & Review Engine Phase 2 — replaces retired adminRating.routes.js
@@ -277,6 +278,7 @@ app.use("/api", protect, onboardingBypass, bookingRoutes);
 app.use("/api/payments", protect, onboardingBypass, paymentRoutes);
 app.use("/api/payouts", protect, onboardingBypass, payoutRoutes);
 app.use("/api/salon/kyc", protect, onboardingBypass, ownerKycRoutes); // ← NEW — Phase 6C owner KYC submission
+app.use("/api/field-agent/kyc", protect, onboardingBypass, fieldAgentKycRoutes); // ← NEW — FA-3.2 Field Agent KYC submission
 app.use("/api/reports", protect, onboardingBypass, reportRoutes);
 app.use("/api/ratings", protect, onboardingBypass, serviceRatingRoutes);
 app.use("/api/salon-media", protect, onboardingBypass, salonMediaRoutes);

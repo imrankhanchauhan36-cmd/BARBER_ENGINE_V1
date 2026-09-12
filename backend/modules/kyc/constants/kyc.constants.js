@@ -191,3 +191,18 @@ export const OPTIONAL_DOCUMENT_KEYS = ["gstCertificate"];
 
 export const REQUIRED_DOCUMENT_KEYS = Object.keys(OWNER_DOCUMENT_KEY_MAP)
   .filter((key) => !OPTIONAL_DOCUMENT_KEYS.includes(key));
+
+// ─── Field Agent-Submittable Document Keys ────────────────
+// FA-3.2 — deliberately NOT derived from OWNER_DOCUMENT_KEY_MAP: Field
+// Agent is an individual applicant, not a Salon business, so GST
+// certificate and cancelled cheque (both Salon-business concepts) are
+// excluded by design, not by accident. All 4 keys are required — there
+// is no optional-document concept for Field Agent in this phase.
+export const FIELD_AGENT_DOCUMENT_KEY_MAP = {
+  panCard:      DOCUMENT_TYPE.PAN_CARD,
+  aadhaarFront: DOCUMENT_TYPE.AADHAAR_FRONT,
+  aadhaarBack:  DOCUMENT_TYPE.AADHAAR_BACK,
+  selfie:       DOCUMENT_TYPE.SELFIE,
+};
+
+export const FIELD_AGENT_REQUIRED_DOCUMENT_KEYS = Object.keys(FIELD_AGENT_DOCUMENT_KEY_MAP);
