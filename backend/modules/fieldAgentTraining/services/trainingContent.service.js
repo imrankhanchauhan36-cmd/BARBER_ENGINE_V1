@@ -25,12 +25,24 @@ import {
   PASSING_SCORE_MIN,
   PASSING_SCORE_MAX,
   WATCHABLE_MEDIA_RESOURCE_TYPES,
+  MAX_LIST_LIMIT,
+  DEFAULT_LIST_LIMIT,
   TRAINING_AUDIT_ACTOR_TYPE,
   TRAINING_AUDIT_ACTION,
   TRAINING_AUDIT_ENTITY_TYPE,
 } from "../constants/fieldAgentTraining.constants.js";
 
 const GRADED_TYPES = [CONTENT_TYPE.KNOWLEDGE_CHECK, CONTENT_TYPE.PRACTICAL_SCENARIO];
+
+// FA-3.3.2.4 — defensive backstop only; the Joi query schemas
+// (trainingContent.validator.js) are the primary defense and already
+// reject an out-of-range `limit` with a 400 before any of these
+// functions run. This clamp exists purely for any future internal
+// caller that bypasses that route-level validation.
+const clampLimit = (limit, fallback) => {
+  const n = Number(limit) || fallback;
+  return Math.max(1, Math.min(n, MAX_LIST_LIMIT));
+};
 
 // ─── FA-3.3.2.1 — AUTHOR-TIME + PUBLISH-TIME SHARED VALIDATORS ─────
 // Each is a pure no-op for content types it doesn't apply to, so every
@@ -198,7 +210,15 @@ export const createDraftVersion = async ({ adminId, notes }) => {
   return version;
 };
 
-export const listVersions = () => TrainingVersion.find().sort({ versionNumber: -1 }).lean();
+export const listVersions = ({ page = 1, limit = DEFAULT_LIST_LIMIT.VERSIONS } = {}) => {
+  const safeLimit = clampLimit(limit, DEFAULT_LIST_LIMIT.VERSIONS);
+  const safePage = Math.max(1, Number(page) || 1);
+  return TrainingVersion.find()
+    .sort({ versionNumber: -1 })
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
+    .lean();
+};
 
 export const getVersionDetail = async (versionId) => {
   const version = await getVersionOrThrow(versionId);
@@ -564,13 +584,16 @@ export const retireVersion = async ({ versionId, adminId, reason }) => {
 
 // ─── ADMIN READ: AGENT PROGRESS / AUDIT ───────────────────────────
 
-export const listAgentProgress = ({ page = 1, limit = 20 } = {}) =>
-  FieldAgentTraining.find()
+export const listAgentProgress = ({ page = 1, limit = DEFAULT_LIST_LIMIT.PROGRESS } = {}) => {
+  const safeLimit = clampLimit(limit, DEFAULT_LIST_LIMIT.PROGRESS);
+  const safePage = Math.max(1, Number(page) || 1);
+  return FieldAgentTraining.find()
     .populate("agentRef", "name phone role")
     .sort({ updatedAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
     .lean();
+};
 
 // The agent's CURRENT enrollment only — for the (common) case of one
 // lifetime enrollment this is the whole story; for an agent who has
@@ -594,14 +617,17 @@ export const listAgentTrainingHistory = async (agentUserId) =>
     .sort({ createdAt: -1 })
     .lean();
 
-export const listAuditEvents = ({ entityType, entityId, page = 1, limit = 50 } = {}) => {
+export const listAuditEvents = ({ entityType, entityId, page = 1, limit = DEFAULT_LIST_LIMIT.AUDIT } = {}) => {
   const filter = {};
   if (entityType) filter.entityType = entityType;
   if (entityId) filter.entityId = entityId;
 
+  const safeLimit = clampLimit(limit, DEFAULT_LIST_LIMIT.AUDIT);
+  const safePage = Math.max(1, Number(page) || 1);
+
   return TrainingAuditEvent.find(filter)
     .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
     .lean();
 };

@@ -131,5 +131,12 @@ fieldAgentTrainingSchema.index({ agentRef: 1, trainingVersion: 1 }, { unique: tr
 
 fieldAgentTrainingSchema.index({ trainingVersion: 1, status: 1 });
 
+// FA-3.3.2.4 — listAgentProgress (trainingContent.service.js) sorts
+// the whole collection by updatedAt with no filter; none of the three
+// indexes above can serve that sort (all require a filter prefix this
+// query doesn't have), which would otherwise force an unindexed
+// in-memory sort — index-only addition, no field change.
+fieldAgentTrainingSchema.index({ updatedAt: -1 });
+
 export default mongoose.models.FieldAgentTraining ||
   mongoose.model("FieldAgentTraining", fieldAgentTrainingSchema);

@@ -165,3 +165,23 @@ export const PASSING_SCORE_MAX = 100;
 // that existing distinction, it does not introduce a new media type
 // or architecture.
 export const WATCHABLE_MEDIA_RESOURCE_TYPES = Object.freeze(["video"]);
+
+// FA-3.3.2.4 — admin query safety. A single, centrally-defined ceiling
+// every admin list endpoint's `limit` is clamped against — a client
+// cannot bypass it with e.g. `limit=999999999`. Enforced twice:
+// Joi rejects an out-of-range value at the route layer (primary,
+// gives a clear 400), and the service layer re-clamps defensively as
+// a backstop for any future internal caller that bypasses Joi.
+export const MAX_LIST_LIMIT = 100;
+
+// Existing per-endpoint default page sizes, preserved exactly as they
+// already behaved before this hardening (listAgentProgress already
+// defaulted to 20, listAuditEvents to 50) — listVersions had no
+// pagination at all before; 50 is a reasonable, generous default for
+// a collection that grows at an admin-authoring pace, not an
+// agent-traffic pace.
+export const DEFAULT_LIST_LIMIT = Object.freeze({
+  PROGRESS: 20,
+  AUDIT: 50,
+  VERSIONS: 50,
+});

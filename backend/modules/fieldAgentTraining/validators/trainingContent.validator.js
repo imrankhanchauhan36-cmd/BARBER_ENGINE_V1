@@ -13,7 +13,22 @@ import {
   CONTENT_TYPE,
   SUPPORTED_LANGUAGE_CODES,
   ADMIN_OVERRIDE_CLASS,
+  MAX_LIST_LIMIT,
+  DEFAULT_LIST_LIMIT,
+  TRAINING_AUDIT_ENTITY_TYPE,
 } from "../constants/fieldAgentTraining.constants.js";
+
+// FA-3.3.2.4 — shared shape, per-endpoint default `limit` (preserving
+// each endpoint's pre-existing default page size), same MAX_LIST_LIMIT
+// ceiling for all three. A `limit` above the ceiling is REJECTED
+// (400) here, not silently clamped — the service layer's own clamp
+// (trainingContent.service.js) is a defensive backstop only, for any
+// future internal caller that bypasses this validator.
+const listQuerySchema = (defaultLimit) =>
+  Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(MAX_LIST_LIMIT).default(defaultLimit),
+  }).unknown(false);
 
 const objectId = Joi.string().hex().length(24);
 
@@ -87,4 +102,16 @@ export const trainingContentSchemas = {
   versionIdParam: Joi.object({ versionId: objectId.required() }).unknown(false),
   contentIdParam: Joi.object({ contentId: objectId.required() }).unknown(false),
   agentUserIdParam: Joi.object({ agentUserId: objectId.required() }).unknown(false),
+
+  // FA-3.3.2.4
+  progressListQuery: listQuerySchema(DEFAULT_LIST_LIMIT.PROGRESS),
+  // Preserves the pre-existing entityType/entityId filter capability
+  // (previously accepted with zero Joi validation at all) alongside
+  // the new page/limit bounds — dropping these would silently break
+  // the audit-filtering FA-3.3.1's own regression suite already relies on.
+  auditListQuery: listQuerySchema(DEFAULT_LIST_LIMIT.AUDIT).keys({
+    entityType: Joi.string().valid(...Object.values(TRAINING_AUDIT_ENTITY_TYPE)).optional(),
+    entityId: objectId.optional(),
+  }),
+  versionsListQuery: listQuerySchema(DEFAULT_LIST_LIMIT.VERSIONS),
 };

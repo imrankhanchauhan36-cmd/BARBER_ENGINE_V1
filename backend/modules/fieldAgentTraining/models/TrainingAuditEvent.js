@@ -53,5 +53,12 @@ const trainingAuditEventSchema = new mongoose.Schema(
 trainingAuditEventSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 trainingAuditEventSchema.index({ actorRef: 1, createdAt: -1 });
 
+// FA-3.3.2.4 — listAuditEvents (trainingContent.service.js), called
+// with no entityType/entityId filter (the "recent activity" admin
+// view), sorts by createdAt with neither compound index above able to
+// serve it — both require a filter prefix this query doesn't supply.
+// Index-only addition, no field change.
+trainingAuditEventSchema.index({ createdAt: -1 });
+
 export default mongoose.models.TrainingAuditEvent ||
   mongoose.model("TrainingAuditEvent", trainingAuditEventSchema);

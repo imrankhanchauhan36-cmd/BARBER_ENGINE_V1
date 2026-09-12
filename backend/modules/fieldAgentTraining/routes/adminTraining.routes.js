@@ -64,7 +64,12 @@ const upload = multer({
 
 // ─── Versions ─────────────────────────────────────────────────────
 router.post("/versions", requireAdminLevel(...WRITE_LEVELS), validate(trainingContentSchemas.createVersion), createDraftVersionHandler);
-router.get("/versions", requireAdminLevel(...READ_LEVELS), listVersionsHandler);
+router.get(
+  "/versions",
+  requireAdminLevel(...READ_LEVELS),
+  validate(trainingContentSchemas.versionsListQuery, "query"),
+  listVersionsHandler
+);
 router.get(
   "/versions/:versionId",
   requireAdminLevel(...READ_LEVELS),
@@ -131,7 +136,12 @@ router.post(
 );
 
 // ─── Progress / Audit (read-only) ─────────────────────────────────
-router.get("/progress", requireAdminLevel(...READ_LEVELS), listAgentProgressHandler);
+router.get(
+  "/progress",
+  requireAdminLevel(...READ_LEVELS),
+  validate(trainingContentSchemas.progressListQuery, "query"),
+  listAgentProgressHandler
+);
 router.get(
   "/progress/:agentUserId",
   requireAdminLevel(...READ_LEVELS),
@@ -144,7 +154,12 @@ router.get(
   validate(trainingContentSchemas.agentUserIdParam, "params"),
   listAgentTrainingHistoryHandler
 );
-router.get("/audit", requireAdminLevel(...READ_LEVELS), listAuditEventsHandler);
+router.get(
+  "/audit",
+  requireAdminLevel(...READ_LEVELS),
+  validate(trainingContentSchemas.auditListQuery, "query"),
+  listAuditEventsHandler
+);
 
 // ─── Progress override (RECOMMENDED / REQUIRES_APPROVAL, audited) ──
 router.post(

@@ -33,10 +33,12 @@ import User from "../models/User.js";
 import TrainingVersion from "../modules/fieldAgentTraining/models/TrainingVersion.js";
 import TrainingModule from "../modules/fieldAgentTraining/models/TrainingModule.js";
 import TrainingContent from "../modules/fieldAgentTraining/models/TrainingContent.js";
+import FieldAgentTraining from "../modules/fieldAgentTraining/models/FieldAgentTraining.js";
+import TrainingAuditEvent from "../modules/fieldAgentTraining/models/TrainingAuditEvent.js";
 import { generateAccessToken } from "../services/token.service.js";
 import { createDraftVersion, addModule, addContent, updateContent, publishVersion } from "../modules/fieldAgentTraining/services/trainingContent.service.js";
 import { uploadTrainingMedia } from "../modules/fieldAgentTraining/services/mediaDelivery.service.js";
-import { MODULE_KEY, MODULE_KEY_ORDER } from "../modules/fieldAgentTraining/constants/fieldAgentTraining.constants.js";
+import { MODULE_KEY, MODULE_KEY_ORDER, MAX_LIST_LIMIT } from "../modules/fieldAgentTraining/constants/fieldAgentTraining.constants.js";
 import { CURRICULUM } from "./seedFieldAgentTrainingV1.js";
 
 const FIXTURE_TAG = "FA-3.3.2 TEST FIXTURE";
@@ -286,6 +288,89 @@ const run = async () => {
     const restored = await publishVersion({ versionId: restoreDraft._id, adminId: admin._id });
     check("real curriculum restored as PUBLISHED after the English-only test", restored.status === "PUBLISHED", restored.status);
     check("restored curriculum carries media-bearing content", !!restoredMediaContentId);
+  }
+
+  // ── FA-3.3.2.4 — ADMIN QUERY SAFETY ─────────────────────────────
+  {
+    const overLimitProgress = await authFetch(`/api/admin/field-agent-training/progress?limit=999999999`, adminToken);
+    check("/progress?limit=999999999 -> 400", overLimitProgress.status === 400, overLimitProgress.status);
+
+    const overLimitAudit = await authFetch(`/api/admin/field-agent-training/audit?limit=999999999`, adminToken);
+    check("/audit?limit=999999999 -> 400", overLimitAudit.status === 400, overLimitAudit.status);
+
+    const atMaxProgress = await authFetch(`/api/admin/field-agent-training/progress?limit=${MAX_LIST_LIMIT}`, adminToken);
+    const atMaxProgressJson = await atMaxProgress.json();
+    check(
+      `/progress?limit=${MAX_LIST_LIMIT} succeeds, <= ${MAX_LIST_LIMIT} rows`,
+      atMaxProgress.status === 200 && (atMaxProgressJson?.data?.progress?.length ?? 0) <= MAX_LIST_LIMIT,
+      `status=${atMaxProgress.status} rows=${atMaxProgressJson?.data?.progress?.length}`
+    );
+
+    const versionsPage1 = await authFetch(`/api/admin/field-agent-training/versions?limit=1&page=1`, adminToken);
+    const versionsPage1Json = await versionsPage1.json();
+    const versionsPage2 = await authFetch(`/api/admin/field-agent-training/versions?limit=1&page=2`, adminToken);
+    const versionsPage2Json = await versionsPage2.json();
+    const v1 = versionsPage1Json?.data?.versions?.[0];
+    const v2 = versionsPage2Json?.data?.versions?.[0];
+    check(
+      "/versions?limit=1&page=2 returns a correct, different second page",
+      versionsPage2.status === 200 && !!v1 && !!v2 && String(v1._id) !== String(v2._id) && v1.versionNumber > v2.versionNumber,
+      `page1=${v1?.versionNumber} page2=${v2?.versionNumber}`
+    );
+
+    const invalidPage = await authFetch(`/api/admin/field-agent-training/progress?page=0`, adminToken);
+    check("/progress?page=0 -> 400 (non-positive page rejected)", invalidPage.status === 400, invalidPage.status);
+
+    const invalidLimit = await authFetch(`/api/admin/field-agent-training/audit?limit=0`, adminToken);
+    check("/audit?limit=0 -> 400 (non-positive limit rejected)", invalidLimit.status === 400, invalidLimit.status);
+
+    const invalidLimitType = await authFetch(`/api/admin/field-agent-training/versions?limit=notanumber`, adminToken);
+    check("/versions?limit=notanumber -> 400 (non-numeric limit rejected)", invalidLimitType.status === 400, invalidLimitType.status);
+
+    // Live MongoDB explain() — confirms the two new indexes are
+    // actually used for the exact unfiltered-sort query shapes these
+    // endpoints run, not merely that the index exists in isolation.
+    const explainStages = (winningPlan) => {
+      const stages = [];
+      const walk = (node) => {
+        if (!node) return;
+        if (node.stage) stages.push(node.stage);
+        if (node.inputStage) walk(node.inputStage);
+        if (Array.isArray(node.inputStages)) node.inputStages.forEach(walk);
+      };
+      walk(winningPlan);
+      return stages;
+    };
+
+    const progressExplain = await FieldAgentTraining.find().sort({ updatedAt: -1 }).limit(20).explain("executionStats");
+    const progressStages = explainStages(progressExplain.queryPlanner.winningPlan);
+    check(
+      "listAgentProgress query plan uses IXSCAN on {updatedAt:-1}, not COLLSCAN",
+      progressStages.includes("IXSCAN") && !progressStages.includes("COLLSCAN"),
+      JSON.stringify(progressStages)
+    );
+
+    const auditExplain = await TrainingAuditEvent.find({}).sort({ createdAt: -1 }).limit(50).explain("executionStats");
+    const auditStages = explainStages(auditExplain.queryPlanner.winningPlan);
+    check(
+      "listAuditEvents (unfiltered) query plan uses IXSCAN on {createdAt:-1}, not COLLSCAN",
+      auditStages.includes("IXSCAN") && !auditStages.includes("COLLSCAN"),
+      JSON.stringify(auditStages)
+    );
+
+    // Direct index-existence confirmation (not just schema definition).
+    const faTrainingIndexes = await FieldAgentTraining.collection.indexes();
+    check(
+      "MongoDB: FieldAgentTraining has {updatedAt:-1} index",
+      faTrainingIndexes.some((i) => i.name === "updatedAt_-1"),
+      JSON.stringify(faTrainingIndexes.map((i) => i.name))
+    );
+    const auditIndexes = await TrainingAuditEvent.collection.indexes();
+    check(
+      "MongoDB: TrainingAuditEvent has {createdAt:-1} index",
+      auditIndexes.some((i) => i.name === "createdAt_-1"),
+      JSON.stringify(auditIndexes.map((i) => i.name))
+    );
   }
 
   // ── CLEANUP — remove every DRAFT test-fixture version tagged above ──

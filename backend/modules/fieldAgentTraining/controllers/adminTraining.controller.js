@@ -38,7 +38,7 @@ export const createDraftVersionHandler = async (req, res, next) => {
 
 export const listVersionsHandler = async (req, res, next) => {
   try {
-    const versions = await listVersions();
+    const versions = await listVersions({ page: req.query.page, limit: req.query.limit });
     return successResponse(res, { message: "Training versions fetched", data: { versions } });
   } catch (err) {
     return next(err);
