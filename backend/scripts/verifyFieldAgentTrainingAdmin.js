@@ -980,6 +980,94 @@ const run = async () => {
     );
   }
 
+  // ── FINAL FA-3.3.2 AUDIT — AUTHORIZATION BOUNDARY (previously
+  // untested gap: STATE/DISTRICT admin write-rejection and
+  // FIELD_AGENT-blocked-from-admin-routes had never been exercised
+  // live in any prior subphase's suite). Verification-only — no
+  // product code changed by this section.
+  {
+    // Must be a genuinely usable account — this location-hierarchy
+    // seed pool includes some SUSPENDED/inactive scaffold admins
+    // (unrelated to FA-3.3.2), and the frozen `protect` middleware
+    // correctly rejects those before ever reaching this module's own
+    // authorization check, which would otherwise be mistaken for an
+    // authz defect here.
+    const districtAdmin = await User.findOne({
+      role: "ADMIN",
+      adminLevel: { $in: ["STATE", "DISTRICT"] },
+      isActive: true,
+      accountStatus: "ACTIVE",
+    })
+      .select("+tokenVersion")
+      .lean();
+    check("a real STATE/DISTRICT admin fixture exists (pre-existing location-hierarchy data)", !!districtAdmin);
+    const districtToken = generateAccessToken({
+      _id: districtAdmin._id,
+      role: "ADMIN",
+      adminLevel: districtAdmin.adminLevel,
+      tokenVersion: districtAdmin.tokenVersion ?? 0,
+    });
+
+    const districtRead = await authFetch("/api/admin/field-agent-training/versions", districtToken);
+    check(`${districtAdmin.adminLevel} admin CAN read /versions (read-scope intact)`, districtRead.status === 200, districtRead.status);
+
+    const districtCreateVersion = await authFetch("/api/admin/field-agent-training/versions", districtToken, {
+      method: "POST",
+      body: JSON.stringify({ notes: "should be rejected" }),
+    });
+    check(`${districtAdmin.adminLevel} admin CANNOT create a version (INDIA-only write) -> 403`, districtCreateVersion.status === 403, districtCreateVersion.status);
+
+    const currentPublishedForAuthz = await TrainingVersion.findOne({ status: "PUBLISHED" }).lean();
+    const districtPublish = await authFetch(`/api/admin/field-agent-training/versions/${currentPublishedForAuthz._id}/publish`, districtToken, { method: "POST" });
+    check(`${districtAdmin.adminLevel} admin CANNOT publish -> 403`, districtPublish.status === 403, districtPublish.status);
+
+    const districtDiscard = await authFetch(`/api/admin/field-agent-training/versions/${currentPublishedForAuthz._id}`, districtToken, { method: "DELETE" });
+    check(`${districtAdmin.adminLevel} admin CANNOT discard -> 403`, districtDiscard.status === 403, districtDiscard.status);
+
+    const districtModuleForReorder = await TrainingModule.findOne({ trainingVersion: currentPublishedForAuthz._id }).lean();
+    const districtReorder = await authFetch(`/api/admin/field-agent-training/modules/${districtModuleForReorder._id}/reorder-content`, districtToken, {
+      method: "PATCH",
+      body: JSON.stringify({ orderedContentIds: [] }),
+    });
+    check(`${districtAdmin.adminLevel} admin CANNOT reorder content -> 403`, districtReorder.status === 403, districtReorder.status);
+
+    const districtOverride = await authFetch("/api/admin/field-agent-training/progress/override", districtToken, {
+      method: "POST",
+      body: JSON.stringify({ agentUserId: admin._id, contentId: districtModuleForReorder._id, overrideClass: "RECOMMENDED", reason: "x" }),
+    });
+    check(`${districtAdmin.adminLevel} admin CANNOT apply a progress override (INDIA-only) -> 403`, districtOverride.status === 403, districtOverride.status);
+
+    // ── FIELD_AGENT token must be blocked from the entire admin surface ──
+    const audAgentPhone = "9999900015";
+    let audAgent = await User.findOne({ phone: audAgentPhone }).select("+tokenVersion");
+    if (!audAgent) audAgent = await User.create({ name: "FA-3.3.2 Final Audit Agent", phone: audAgentPhone, role: "FIELD_AGENT", isActive: true });
+    const audAgentToken = generateAccessToken({ _id: audAgent._id, role: "FIELD_AGENT", tokenVersion: audAgent.tokenVersion ?? 0 });
+
+    const agentReadVersions = await authFetch("/api/admin/field-agent-training/versions", audAgentToken);
+    check("FIELD_AGENT token CANNOT read admin /versions -> 403", agentReadVersions.status === 403, agentReadVersions.status);
+
+    const agentCreateVersion = await authFetch("/api/admin/field-agent-training/versions", audAgentToken, {
+      method: "POST",
+      body: JSON.stringify({ notes: "should be rejected" }),
+    });
+    check("FIELD_AGENT token CANNOT create a version -> 403", agentCreateVersion.status === 403, agentCreateVersion.status);
+
+    const agentReadProgress = await authFetch("/api/admin/field-agent-training/progress", audAgentToken);
+    check("FIELD_AGENT token CANNOT read admin /progress (another agent's data) -> 403", agentReadProgress.status === 403, agentReadProgress.status);
+
+    const agentReadAudit = await authFetch("/api/admin/field-agent-training/audit", audAgentToken);
+    check("FIELD_AGENT token CANNOT read admin /audit -> 403", agentReadAudit.status === 403, agentReadAudit.status);
+
+    const agentUploadMedia = await fetch(url(`/api/admin/field-agent-training/content/${districtModuleForReorder._id}/media`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${audAgentToken}` },
+    });
+    check("FIELD_AGENT token CANNOT reach the admin media upload route -> 401/403", [401, 403].includes(agentUploadMedia.status), agentUploadMedia.status);
+
+    // cleanup this section's own disposable fixture
+    await User.deleteOne({ _id: audAgent._id });
+  }
+
   // ── CLEANUP — remove every DRAFT test-fixture version tagged above ──
   // Only DRAFT-status tagged versions are deleted — this is a hard
   // safety guard, not a formality: one tagged fixture (the English-
