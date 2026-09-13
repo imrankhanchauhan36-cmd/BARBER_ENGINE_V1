@@ -85,12 +85,28 @@ const findExistingProfile = (userRef, applicationRef) =>
 // {applicationRef} converges to the SAME profile for every racing
 // caller, never a duplicate; a duplicate-key race on {agentCode}
 // (vanishingly rare) regenerates and retries, bounded.
-export const createFieldAgentProfile = async ({ applicationId, adminId }) => {
+//
+// FA-4.2 addition (additive, backward-compatible): an optional
+// `session` lets a caller (the real admin-approval transaction) fold
+// profile creation into ITS OWN larger transaction, so the FA-2
+// status transition and the profile creation commit or abort
+// together — the atomicity FA-4.2's approval flow requires. When
+// `session` is omitted (every FA-4.1 caller, unchanged), this
+// function behaves EXACTLY as it always did: self-managed
+// transaction, full bounded retry, identical return shape. When
+// `session` IS provided, this function does a SINGLE attempt only,
+// using the caller's transaction — a write conflict or duplicate key
+// in that mode must abort the CALLER's whole transaction (this
+// function cannot safely retry on the caller's behalf inside an
+// already-active external transaction), so the caller is responsible
+// for its own outer retry loop, exactly like startTestAttempt's own
+// pattern of re-reading live state on each outer retry.
+export const createFieldAgentProfile = async ({ applicationId, adminId, session: externalSession = null }) => {
   if (!adminId) {
     throw Errors.badRequest("adminId is required to create a Field Agent profile");
   }
 
-  const application = await FieldAgentApplication.findById(applicationId);
+  const application = await FieldAgentApplication.findById(applicationId).session(externalSession);
   if (!application) throw Errors.notFound("Field Agent application not found");
 
   if (!PROFILE_ELIGIBLE_APPLICATION_STATUSES.includes(application.status)) {
@@ -102,8 +118,45 @@ export const createFieldAgentProfile = async ({ applicationId, adminId }) => {
   // Idempotent pre-check — defense-in-depth ahead of the unique
   // indexes, same convention as every other creation flow in this
   // codebase (e.g. FA-2's own createOrGetDraftApplication).
-  const existing = await findExistingProfile(application.userRef, application._id);
+  const existing = await findExistingProfile(application.userRef, application._id).session(externalSession);
   if (existing) return existing;
+
+  if (externalSession) {
+    const agentCode = generateAgentCode();
+    const created = await FieldAgent.create(
+      [
+        {
+          userRef: application.userRef,
+          applicationRef: application._id,
+          agentCode,
+          operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.PENDING_ACTIVATION,
+          approvedBy: adminId,
+          approvedAt: new Date(),
+        },
+      ],
+      { session: externalSession }
+    );
+
+    await FieldAgentAuditEvent.create(
+      [
+        {
+          entityType: AUDIT_ENTITY_TYPE.FIELD_AGENT,
+          entityId: created[0]._id,
+          actorRef: adminId,
+          actorType: AUDIT_ACTOR_TYPE.ADMIN,
+          action: AUDIT_ACTION.FIELD_AGENT_PROFILE_CREATED,
+          newValue: {
+            userRef: application.userRef,
+            applicationRef: application._id,
+            agentCode,
+          },
+        },
+      ],
+      { session: externalSession }
+    );
+
+    return created[0];
+  }
 
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_AGENT_CODE_ATTEMPTS; attempt++) {
@@ -190,7 +243,7 @@ export const createFieldAgentProfile = async ({ applicationId, adminId }) => {
 
 // ─── READ-ONLY FOUNDATION HELPERS ──────────────────────────────────
 // Small, additive lookups — no HTTP surface in FA-4.1, but genuinely
-// useful for later milestones (and this phase's own targeted tests)
+// useful for FA-4.2/4.3/4.4 (and this phase's own targeted tests)
 // without requiring any redesign later.
 
 export const getFieldAgentByUserId = (userId) => FieldAgent.findOne({ userRef: userId }).lean();

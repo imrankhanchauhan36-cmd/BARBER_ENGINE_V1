@@ -122,6 +122,21 @@ export const AUDIT_ACTION = Object.freeze({
   // profile" recovery path (same idempotency discipline as
   // TEST_STARTED).
   FIELD_AGENT_PROFILE_CREATED: "FIELD_AGENT_PROFILE_CREATED",
+  // FA-4.2 — additive only. Written by
+  // modules/fieldAgent/services/fieldAgentApproval.service.js
+  // (approveApplication/rejectApplication), entityType "APPLICATION",
+  // actorType ADMIN, inside the same transaction as the application's
+  // own status write (and, for approval, the FieldAgent profile
+  // creation — see that service's own header for why one combined
+  // transaction is required). Deliberately NO separate
+  // "FIELD_AGENT_RESUBMITTED" action: resubmission is the existing,
+  // unmodified FA-2 createOrGetDraftApplication path (a REJECTED
+  // application is terminal; the same user starts a genuinely new
+  // DRAFT application), which already writes APPLICATION_CREATED —
+  // adding a redundant second event for the identical fact would
+  // duplicate, not extend, the existing audit trail.
+  FIELD_AGENT_APPROVED: "FIELD_AGENT_APPROVED",
+  FIELD_AGENT_REJECTED: "FIELD_AGENT_REJECTED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string

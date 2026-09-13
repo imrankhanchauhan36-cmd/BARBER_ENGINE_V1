@@ -47,6 +47,7 @@ import fieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/fieldA
 import fieldAgentHelpRoutes from "./modules/fieldAgentTraining/routes/fieldAgentHelp.routes.js"; // ← NEW — FA-3.3 Field Agent Help (curated operational reference)
 import adminFieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/adminTraining.routes.js"; // ← NEW — FA-3.3 admin curriculum authoring/governance
 import adminFieldAgentTestRoutes from "./modules/fieldAgentTest/routes/adminTest.routes.js"; // ← NEW — FA-3.4.1 admin exam authoring/governance
+import adminFieldAgentApprovalRoutes from "./modules/fieldAgent/routes/adminFieldAgentApproval.routes.js"; // ← NEW — FA-4.2 admin approval/rejection
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
@@ -358,6 +359,11 @@ app.use("/api/admin/field-agent-training", protect, adminFieldAgentTrainingRoute
 // need INDIA level, read ops allow INDIA/STATE/DISTRICT). Agent-facing
 // test-taking routes do not exist yet (FA-3.4.3).
 app.use("/api/admin/field-agent-test", protect, adminFieldAgentTestRoutes);
+// FA-4.2 — admin approval/rejection of Field Agent applications. Same
+// requireAdminLevel per-route pattern as adminFieldAgentTestRoutes
+// above (approve/reject need INDIA level, read ops allow
+// INDIA/STATE/DISTRICT).
+app.use("/api/admin/field-agents", protect, adminFieldAgentApprovalRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
