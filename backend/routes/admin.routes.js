@@ -120,6 +120,8 @@ import {
 } from "../controllers/areaDiscoveryCandidate.controller.js";
 import { areaDiscoveryCandidateSchemas } from "../validators/areaDiscoveryCandidate.validator.js";
 import { previewCandidateMatch } from "../controllers/areaDiscoveryMatch.controller.js";
+import { resolveSalonToCandidateArea } from "../controllers/areaDiscoveryResolution.controller.js";
+import { areaDiscoveryResolutionSchemas } from "../validators/areaDiscoveryResolution.validator.js";
 
 
 // ── Middlewares ───────────────────────────────────────────
@@ -254,6 +256,21 @@ router.get(
   requireAdminLevel("INDIA", "STATE", "DISTRICT"),
   validate(areaDiscoveryCandidateSchemas.candidateIdParam, "params"),
   asyncHandler(previewCandidateMatch)
+);
+
+// ── AREA-2.5.3 — Controlled Candidate -> Salon Area Resolution ──────
+// INDIA-only (a governance write, not a read) — stricter than the
+// preview endpoint above. New file/validator, frozen candidate
+// controller/validator untouched. No route-ordering hazard: this is
+// a different HTTP method+path-segment-count than the generic
+// :candidateId routes, and the identical nested-suffix shape
+// (match-preview, above) already coexists safely in this same router.
+router.post(
+  "/area-discovery-candidates/:candidateId/resolve-salon",
+  requireAdminLevel("INDIA"),
+  validate(areaDiscoveryResolutionSchemas.candidateIdParam, "params"),
+  validate(areaDiscoveryResolutionSchemas.resolveSalonBody),
+  asyncHandler(resolveSalonToCandidateArea)
 );
 
 
