@@ -138,5 +138,17 @@ fieldAgentTrainingSchema.index({ trainingVersion: 1, status: 1 });
 // in-memory sort — index-only addition, no field change.
 fieldAgentTrainingSchema.index({ updatedAt: -1 });
 
+// FA-4.3 — additive, index-only, same justification style as the
+// FA-3.3.2.4 addition directly above. The Admin Review Queue's batched
+// per-page enrichment (fieldAgentReview.service.js) looks up each
+// page's training enrollments via `applicationRef: {$in: [...]}` —
+// none of the indexes above can serve an applicationRef-only query
+// (all require agentRef or trainingVersion as a filter prefix this
+// query doesn't have), confirmed via a live `.explain()` showing
+// COLLSCAN before this index was added. No field or existing-query
+// behavior changes — this index only ever gets selected for a query
+// shape that previously had no covering index at all.
+fieldAgentTrainingSchema.index({ applicationRef: 1 });
+
 export default mongoose.models.FieldAgentTraining ||
   mongoose.model("FieldAgentTraining", fieldAgentTrainingSchema);
