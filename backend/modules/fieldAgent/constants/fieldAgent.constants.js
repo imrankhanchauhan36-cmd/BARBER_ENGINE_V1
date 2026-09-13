@@ -114,6 +114,32 @@ export const AUDIT_ACTION = Object.freeze({
   // inline comments for the exact idempotency/concurrency reasoning).
   TEST_STARTED: "TEST_STARTED",
   TEST_SUBMITTED: "TEST_SUBMITTED",
+  // FA-4.1 — additive only. Written by
+  // modules/fieldAgent/services/fieldAgentProfile.service.js
+  // (createFieldAgentProfile), inside the same transaction as the
+  // FieldAgent document's own creation. Fires exactly once per actual
+  // profile created — never on the idempotent "return the existing
+  // profile" recovery path (same idempotency discipline as
+  // TEST_STARTED).
+  FIELD_AGENT_PROFILE_CREATED: "FIELD_AGENT_PROFILE_CREATED",
+});
+
+// FieldAgentAuditEvent.entityType vocabulary — a free-form string
+// field on that frozen model (no schema enum), so this exists only so
+// every write site uses the identical literal. "APPLICATION" was
+// always FieldAgentAuditEvent's own implicit schema default (FA-2
+// never had to name it explicitly); "FIELD_AGENT" is new in FA-4.1.
+export const AUDIT_ENTITY_TYPE = Object.freeze({
+  APPLICATION: "APPLICATION",
+  FIELD_AGENT: "FIELD_AGENT",
+});
+
+// FA-4.1 — the FieldAgent operational profile's own status, DELIBERATELY
+// separate from both User.accountStatus (generic, cross-domain account
+// state) and FieldAgentApplication.status (the pre-approval application
+// lifecycle, terminates at APPROVED).
+export const FIELD_AGENT_OPERATIONAL_STATUS = Object.freeze({
+  PENDING_ACTIVATION: "PENDING_ACTIVATION",
 });
 
 export const FIELD_AGENT_OTP_ROLE = "FIELD_AGENT";
