@@ -49,6 +49,7 @@ import adminFieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/a
 import adminFieldAgentTestRoutes from "./modules/fieldAgentTest/routes/adminTest.routes.js"; // ← NEW — FA-3.4.1 admin exam authoring/governance
 import adminFieldAgentApprovalRoutes from "./modules/fieldAgent/routes/adminFieldAgentApproval.routes.js"; // ← NEW — FA-4.2 admin approval/rejection
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
+import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -364,6 +365,10 @@ app.use("/api/admin/field-agent-test", protect, adminFieldAgentTestRoutes);
 // above (approve/reject need INDIA level, read ops allow
 // INDIA/STATE/DISTRICT).
 app.use("/api/admin/field-agents", protect, adminFieldAgentApprovalRoutes);
+// FA-5.1 — admin CommercialPolicyVersion authoring/versioning. Read
+// AND write are INDIA-only (see adminCommercialPolicy.routes.js's own
+// header for why this is stricter than the read-level split above).
+app.use("/api/admin/commercial-policies", protect, adminCommercialPolicyRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////

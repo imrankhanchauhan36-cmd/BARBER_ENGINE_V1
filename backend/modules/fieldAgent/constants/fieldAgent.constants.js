@@ -137,6 +137,18 @@ export const AUDIT_ACTION = Object.freeze({
   // duplicate, not extend, the existing audit trail.
   FIELD_AGENT_APPROVED: "FIELD_AGENT_APPROVED",
   FIELD_AGENT_REJECTED: "FIELD_AGENT_REJECTED",
+  // FA-5.1 — additive only, approved in the FA-5 Architecture Decision
+  // Lock §12/§16. Written by
+  // modules/fieldAgent/services/commercialModel.service.js
+  // (selectCommercialPath), entityType FIELD_AGENT, actorType ADMIN.
+  // COMMERCIAL_POLICY_* are written by
+  // modules/fieldAgent/services/commercialPolicy.service.js, entityType
+  // COMMERCIAL_POLICY_VERSION — mirrors TEST_VERSION_PUBLISHED/
+  // TEST_VERSION_RETIRED exactly (see that pair's own comment above).
+  COMMERCIAL_MODEL_SELECTED: "COMMERCIAL_MODEL_SELECTED",
+  COMMERCIAL_POLICY_CREATED: "COMMERCIAL_POLICY_CREATED",
+  COMMERCIAL_POLICY_PUBLISHED: "COMMERCIAL_POLICY_PUBLISHED",
+  COMMERCIAL_POLICY_RETIRED: "COMMERCIAL_POLICY_RETIRED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string
@@ -144,17 +156,45 @@ export const AUDIT_ACTION = Object.freeze({
 // every write site uses the identical literal. "APPLICATION" was
 // always FieldAgentAuditEvent's own implicit schema default (FA-2
 // never had to name it explicitly); "FIELD_AGENT" is new in FA-4.1.
+// "COMMERCIAL_POLICY_VERSION" is new in FA-5.1.
 export const AUDIT_ENTITY_TYPE = Object.freeze({
   APPLICATION: "APPLICATION",
   FIELD_AGENT: "FIELD_AGENT",
+  COMMERCIAL_POLICY_VERSION: "COMMERCIAL_POLICY_VERSION",
 });
 
 // FA-4.1 — the FieldAgent operational profile's own status, DELIBERATELY
 // separate from both User.accountStatus (generic, cross-domain account
 // state) and FieldAgentApplication.status (the pre-approval application
 // lifecycle, terminates at APPROVED).
+//
+// FA-5.1 — ACTIVE is now added, per the FA-5 Architecture Decision Lock
+// §12: a FieldAgent whose commercialPath is ACQUISITION_AGENT moves
+// straight to ACTIVE the moment that path is selected (no further
+// commercial gate exists for that path in V1 — see
+// commercialModel.service.js). A FieldAgent whose commercialPath is
+// TERRITORY_PARTNER stays PENDING_ACTIVATION in FA-5.1 — Territory
+// Partner activation requires a License + exclusive Territory
+// Assignment, neither of which exists until a later FA-5 phase. This
+// enum value is purely additive; no existing PENDING_ACTIVATION
+// profile is ever automatically transitioned by adding it. Do not add
+// AT_RISK/SUSPENDED/BLOCKED/DEACTUATED here until an approved later
+// phase actually needs them.
 export const FIELD_AGENT_OPERATIONAL_STATUS = Object.freeze({
   PENDING_ACTIVATION: "PENDING_ACTIVATION",
+  ACTIVE: "ACTIVE",
+});
+
+// FA-5.1 — the FieldAgent's chosen commercial relationship with
+// ZEMISH, per the FA-5 Architecture Decision Lock §5/§12. Server-
+// controlled only (never client-suppliable), set exactly once by an
+// INDIA admin via commercialModel.service.js#selectCommercialPath.
+// null (the schema default — this is NOT part of this enum's own
+// value set) means "not yet selected", which remains valid
+// indefinitely for any PENDING_ACTIVATION profile.
+export const COMMERCIAL_PATH = Object.freeze({
+  ACQUISITION_AGENT: "ACQUISITION_AGENT",
+  TERRITORY_PARTNER: "TERRITORY_PARTNER",
 });
 
 export const FIELD_AGENT_OTP_ROLE = "FIELD_AGENT";

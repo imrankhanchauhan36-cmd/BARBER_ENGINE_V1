@@ -20,19 +20,32 @@
  *
  * DELIBERATELY EXCLUDED from this schema (out of FA-4.1 scope, later
  * milestones own them): zoneRef/territoryRef/districtRef/cityRef/
- * areaRef, transfer fields, commission fields, support fields, payout
- * fields, performance fields. No KYC data (PAN/Aadhaar/bank details)
- * is duplicated here — this document only ever references
+ * areaRef (FA-5), transfer fields, commission fields, support fields,
+ * payout fields, performance fields. No KYC data (PAN/Aadhaar/bank
+ * details) is duplicated here — this document only ever references
  * userRef/applicationRef, never copies sensitive fields off them.
  *
  * agentCode is immutable after creation — enforced in the service
  * layer (never included in any update payload; no update path exists
  * for this field at all in FA-4.1, since nothing mutates a FieldAgent
  * document after creation yet).
+ *
+ * FA-5.1 — commercialPath is added (additive, nullable). Per the FA-5
+ * Architecture Decision Lock §5/§12: set exactly once, by an INDIA
+ * admin, via commercialModel.service.js#selectCommercialPath — never
+ * inferred, never client-suppliable, never written by
+ * fieldAgentProfile.service.js/fieldAgentApproval.service.js (both
+ * remain byte-for-byte untouched by FA-5.1). null remains valid
+ * indefinitely for any PENDING_ACTIVATION profile that hasn't had its
+ * commercial model decided yet — this is not an error state.
+ * CommercialTerritory/TerritoryAreaClaim/TerritoryAssignment/
+ * TerritoryPartnerLicense/FieldAgentCoverage/AcquisitionClaim/
+ * SalonAttribution remain explicitly out of scope for FA-5.1 (later
+ * FA-5 phases) — nothing referencing them is added here.
  */
 
 import mongoose from "mongoose";
-import { FIELD_AGENT_OPERATIONAL_STATUS } from "../constants/fieldAgent.constants.js";
+import { FIELD_AGENT_OPERATIONAL_STATUS, COMMERCIAL_PATH } from "../constants/fieldAgent.constants.js";
 
 const fieldAgentSchema = new mongoose.Schema(
   {
@@ -69,6 +82,17 @@ const fieldAgentSchema = new mongoose.Schema(
     // real adminId and sets both together, atomically, at creation.
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     approvedAt: { type: Date, default: null },
+
+    // FA-5.1 — see file header. Explicit `null` in the enum list (not
+    // just an absent default) because Mongoose enum validation
+    // otherwise rejects an explicitly-set `null`, and this field is
+    // legitimately read/written as null (never-yet-selected), not
+    // merely defaulted.
+    commercialPath: {
+      type: String,
+      enum: [...Object.values(COMMERCIAL_PATH), null],
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -82,9 +106,12 @@ fieldAgentSchema.index({ applicationRef: 1 }, { unique: true });
 // agentCode is the human-facing identity — must be globally unique.
 fieldAgentSchema.index({ agentCode: 1 }, { unique: true });
 
-// Deliberately still NO index on operationalStatus in FA-4.1 — it has
-// only one meaningful value so far, and no query filters on it yet;
-// every read here is a point lookup by _id. Add an index only when a
-// real listing/filtering query needs one.
+// Deliberately still NO index on operationalStatus or commercialPath
+// in FA-5.1: operationalStatus now has two values (PENDING_ACTIVATION/
+// ACTIVE, since FA-5.1), and commercialPath three (null/
+// ACQUISITION_AGENT/TERRITORY_PARTNER), but no query in FA-5.1 filters
+// on either — every read here is a point lookup by _id. Add an index
+// only when a real listing/filtering query needs one (evidence-driven,
+// same discipline FA-4.3 already proved on FieldAgentTraining).
 
 export default mongoose.models.FieldAgent || mongoose.model("FieldAgent", fieldAgentSchema);

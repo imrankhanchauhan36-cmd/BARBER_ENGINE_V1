@@ -15,6 +15,15 @@
  * minimal placeholder handlers (which existed only as "the minimum
  * FA-4.2 capability" pending this exact build-out). approve/reject
  * below are completely untouched by FA-4.3.
+ *
+ * FA-5.1 — one new additive route: POST /:fieldAgentId/commercial-model,
+ * INDIA-only, selecting a FieldAgent's one-time commercialPath (see
+ * commercialModel.service.js#selectCommercialPath). Deliberately added
+ * to THIS existing router rather than a new one — it operates on the
+ * same admin-approval bounded context (a decision about an already-
+ * approved Field Agent), reusing this file's own established
+ * INDIA-only write-level convention. approve/reject/review routes
+ * above are completely untouched by FA-5.1.
  */
 
 import express from "express";
@@ -23,8 +32,10 @@ import { validate } from "../../../middlewares/validate.middleware.js";
 import { idempotency } from "../../../middlewares/idempotency.middleware.js";
 import { approveApplicationHandler, rejectApplicationHandler } from "../controllers/adminFieldAgentApproval.controller.js";
 import { listApplicationsForReviewHandler, getApplicationReviewDetailHandler } from "../controllers/adminFieldAgentReview.controller.js";
+import { selectCommercialPathHandler } from "../controllers/adminCommercialModel.controller.js";
 import { adminFieldAgentApprovalSchemas } from "../validators/adminFieldAgentApproval.validator.js";
 import { adminFieldAgentReviewSchemas } from "../validators/adminFieldAgentReview.validator.js";
+import { adminCommercialModelSchemas } from "../validators/adminCommercialModel.validator.js";
 
 const router = express.Router();
 
@@ -61,6 +72,18 @@ router.post(
   validate(adminFieldAgentApprovalSchemas.applicationIdParam, "params"),
   validate(adminFieldAgentApprovalSchemas.rejectBody),
   rejectApplicationHandler
+);
+
+// FA-5.1 — commercial-path selection operates on a FieldAgent (not an
+// application) id, so it intentionally does NOT reuse
+// applicationIdParam above.
+router.post(
+  "/:fieldAgentId/commercial-model",
+  requireAdminLevel(...WRITE_LEVELS),
+  idempotency,
+  validate(adminCommercialModelSchemas.fieldAgentIdParam, "params"),
+  validate(adminCommercialModelSchemas.selectCommercialPath),
+  selectCommercialPathHandler
 );
 
 export default router;
