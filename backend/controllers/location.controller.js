@@ -5,10 +5,13 @@
  */
 
 import mongoose from "mongoose";
-import Area from "../models/Area.js";
+import Area, { AREA_SOURCE_TYPE } from "../models/Area.js";
 import City from "../models/City.js";
 import District from "../models/District.js";
+import State from "../models/State.js";
 import { Errors, successResponse } from "../utils/response.js";
+import { logAdminAction } from "../utils/auditLog.js";
+import { AUDIT_ACTIONS } from "../utils/auditActions.js";
 
 const isValidId   = (id)  => mongoose.Types.ObjectId.isValid(id);
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -435,9 +438,30 @@ export const createArea = async (req, res, next) => {
       return next(Errors.forbidden("You can only create areas in your own district"));
     }
 
-    // City exists + active
+    // State exists + active + not deleted (AREA-2.1 — previously
+    // untrusted, only transitively implied via the City/District
+    // checks below; now verified directly per AREA-1.2 §5)
+    const state = await State.findById(stateId).lean();
+    if (!state || !state.isActive || state.isDeleted) {
+      return next(Errors.notFound("State not found or inactive"));
+    }
+
+    // District exists + active + not deleted + belongs to the
+    // supplied State (AREA-2.1 — the confirmed gap from AREA-0/AREA-1:
+    // this ancestor link was never checked before).
+    const district = await District.findById(districtId).lean();
+    if (!district || !district.isActive || district.isDeleted) {
+      return next(Errors.notFound("District not found or inactive"));
+    }
+    if (String(district.stateRef) !== String(stateId)) {
+      return next(Errors.badRequest("District does not belong to this state"));
+    }
+
+    // City exists + active + not deleted + belongs to the supplied
+    // District (existing check; isDeleted made explicit alongside the
+    // State/District checks above)
     const city = await City.findById(cityId).lean();
-    if (!city || !city.isActive) return next(Errors.notFound("City not found or inactive"));
+    if (!city || !city.isActive || city.isDeleted) return next(Errors.notFound("City not found or inactive"));
     if (String(city.districtRef) !== String(districtId)) {
       return next(Errors.badRequest("City does not belong to this district"));
     }
@@ -447,13 +471,23 @@ export const createArea = async (req, res, next) => {
       return next(Errors.badRequest("Pincode must be exactly 6 digits"));
     }
 
-    // Duplicate check
+    // Duplicate check — friendly pre-check only. The canonical
+    // {cityRef, normalizedName} unique index (Area.js) is the real
+    // concurrency guarantee; a race that slips past this pre-check
+    // surfaces as a raw E11000, which middlewares/errorHandler.js
+    // already translates into a deterministic 409 CONFLICT — no
+    // duplicate local translation is added here.
     const existing = await Area.findOne({
       name:    { $regex: `^${escapeRegex(name)}$`, $options: "i" },
       cityRef: cityId,
     });
     if (existing) return next(Errors.conflict(`Area "${name}" already exists in this city`));
 
+    // Provenance is entirely server-controlled (AREA-1.2 §6/§7) —
+    // sourceType is never read from req.body, and every Area created
+    // through this endpoint is MANUAL by definition. Other source-*
+    // fields stay at their schema default (null) — there is no
+    // external record to attach them to.
     const area = await Area.create({
       name,
       cityRef:       cityId,
@@ -463,6 +497,20 @@ export const createArea = async (req, res, next) => {
       isServiceable: isServiceable !== false,
       createdBy:     req.user.id,
       isActive:      true,
+      sourceType:    AREA_SOURCE_TYPE.MANUAL,
+    });
+
+    // Fire-and-forget, same convention as district.controller.js's
+    // logAdminAction usage — a failed audit write must never fail the
+    // Area creation it describes, and only ever fires after the
+    // creation has already succeeded.
+    logAdminAction({
+      adminId:    req.user.id,
+      action:     AUDIT_ACTIONS.AREA_CREATED,
+      targetType: "AREA",
+      targetId:   area._id,
+      meta:       { name: area.name, cityId, districtId, stateId, sourceType: area.sourceType },
+      req,
     });
 
     return successResponse(res, {
@@ -476,6 +524,7 @@ export const createArea = async (req, res, next) => {
         district:      { id: districtId },
         state:         { id: stateId },
         isActive:      area.isActive,
+        sourceType:    area.sourceType,
       },
     });
   } catch (err) { next(err) }

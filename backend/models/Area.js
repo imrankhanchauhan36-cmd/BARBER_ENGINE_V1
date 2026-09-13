@@ -24,6 +24,28 @@ export const AREA_TIER = {
   RURAL:  "RURAL",
 };
 
+// AREA-2.1 — provenance vocabulary. ZEMISH (INDIA admin / createArea)
+// is the canonical creator of the operational Area master (AREA-1
+// Decision 4/5); these values only record where a given record came
+// from. Never client-writable — see createArea/updateArea.
+export const AREA_SOURCE_TYPE = {
+  MANUAL:             "MANUAL",
+  GOVERNMENT_PINCODE: "GOVERNMENT_PINCODE",
+  GOVERNMENT_CENSUS:  "GOVERNMENT_CENSUS",
+  OSM:                "OSM",
+  COMMERCIAL:         "COMMERCIAL",
+  MERGED:             "MERGED",
+};
+
+// Reference-layer freshness marker only — never drives automatic
+// deletion/deactivation (AREA-1 Decision 11). Left unset (null) for
+// MANUAL records, which have no external source to go stale against.
+export const AREA_SOURCE_RECORD_STATUS = {
+  ACTIVE_IN_SOURCE:   "ACTIVE_IN_SOURCE",
+  NOT_SEEN_IN_LATEST: "NOT_SEEN_IN_LATEST",
+  SUPERSEDED:         "SUPERSEDED",
+};
+
 //////////////////////////////////////////////////////////////
 // 🔥 SCHEMA
 //////////////////////////////////////////////////////////////
@@ -221,6 +243,53 @@ const AreaSchema = new mongoose.Schema(
     updatedBy: {
       type:    mongoose.Schema.Types.ObjectId,
       ref:     "User",
+      default: null,
+    },
+
+    //////////////////////////////////////////////////////////
+    // 🧬 PROVENANCE (AREA-2.1 — additive, server-controlled only)
+    // Identity (_id, cityRef+normalizedName) is unaffected by this
+    // block — it exists solely to record where a record came from,
+    // per AREA-1 Decision 5/6. No client input path may set any of
+    // these fields (see createArea/updateArea).
+    //////////////////////////////////////////////////////////
+    sourceType: {
+      type:    String,
+      enum:    Object.values(AREA_SOURCE_TYPE),
+      default: AREA_SOURCE_TYPE.MANUAL,
+    },
+
+    sourceExternalId: {
+      type:    String,
+      trim:    true,
+      default: null,
+    },
+
+    sourceName: {
+      type:    String,
+      trim:    true,
+      default: null,
+    },
+
+    sourceVersion: {
+      type:    String,
+      trim:    true,
+      default: null,
+    },
+
+    sourceImportedAt: {
+      type:    Date,
+      default: null,
+    },
+
+    lastSeenAt: {
+      type:    Date,
+      default: null,
+    },
+
+    sourceRecordStatus: {
+      type:    String,
+      enum:    Object.values(AREA_SOURCE_RECORD_STATUS),
       default: null,
     },
   },

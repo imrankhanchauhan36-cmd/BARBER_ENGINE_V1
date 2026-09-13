@@ -23,4 +23,7 @@ export const AUDIT_ACTIONS = {
   // Salon (for future alignment — not wired yet)
   SALON_APPROVED: "SALON_APPROVED",
   SALON_REJECTED: "SALON_REJECTED",
+
+  // Area (AREA-2.1 — createArea hardening)
+  AREA_CREATED: "AREA_CREATED",
 };
