@@ -112,6 +112,14 @@ import {
 } from "../controllers/areaServiceability.controller.js";
 import { areaServiceabilitySchemas } from "../validators/areaServiceability.validator.js";
 
+import {
+  getAreaDiscoveryCandidateById,
+  listAreaDiscoveryCandidates,
+  observeAreaDiscoveryCandidate,
+  reviewAreaDiscoveryCandidate,
+} from "../controllers/areaDiscoveryCandidate.controller.js";
+import { areaDiscoveryCandidateSchemas } from "../validators/areaDiscoveryCandidate.validator.js";
+
 
 // ── Middlewares ───────────────────────────────────────────
 import { protect } from "../middlewares/auth.middleware.js";
@@ -201,6 +209,39 @@ router.patch(
   validate(areaServiceabilitySchemas.areaIdParam, "params"),
   validate(areaServiceabilitySchemas.transitionBody),
   asyncHandler(transitionAreaServiceability)
+);
+
+// ── AREA-2.5.1 — Area Discovery Candidate (foundation only) ─────────
+// "observe" mirrors createArea's own INDIA/STATE/DISTRICT scope
+// exactly (recording an observation is lower-stakes than creating
+// canonical geography). "review" (approve/reject/merge) is INDIA-only,
+// mirroring AreaServiceability's stricter governance-action precedent
+// — no existing policy clearly supports STATE/DISTRICT delegation for
+// candidate approval, so the safest existing boundary is used.
+router.get(
+  "/area-discovery-candidates",
+  requireAdminLevel("INDIA", "STATE", "DISTRICT"),
+  validate(areaDiscoveryCandidateSchemas.listQuery, "query"),
+  asyncHandler(listAreaDiscoveryCandidates)
+);
+router.get(
+  "/area-discovery-candidates/:candidateId",
+  requireAdminLevel("INDIA", "STATE", "DISTRICT"),
+  validate(areaDiscoveryCandidateSchemas.candidateIdParam, "params"),
+  asyncHandler(getAreaDiscoveryCandidateById)
+);
+router.post(
+  "/area-discovery-candidates",
+  requireAdminLevel("INDIA", "STATE", "DISTRICT"),
+  validate(areaDiscoveryCandidateSchemas.observeBody),
+  asyncHandler(observeAreaDiscoveryCandidate)
+);
+router.patch(
+  "/area-discovery-candidates/:candidateId",
+  requireAdminLevel("INDIA"),
+  validate(areaDiscoveryCandidateSchemas.candidateIdParam, "params"),
+  validate(areaDiscoveryCandidateSchemas.reviewBody),
+  asyncHandler(reviewAreaDiscoveryCandidate)
 );
 
 
