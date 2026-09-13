@@ -105,11 +105,19 @@ import {
   updateState,
 } from "../controllers/state.controller.js";
 
+import {
+  configureAreaServiceability,
+  getAreaServiceability,
+  transitionAreaServiceability,
+} from "../controllers/areaServiceability.controller.js";
+import { areaServiceabilitySchemas } from "../validators/areaServiceability.validator.js";
+
 
 // ── Middlewares ───────────────────────────────────────────
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireAdminLevel } from "../middlewares/requireAdminLevel.js";
 import { requireRole } from "../middlewares/role.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
 
 const router = express.Router();
 
@@ -167,6 +175,33 @@ router.get   ("/areas/:id",          requireAdminLevel("INDIA","STATE","DISTRICT
 router.post  ("/areas",              requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(createArea));
 router.patch ("/areas/:id",          requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(updateArea));
 router.delete("/areas/:id",          requireAdminLevel("INDIA","STATE"),            asyncHandler(deleteArea));
+
+// ── AREA-2.4.1 — Area Serviceability ────────────────────────────────
+// Write access (configure/transition) is INDIA-only for V1 — the
+// safest currently-approved boundary; STATE/DISTRICT write access
+// remains an open business decision (AREA-2.4 audit §V.1), not
+// invented here. Read access follows the same INDIA/STATE/DISTRICT +
+// geography-scope pattern as getAreaById.
+router.get(
+  "/areas/:areaId/serviceability",
+  requireAdminLevel("INDIA", "STATE", "DISTRICT"),
+  validate(areaServiceabilitySchemas.areaIdParam, "params"),
+  asyncHandler(getAreaServiceability)
+);
+router.post(
+  "/areas/:areaId/serviceability",
+  requireAdminLevel("INDIA"),
+  validate(areaServiceabilitySchemas.areaIdParam, "params"),
+  validate(areaServiceabilitySchemas.configureBody),
+  asyncHandler(configureAreaServiceability)
+);
+router.patch(
+  "/areas/:areaId/serviceability",
+  requireAdminLevel("INDIA"),
+  validate(areaServiceabilitySchemas.areaIdParam, "params"),
+  validate(areaServiceabilitySchemas.transitionBody),
+  asyncHandler(transitionAreaServiceability)
+);
 
 
 // ── Admin Management ──────────────────────────────────────

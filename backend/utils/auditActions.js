@@ -26,4 +26,7 @@ export const AUDIT_ACTIONS = {
 
   // Area (AREA-2.1 — createArea hardening)
   AREA_CREATED: "AREA_CREATED",
+
+  // Area Serviceability (AREA-2.4.1)
+  AREA_SERVICEABILITY_STATUS_CHANGED: "AREA_SERVICEABILITY_STATUS_CHANGED",
 };
