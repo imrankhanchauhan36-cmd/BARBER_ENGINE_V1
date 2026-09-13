@@ -119,6 +119,7 @@ import {
   reviewAreaDiscoveryCandidate,
 } from "../controllers/areaDiscoveryCandidate.controller.js";
 import { areaDiscoveryCandidateSchemas } from "../validators/areaDiscoveryCandidate.validator.js";
+import { previewCandidateMatch } from "../controllers/areaDiscoveryMatch.controller.js";
 
 
 // ── Middlewares ───────────────────────────────────────────
@@ -242,6 +243,17 @@ router.patch(
   validate(areaDiscoveryCandidateSchemas.candidateIdParam, "params"),
   validate(areaDiscoveryCandidateSchemas.reviewBody),
   asyncHandler(reviewAreaDiscoveryCandidate)
+);
+
+// ── AREA-2.5.2 — Area Discovery Match Preview (read-only) ───────────
+// Same scope pattern as getAreaDiscoveryCandidateById above — no
+// client-supplied geography, no writes, new file/controller so the
+// frozen AREA-2.5.1 controller stays untouched.
+router.get(
+  "/area-discovery-candidates/:candidateId/match-preview",
+  requireAdminLevel("INDIA", "STATE", "DISTRICT"),
+  validate(areaDiscoveryCandidateSchemas.candidateIdParam, "params"),
+  asyncHandler(previewCandidateMatch)
 );
 
 
