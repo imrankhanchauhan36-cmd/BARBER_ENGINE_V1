@@ -65,6 +65,8 @@ const nextPhone = () => `9999908${String(phoneSeq++).padStart(3, "0")}`;
 const FIXTURE_MARKER = "FA-5.1-VERIFY-FIXTURE";
 const validPolicyBody = (overrides = {}) => ({
   acquisitionIncentiveAmountInPaise: 50000,
+  acquisitionAgentCommissionPercent: 10, // FA-8 — disposable test value, now required on create
+  acquisitionEarningTargetInPaise: 100000, // FA-8 — disposable test value, now required on create
   territoryPartnerCommissionPercent: 12.5,
   licenseTermMonths: 12,
   claimExpiryDays: 30,

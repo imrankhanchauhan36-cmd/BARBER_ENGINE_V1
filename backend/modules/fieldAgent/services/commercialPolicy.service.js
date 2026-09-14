@@ -55,6 +55,8 @@ const isTransientConflict = (err) =>
 
 const CONFIGURABLE_FIELDS = [
   "acquisitionIncentiveAmountInPaise",
+  "acquisitionAgentCommissionPercent", // FA-8
+  "acquisitionEarningTargetInPaise", // FA-8
   "territoryPartnerCommissionPercent",
   "licenseTermMonths",
   "claimExpiryDays",
@@ -76,6 +78,8 @@ export const createDraftPolicyVersion = async ({ adminId, ...fields }) => {
         versionNumber,
         createdBy: adminId,
         acquisitionIncentiveAmountInPaise: fields.acquisitionIncentiveAmountInPaise,
+        acquisitionAgentCommissionPercent: fields.acquisitionAgentCommissionPercent, // FA-8
+        acquisitionEarningTargetInPaise: fields.acquisitionEarningTargetInPaise, // FA-8
         territoryPartnerCommissionPercent: fields.territoryPartnerCommissionPercent,
         licenseTermMonths: fields.licenseTermMonths,
         claimExpiryDays: fields.claimExpiryDays,

@@ -45,6 +45,16 @@ const policyItemListSchema = Joi.array().items(policyItemSchema).max(MAX_POLICY_
 
 const policyBusinessFields = {
   acquisitionIncentiveAmountInPaise: Joi.number().integer().min(ACQUISITION_INCENTIVE_MIN_PAISE),
+  // FA-8 — mirrors territoryPartnerCommissionPercent's own semantics
+  // exactly (decimal allowed, same 0-100 bound, reusing the identical
+  // constants rather than duplicating them with the same values).
+  acquisitionAgentCommissionPercent: Joi.number()
+    .min(TERRITORY_COMMISSION_PERCENT_MIN)
+    .max(TERRITORY_COMMISSION_PERCENT_MAX),
+  // FA-8 — the nationally configured cumulative acquisition earning
+  // target/cap per salon, in paise. No business maximum is invented
+  // here — only the structural (non-negative, integer) bound.
+  acquisitionEarningTargetInPaise: Joi.number().integer().min(ACQUISITION_INCENTIVE_MIN_PAISE),
   territoryPartnerCommissionPercent: Joi.number()
     .min(TERRITORY_COMMISSION_PERCENT_MIN)
     .max(TERRITORY_COMMISSION_PERCENT_MAX),
@@ -57,7 +67,11 @@ const policyBusinessFields = {
 
 export const adminCommercialPolicySchemas = {
   createVersion: Joi.object({
-    acquisitionIncentiveAmountInPaise: policyBusinessFields.acquisitionIncentiveAmountInPaise.required(),
+    // FA-8 — now optional at creation (RESERVED, no longer required —
+    // see CommercialPolicyVersion.js's own field comment for why).
+    acquisitionIncentiveAmountInPaise: policyBusinessFields.acquisitionIncentiveAmountInPaise.optional(),
+    acquisitionAgentCommissionPercent: policyBusinessFields.acquisitionAgentCommissionPercent.required(),
+    acquisitionEarningTargetInPaise: policyBusinessFields.acquisitionEarningTargetInPaise.required(),
     territoryPartnerCommissionPercent: policyBusinessFields.territoryPartnerCommissionPercent.required(),
     licenseTermMonths: policyBusinessFields.licenseTermMonths.required(),
     claimExpiryDays: policyBusinessFields.claimExpiryDays.required(),
@@ -69,6 +83,8 @@ export const adminCommercialPolicySchemas = {
 
   updateVersion: Joi.object({
     acquisitionIncentiveAmountInPaise: policyBusinessFields.acquisitionIncentiveAmountInPaise.optional(),
+    acquisitionAgentCommissionPercent: policyBusinessFields.acquisitionAgentCommissionPercent.optional(),
+    acquisitionEarningTargetInPaise: policyBusinessFields.acquisitionEarningTargetInPaise.optional(),
     territoryPartnerCommissionPercent: policyBusinessFields.territoryPartnerCommissionPercent.optional(),
     licenseTermMonths: policyBusinessFields.licenseTermMonths.optional(),
     claimExpiryDays: policyBusinessFields.claimExpiryDays.optional(),
