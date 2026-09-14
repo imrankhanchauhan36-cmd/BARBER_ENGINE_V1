@@ -45,6 +45,11 @@ import AcquisitionClaim from "../modules/fieldAgent/models/AcquisitionClaim.js";
 import AcquisitionEarningProgress from "../modules/fieldAgent/models/AcquisitionEarningProgress.js";
 import FieldAgentEarningLedger from "../modules/fieldAgent/models/FieldAgentEarningLedger.js";
 import FieldAgentEarningJobCheckpoint from "../modules/fieldAgent/models/FieldAgentEarningJobCheckpoint.js";
+// FA-9 corrective compatibility round: needed because the 4 Territory
+// Partner fixtures now go through the real assignPartner() path, which
+// atomically creates a TerritoryPartnerTermSnapshot — cleanup must
+// account for that real, additional collection.
+import TerritoryPartnerTermSnapshot from "../modules/fieldAgent/models/TerritoryPartnerTermSnapshot.js";
 import FieldAgentEarningPolicyGap from "../modules/fieldAgent/models/FieldAgentEarningPolicyGap.js";
 import CommercialPolicyVersion from "../modules/fieldAgent/models/CommercialPolicyVersion.js";
 import CommercialPolicyOverride from "../modules/fieldAgent/models/CommercialPolicyOverride.js";
@@ -53,6 +58,7 @@ import CommercialTerritory from "../modules/fieldAgent/models/CommercialTerritor
 import TerritoryAssignment from "../modules/fieldAgent/models/TerritoryAssignment.js";
 
 import { publishPolicyOverride } from "../modules/fieldAgent/services/commercialPolicyOverride.service.js";
+import { assignPartner } from "../modules/fieldAgent/services/commercialTerritory.service.js";
 import {
   processCompletedBooking,
   resolveApplicableCommercialPolicyForBooking,
@@ -407,9 +413,14 @@ const run = async () => {
       fixtureUserIds.push(tpUser._id);
       const tpAgent = await FieldAgent.create({ userRef: tpUser._id, applicationRef: oid(), agentCode: `ZF9TP-${Date.now()}`, operationalStatus: "ACTIVE", commercialPath: "TERRITORY_PARTNER" });
       fixtureFieldAgentIds.push(tpAgent._id);
-      const assignment = await TerritoryAssignment.create({ territoryRef: territory._id, fieldAgentRef: tpAgent._id, status: "ACTIVE", effectiveFrom: new Date(Date.now() - 3600000), assignedBy: indiaAdmin._id });
+      // FA-9 corrective compatibility round: created via the
+      // authoritative assignPartner() path (not a raw
+      // TerritoryAssignment.create()) so this fixture represents a
+      // real-world assignment under FA-10's now-authoritative contract
+      // — assignPartner atomically creates the TerritoryPartnerTermSnapshot
+      // too, exactly as production does.
+      const { assignment } = await assignPartner({ territoryId: territory._id, fieldAgentId: tpAgent._id, adminId: indiaAdmin._id });
       fixtureAssignmentIds.push(assignment._id);
-      await CommercialTerritory.updateOne({ _id: territory._id }, { $set: { currentAssignmentRef: assignment._id } });
 
       const targetBooking = await mkBooking(salon, { commissionAmountInPaise: 1000000 }); // hits exact target
       await processCompletedBooking(targetBooking);
@@ -629,9 +640,9 @@ const run = async () => {
       fixtureUserIds.push(tpUser._id);
       const tpAgent = await FieldAgent.create({ userRef: tpUser._id, applicationRef: oid(), agentCode: `ZF9TP-${status}-${Date.now()}`, operationalStatus: "ACTIVE", commercialPath: "TERRITORY_PARTNER" });
       fixtureFieldAgentIds.push(tpAgent._id);
-      const assignment = await TerritoryAssignment.create({ territoryRef: territory._id, fieldAgentRef: tpAgent._id, status: "ACTIVE", effectiveFrom: new Date(Date.now() - 3600000), assignedBy: indiaAdmin._id });
+      // Authoritative assignPartner() path — see test 23's own comment.
+      const { assignment } = await assignPartner({ territoryId: territory._id, fieldAgentId: tpAgent._id, adminId: indiaAdmin._id });
       fixtureAssignmentIds.push(assignment._id);
-      await CommercialTerritory.updateOne({ _id: territory._id }, { $set: { currentAssignmentRef: assignment._id } });
 
       // No AcquisitionClaim on this salon — booking goes straight to Territory Partner evaluation.
       const booking = await mkBooking(salon, { commissionAmountInPaise: 50000 });
@@ -649,9 +660,9 @@ const run = async () => {
       fixtureUserIds.push(tpUser._id);
       const tpAgent = await FieldAgent.create({ userRef: tpUser._id, applicationRef: oid(), agentCode: `ZF9TP-FT-${Date.now()}`, operationalStatus: "ACTIVE", commercialPath: "TERRITORY_PARTNER" });
       fixtureFieldAgentIds.push(tpAgent._id);
-      const assignment = await TerritoryAssignment.create({ territoryRef: territory._id, fieldAgentRef: tpAgent._id, status: "ACTIVE", effectiveFrom: new Date(Date.now() - 3600000), assignedBy: indiaAdmin._id });
+      // Authoritative assignPartner() path — see test 23's own comment.
+      const { assignment } = await assignPartner({ territoryId: territory._id, fieldAgentId: tpAgent._id, adminId: indiaAdmin._id });
       fixtureAssignmentIds.push(assignment._id);
-      await CommercialTerritory.updateOne({ _id: territory._id }, { $set: { currentAssignmentRef: assignment._id } });
 
       await mkFieldAgentWithClaim(salon, "SUSPENDED"); // suspended Acquisition Agent, ACTIVE claim, target not reached
       const booking = await mkBooking(salon, { commissionAmountInPaise: 50000 });
@@ -686,11 +697,23 @@ const run = async () => {
       fixtureUserIds.push(tpUser._id);
       const tpAgent = await FieldAgent.create({ userRef: tpUser._id, applicationRef: oid(), agentCode: `ZF9TP-F7-${Date.now()}`, operationalStatus: "ACTIVE", commercialPath: "TERRITORY_PARTNER" });
       fixtureFieldAgentIds.push(tpAgent._id);
-      const assignment = await TerritoryAssignment.create({ territoryRef: territory._id, fieldAgentRef: tpAgent._id, status: "ACTIVE", effectiveFrom: new Date(Date.now() - 3600000), assignedBy: indiaAdmin._id });
+      // Authoritative assignPartner() path — see test 23's own comment.
+      const { assignment } = await assignPartner({ territoryId: territory._id, fieldAgentId: tpAgent._id, adminId: indiaAdmin._id });
       fixtureAssignmentIds.push(assignment._id);
-      await CommercialTerritory.updateOne({ _id: territory._id }, { $set: { currentAssignmentRef: assignment._id } });
 
-      const nextBooking = await mkBooking(salon, { commissionAmountInPaise: 40000, completedAt: new Date(booking.completedAt.getTime() + 1000) });
+      // FA-9 corrective compatibility round: assignPartner() sets
+      // effectiveFrom to the REAL wall-clock instant it runs at (unlike
+      // the old backdated raw fixture) — that instant can legitimately
+      // land after `booking.completedAt + 1s` given the several lines
+      // of setup/processing in between. nextBooking must be strictly
+      // after BOTH the F-5 target-reaching booking AND the assignment's
+      // own effectiveFrom, or resolveTerritoryPartnerEligibility's own
+      // (unchanged, correct) time-bounded lookup would legitimately
+      // find no assignment yet — not a bug in production logic, just a
+      // fixture ordering detail that changed once a real timestamp
+      // replaced a deliberately-backdated one.
+      const nextBookingCompletedAt = new Date(Math.max(booking.completedAt.getTime(), assignment.effectiveFrom.getTime()) + 1000);
+      const nextBooking = await mkBooking(salon, { commissionAmountInPaise: 40000, completedAt: nextBookingCompletedAt });
       const nextOutcome = await processCompletedBooking(nextBooking);
       check("F-7. Subsequent booking after target reached earns Territory Partner", nextOutcome.outcome === "CREDITED" && nextOutcome.creditedAmountInPaise === 3200 /* 8% of 40000 */, nextOutcome);
     }
@@ -834,6 +857,7 @@ const run = async () => {
     await AcquisitionEarningProgress.deleteMany({ acquisitionClaimRef: { $in: fixtureClaimIds } });
     await Booking.deleteMany({ _id: { $in: fixtureBookingIds } });
     await AcquisitionClaim.deleteMany({ _id: { $in: fixtureClaimIds } });
+    await TerritoryPartnerTermSnapshot.deleteMany({ territoryAssignmentRef: { $in: fixtureAssignmentIds } });
     await TerritoryAssignment.deleteMany({ _id: { $in: fixtureAssignmentIds } });
     await CommercialTerritory.deleteMany({ _id: { $in: fixtureTerritoryIds } });
     await FieldAgent.deleteMany({ _id: { $in: fixtureFieldAgentIds } });
@@ -844,9 +868,16 @@ const run = async () => {
     await CommercialPolicyVersion.deleteMany({ _id: { $in: fixturePolicyIds } });
     await Salon.deleteMany({ _id: { $in: fixtureSalonIds } });
     await User.deleteMany({ _id: { $in: fixtureUserIds } });
-    await Area.deleteMany({ _id: { $in: [areaA1._id, areaB1._id, areaC1._id] } });
-    await City.deleteMany({ _id: { $in: [cityA._id, cityB._id, cityC._id] } });
-    await District.deleteMany({ _id: { $in: [districtA._id, districtB._id, districtC._id] } });
+    // FA-9 corrective compatibility round: use the dynamically-populated
+    // fixture arrays (fixtureAreaIds/fixtureCityIds/fixtureDistrictIds,
+    // appended to by every mkFreshGeography() call), not the original
+    // hardcoded 3-item literals — the hardcoded list silently missed
+    // every geography set created by mkFreshGeography, leaking disposable
+    // District/City/Area fixtures on every run. Test-cleanup-only fix;
+    // no business logic touched.
+    await Area.deleteMany({ _id: { $in: fixtureAreaIds } });
+    await City.deleteMany({ _id: { $in: fixtureCityIds } });
+    await District.deleteMany({ _id: { $in: fixtureDistrictIds } });
     await State.deleteMany({ _id: state._id });
     // Restore the REAL production checkpoint exactly as it was before
     // this run touched it (see the setup comment above) — never delete
@@ -869,6 +900,7 @@ const run = async () => {
       overrides: await CommercialPolicyOverride.countDocuments({ _id: { $in: fixtureOverrideIds } }),
       policies: await CommercialPolicyVersion.countDocuments({ _id: { $in: fixturePolicyIds } }),
       gaps: await FieldAgentEarningPolicyGap.countDocuments({ $or: [{ bookingRef: { $in: fixtureBookingIds } }, { acquisitionClaimRef: { $in: fixtureClaimIds } }] }),
+      termSnapshots: await TerritoryPartnerTermSnapshot.countDocuments({ territoryAssignmentRef: { $in: fixtureAssignmentIds } }),
     };
     check("Zero residue — all FA-9 fixtures removed", Object.values(residue).every((c) => c === 0), residue);
 

@@ -59,10 +59,16 @@ const FieldAgentEarningPolicyGapSchema = new mongoose.Schema(
     bookingRef: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", default: null, immutable: true },
     acquisitionClaimRef: { type: mongoose.Schema.Types.ObjectId, ref: "AcquisitionClaim", default: null, immutable: true },
     salonRef: { type: mongoose.Schema.Types.ObjectId, ref: "Salon", default: null, immutable: true },
+    // FA-10 — populated only for TERM_SNAPSHOT_GAP (a TerritoryAssignment
+    // with no TerritoryPartnerTermSnapshot yet). Additive field, reusing
+    // this exact gap collection/reconciliation mechanism for a third gap
+    // type rather than building a second, parallel gap-tracking system.
+    territoryAssignmentRef: { type: mongoose.Schema.Types.ObjectId, ref: "TerritoryAssignment", default: null, immutable: true },
 
     // The historical instant policy resolution must be evaluated at —
     // Booking.completedAt for BOOKING_POLICY_GAP, AcquisitionClaim.createdAt
-    // for CLAIM_PROGRESS_GAP. Never re-derived as "now" on retry.
+    // for CLAIM_PROGRESS_GAP, TerritoryAssignment.effectiveFrom for
+    // TERM_SNAPSHOT_GAP. Never re-derived as "now" on retry.
     resolutionInstant: { type: Date, required: true, immutable: true },
 
     status: {

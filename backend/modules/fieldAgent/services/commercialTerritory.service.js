@@ -43,6 +43,14 @@ import TerritoryAssignment from "../models/TerritoryAssignment.js";
 import TerritoryActivationLock from "../models/TerritoryActivationLock.js";
 import FieldAgent from "../models/FieldAgent.js";
 import FieldAgentAuditEvent from "../models/FieldAgentAuditEvent.js";
+// FA-10 — additive integration point only. This import creates a new,
+// additive TerritoryPartnerTermSnapshot document immediately after
+// assignment creation, inside the same transaction; it never reads,
+// writes, or otherwise touches TerritoryAssignment/CommercialTerritory's
+// own schema, fields, or lifecycle. See the call site inside
+// assignPartner below for the exact coupling (mirrors
+// acquisitionClaim.service.js's own FA-9 integration exactly).
+import { createTerritoryPartnerTermSnapshot } from "./fieldAgentEarning.service.js";
 import { AUDIT_ACTOR_TYPE, AUDIT_ACTION, AUDIT_ENTITY_TYPE, COMMERCIAL_PATH } from "../constants/fieldAgent.constants.js";
 import {
   TERRITORY_SCOPE_TYPE,
@@ -527,7 +535,27 @@ export const assignPartner = async ({ territoryId, fieldAgentId, adminId }) => {
       territory.updatedBy = adminId;
       await territory.save({ session });
 
+      // FA-10 — additive only, does not modify TerritoryAssignment's
+      // own fields/lifecycle. Attempts to snapshot the 3-year term from
+      // whichever national commercial policy is applicable AT this
+      // exact assignment-creation instant, inside the SAME transaction
+      // (so assignment + term snapshot are atomically coupled when a
+      // policy exists). If no policy exists yet, this deliberately does
+      // NOT fail the assignment — the assignPartner flow is unchanged,
+      // frozen, and fully independent of commercial-policy state
+      // (exactly as it always has been). The absence is instead
+      // durably recorded as an auditable TERM_SNAPSHOT_GAP (reusing
+      // FA-9's own gap mechanism) for later reconciliation once a
+      // policy is published.
+      const termSnapshot = await createTerritoryPartnerTermSnapshot({ assignment, session });
+
       await session.commitTransaction();
+
+      if (!termSnapshot) {
+        console.warn(
+          `⚠️ FA-10 TERM_SNAPSHOT_GAP: TerritoryAssignment ${assignment._id} created with no applicable national commercial policy at ${assignment.effectiveFrom.toISOString()} — 3-year term not yet snapshotted. Durably tracked in FieldAgentEarningPolicyGap; will resolve automatically once a CommercialPolicyVersion applicable at assignment-creation time is published.`
+        );
+      }
 
       safeAuditEvent({
         entityType: AUDIT_ENTITY_TYPE.COMMERCIAL_TERRITORY,

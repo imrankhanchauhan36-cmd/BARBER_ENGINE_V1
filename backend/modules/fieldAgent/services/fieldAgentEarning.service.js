@@ -70,6 +70,7 @@ import AcquisitionClaim from "../models/AcquisitionClaim.js";
 import AcquisitionEarningProgress from "../models/AcquisitionEarningProgress.js";
 import FieldAgentEarningLedger from "../models/FieldAgentEarningLedger.js";
 import FieldAgentEarningPolicyGap from "../models/FieldAgentEarningPolicyGap.js";
+import TerritoryPartnerTermSnapshot from "../models/TerritoryPartnerTermSnapshot.js";
 import CommercialPolicyVersion from "../models/CommercialPolicyVersion.js";
 import CommercialPolicyOverride from "../models/CommercialPolicyOverride.js";
 import CommercialTerritory from "../models/CommercialTerritory.js";
@@ -101,6 +102,11 @@ export const PROCESSING_OUTCOME = Object.freeze({
   // booking's OWN completedAt may well have a valid policy — the block
   // is specifically "the claim's target was never snapshotted."
   PENDING_CLAIM_PROGRESS_GAP: "PENDING_CLAIM_PROGRESS_GAP",
+  // FA-10 — a real TerritoryAssignment/eligibility was found but its
+  // TerritoryPartnerTermSnapshot does not exist yet (no national
+  // policy existed at assignment.effectiveFrom). Distinct from
+  // ZERO_TERM_EXPIRED: this is "unknown yet", not "definitively over."
+  PENDING_TERM_SNAPSHOT_GAP: "PENDING_TERM_SNAPSHOT_GAP",
 });
 
 const isTransientConflict = (err) =>
@@ -166,7 +172,7 @@ export const resolveApplicableCommercialPolicyForBooking = async (salon, complet
 // together with it — otherwise a retry that creates a NEW claim _id
 // would leave a stale, permanently-orphaned gap row pointing at the
 // old, rolled-back claim.
-const recordOrTouchGap = async ({ gapType, referenceKey, bookingRef, acquisitionClaimRef, salonRef, resolutionInstant, lastErrorCode, session = null }) => {
+const recordOrTouchGap = async ({ gapType, referenceKey, bookingRef, acquisitionClaimRef, salonRef, territoryAssignmentRef, resolutionInstant, lastErrorCode, session = null }) => {
   await FieldAgentEarningPolicyGap.findOneAndUpdate(
     { referenceKey },
     {
@@ -176,6 +182,7 @@ const recordOrTouchGap = async ({ gapType, referenceKey, bookingRef, acquisition
         bookingRef: bookingRef ?? null,
         acquisitionClaimRef: acquisitionClaimRef ?? null,
         salonRef: salonRef ?? null,
+        territoryAssignmentRef: territoryAssignmentRef ?? null,
         resolutionInstant,
         status: GAP_STATUS.OPEN,
         firstSeenAt: new Date(),
@@ -258,6 +265,89 @@ export const createAcquisitionEarningProgressForClaim = async ({ claim, salon, s
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// TERRITORY PARTNER TERM SNAPSHOT (FA-10)
+//
+// Mirrors createAcquisitionEarningProgressForClaim's exact principle:
+// resolve the value applicable AT the relationship's creation instant
+// (here, TerritoryAssignment.effectiveFrom, not "now"), snapshot it
+// once, never recompute from a later policy. termMonths always comes
+// from the NATIONAL CommercialPolicyVersion — CommercialPolicyOverride
+// does not carry licenseTermMonths (confirmed by its own schema), so
+// there is no geography-override path for term length.
+//
+// UTC calendar-month addition (Date.UTC) — no local-timezone/DST
+// ambiguity. A start date that doesn't exist in the target month
+// (e.g. Feb 29 on a start year, landing on a non-leap year) rolls
+// forward via JS Date's own overflow normalization, exactly like
+// every other UTC date computation in this codebase.
+//
+// Returns the created snapshot, or null if no national policy was
+// applicable at effectiveFrom — never invents a term, never defaults,
+// always durably records/keeps-open a TERM_SNAPSHOT_GAP when it
+// returns null (shared gap mechanism, not a second system).
+// ═══════════════════════════════════════════════════════════════════
+const addUtcMonths = (date, months) =>
+  new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + months,
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds()
+    )
+  );
+
+export const createTerritoryPartnerTermSnapshot = async ({ assignment, session = null }) => {
+  let policyQuery = CommercialPolicyVersion.findOne({
+    status: COMMERCIAL_POLICY_STATUS.PUBLISHED,
+    publishedAt: { $lte: assignment.effectiveFrom },
+    $or: [{ retiredAt: null }, { retiredAt: { $gt: assignment.effectiveFrom } }],
+  });
+  if (session) policyQuery = policyQuery.session(session);
+  const nationalPolicy = await policyQuery;
+
+  if (!nationalPolicy) {
+    await recordOrTouchGap({
+      gapType: GAP_TYPE.TERM_SNAPSHOT_GAP,
+      referenceKey: `gap:term:${assignment._id}`,
+      acquisitionClaimRef: null,
+      salonRef: null,
+      territoryAssignmentRef: assignment._id,
+      resolutionInstant: assignment.effectiveFrom,
+      lastErrorCode: "NO_NATIONAL_POLICY_AT_ASSIGNMENT_CREATION",
+      session,
+    });
+    return null;
+  }
+
+  try {
+    const [snapshot] = await TerritoryPartnerTermSnapshot.create(
+      [
+        {
+          territoryAssignmentRef: assignment._id,
+          fieldAgentRef: assignment.fieldAgentRef,
+          termStartAt: assignment.effectiveFrom,
+          termMonths: nationalPolicy.licenseTermMonths,
+          termExpiresAt: addUtcMonths(assignment.effectiveFrom, nationalPolicy.licenseTermMonths),
+          policyVersionRef: nationalPolicy._id,
+        },
+      ],
+      session ? { session } : {}
+    );
+    await resolveGapIfOpen(`gap:term:${assignment._id}`, session);
+    return snapshot;
+  } catch (err) {
+    if (err.code === 11000) {
+      // Already created by a concurrent/prior attempt — idempotent no-op.
+      return TerritoryPartnerTermSnapshot.findOne({ territoryAssignmentRef: assignment._id }).lean();
+    }
+    throw err;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // TERRITORY PARTNER ELIGIBILITY — resolved AS OF completedAt via
 // TerritoryAssignment's own time-bounded history (never the "current"
 // currentAssignmentRef pointer, which only reflects live state).
@@ -292,7 +382,18 @@ export const resolveTerritoryPartnerEligibility = async (salon, completedAt) => 
     .lean();
   if (!assignment) return null;
 
-  return { territoryAssignmentRef: assignment._id, fieldAgentRef: assignment.fieldAgentRef };
+  // FA-10 — term validity, resolved immediately after the assignment
+  // itself (before any policy/financial step), per the locked check
+  // order. termSnapshot is null when no TerritoryPartnerTermSnapshot
+  // exists yet (a durable gap, handled by the caller) — distinct from
+  // an assignment that exists but has no term info at all.
+  const termSnapshot = await TerritoryPartnerTermSnapshot.findOne({ territoryAssignmentRef: assignment._id }).lean();
+
+  return {
+    territoryAssignmentRef: assignment._id,
+    fieldAgentRef: assignment.fieldAgentRef,
+    termSnapshot,
+  };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -537,6 +638,57 @@ const attemptTerritoryPartnerCredit = async ({ booking, salon, resolved }) => {
     return { outcome: PROCESSING_OUTCOME.NO_ENTITLEMENT, creditedAmountInPaise: 0 };
   }
 
+  // FA-10 — term validity, checked immediately after eligibility is
+  // confirmed and BEFORE policy/financial resolution (locked check
+  // order §7, ahead of §8). Two distinct non-eligible states:
+  //   (a) no snapshot yet -> durable gap, retryable, no ledger row.
+  //   (b) snapshot exists but has elapsed -> definitive, auditable
+  //       zero-value terminal outcome, ledger row written.
+  if (!eligibility.termSnapshot) {
+    // resolutionInstant must be the assignment's own effectiveFrom (the
+    // true "ISSUANCE" instant), never booking.completedAt — fetched
+    // fresh here only for the rare case this is the FIRST time the gap
+    // is created (normally createTerritoryPartnerTermSnapshot already
+    // created it with the correct instant at assignment time, and this
+    // call is just a $setOnInsert-safe re-touch that leaves it alone).
+    const assignmentForGap = await TerritoryAssignment.findById(eligibility.territoryAssignmentRef).select("effectiveFrom").lean();
+    await recordOrTouchGap({
+      gapType: GAP_TYPE.TERM_SNAPSHOT_GAP,
+      referenceKey: `gap:term:${eligibility.territoryAssignmentRef}`,
+      acquisitionClaimRef: null,
+      salonRef: booking.salonRef,
+      territoryAssignmentRef: eligibility.territoryAssignmentRef,
+      resolutionInstant: assignmentForGap?.effectiveFrom ?? booking.completedAt,
+      lastErrorCode: "NO_TERM_SNAPSHOT_YET",
+    });
+    return { outcome: PROCESSING_OUTCOME.PENDING_TERM_SNAPSHOT_GAP, creditedAmountInPaise: 0 };
+  }
+
+  // Exact boundary (locked): eligible when completedAt < termExpiresAt,
+  // NOT eligible when completedAt >= termExpiresAt.
+  const termExpired = booking.completedAt.getTime() >= eligibility.termSnapshot.termExpiresAt.getTime();
+  if (termExpired) {
+    const ratePercentForRecord = resolved.policy.territoryPartnerCommissionPercent;
+    const rawEligibleForRecord = roundPaise(booking.commissionAmountInPaise, ratePercentForRecord);
+    const row = await writeSimpleLedgerRow({
+      bookingRef: booking._id,
+      entitlementType: EARNING_ENTITLEMENT_TYPE.TERRITORY_PARTNER,
+      idempotencyKey,
+      fieldAgentRef: eligibility.fieldAgentRef,
+      acquisitionClaimRef: null,
+      territoryAssignmentRef: eligibility.territoryAssignmentRef,
+      policySource: resolved.policySource,
+      policyVersionRef: resolved.policy._id,
+      appliedRatePercent: ratePercentForRecord,
+      bookingCommissionAmountInPaise: booking.commissionAmountInPaise,
+      rawEligibleAmountInPaise: rawEligibleForRecord,
+      creditedAmountInPaise: 0,
+      creditOutcome: EARNING_CREDIT_OUTCOME.ZERO_TERM_EXPIRED,
+      bookingCompletedAt: booking.completedAt,
+    });
+    return { outcome: row.creditOutcome, creditedAmountInPaise: row.creditedAmountInPaise };
+  }
+
   const ratePercent = resolved.policy.territoryPartnerCommissionPercent;
   const rawEligibleAmountInPaise = roundPaise(booking.commissionAmountInPaise, ratePercent);
 
@@ -663,6 +815,25 @@ export const reprocessOneGap = async (gap) => {
       return { reprocessed: false, outcome: "STILL_NO_POLICY_AT_CLAIM_CREATION" };
     }
     return { reprocessed: true, outcome: "PROGRESS_CREATED" };
+  }
+
+  if (gap.gapType === GAP_TYPE.TERM_SNAPSHOT_GAP) {
+    const assignment = await TerritoryAssignment.findById(gap.territoryAssignmentRef).lean();
+    if (!assignment) {
+      await resolveGapIfOpen(gap.referenceKey);
+      return { reprocessed: true, outcome: "ASSIGNMENT_GONE" };
+    }
+    const snapshot = await createTerritoryPartnerTermSnapshot({ assignment });
+    // createTerritoryPartnerTermSnapshot itself calls resolveGapIfOpen
+    // on success, and re-touches the OPEN gap on continued failure —
+    // on continued absence of a national policy at effectiveFrom the
+    // gap stays OPEN (can be permanent if no policy ever existed as of
+    // that historical instant — the exact same class of consequence as
+    // CLAIM_PROGRESS_GAP, see the final report).
+    if (!snapshot) {
+      return { reprocessed: false, outcome: "STILL_NO_POLICY_AT_ASSIGNMENT_CREATION" };
+    }
+    return { reprocessed: true, outcome: "TERM_SNAPSHOT_CREATED" };
   }
 
   return { reprocessed: false, outcome: "UNKNOWN_GAP_TYPE" };

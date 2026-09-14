@@ -31,10 +31,16 @@ export const EARNING_ENTITLEMENT_TYPE = Object.freeze({
 //   not ACTIVE at processing time (suspended/blocked) — historically
 //   valid entitlement is preserved elsewhere; only THIS booking's new
 //   credit is withheld.
+// FA-10 — ZERO_TERM_EXPIRED: a Territory Partner's 3-year term
+// (TerritoryPartnerTermSnapshot.termExpiresAt) had already elapsed as
+// of Booking.completedAt. Distinct from ZERO_AGENT_INELIGIBLE
+// (account suspended/blocked) so an audit can tell the two reasons
+// apart — additive-only, same "zero-value outcome" convention.
 export const EARNING_CREDIT_OUTCOME = Object.freeze({
   CREDITED: "CREDITED",
   ZERO_TARGET_REACHED: "ZERO_TARGET_REACHED",
   ZERO_AGENT_INELIGIBLE: "ZERO_AGENT_INELIGIBLE",
+  ZERO_TERM_EXPIRED: "ZERO_TERM_EXPIRED",
 });
 
 // Which policy lineage a ledger row's policyVersionRef points into —
@@ -57,9 +63,17 @@ export const ACQUISITION_PROGRESS_STATUS = Object.freeze({
 // applicable policy at Booking.completedAt. CLAIM_PROGRESS_GAP: an
 // AcquisitionClaim had no applicable policy at claim.createdAt, so its
 // AcquisitionEarningProgress/target could not yet be snapshotted.
+// FA-10 — TERM_SNAPSHOT_GAP: a TerritoryAssignment had no applicable
+// national policy at effectiveFrom, so its TerritoryPartnerTermSnapshot
+// (termMonths/termExpiresAt) could not yet be created. Reuses this
+// exact durable-gap mechanism rather than a second, parallel
+// gap-tracking system — same reconciliation sweep, same reference-key
+// idempotency, same "never invent, durably retry" discipline as
+// CLAIM_PROGRESS_GAP.
 export const GAP_TYPE = Object.freeze({
   BOOKING_POLICY_GAP: "BOOKING_POLICY_GAP",
   CLAIM_PROGRESS_GAP: "CLAIM_PROGRESS_GAP",
+  TERM_SNAPSHOT_GAP: "TERM_SNAPSHOT_GAP",
 });
 
 export const GAP_STATUS = Object.freeze({
