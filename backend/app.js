@@ -51,6 +51,9 @@ import adminFieldAgentApprovalRoutes from "./modules/fieldAgent/routes/adminFiel
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
+import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldAgentAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 Field Agent acquisition referral/claim self-service
+import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
+import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -375,6 +378,17 @@ app.use("/api/admin/commercial-policies", protect, adminCommercialPolicyRoutes);
 // adminCommercialTerritory.routes.js's own header); reads additionally
 // allow STATE/DISTRICT, scoped to the admin's own geography.
 app.use("/api/admin/commercial-territories", protect, adminCommercialTerritoryRoutes);
+// FA-5.3 — Field Agent acquisition referral/claim self-service.
+// protect/onboardingBypass at the mount level, same convention as
+// fieldAgentTrainingRoutes/fieldAgentTestRoutes above.
+app.use("/api/field-agent/acquisition", protect, onboardingBypass, fieldAgentAcquisitionClaimRoutes);
+// FA-5.3 — Salon Owner referral redemption bridge. protect +
+// requireRole("OWNER") are applied INSIDE the router itself, same
+// convention as salonOnboardingRouter (no extra middleware here).
+app.use("/api/acquisition", acquisitionRedeemRoutes);
+// FA-5.3 — admin AcquisitionClaim review. Read AND reject/reassign
+// scoping mirrors adminCommercialTerritoryRoutes exactly.
+app.use("/api/admin/acquisition-claims", protect, adminAcquisitionClaimRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////

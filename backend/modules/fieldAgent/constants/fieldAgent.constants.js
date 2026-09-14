@@ -163,6 +163,19 @@ export const AUDIT_ACTION = Object.freeze({
   // this module's own FieldAgentAuditEvent.
   TERRITORY_PARTNER_ASSIGNED: "TERRITORY_PARTNER_ASSIGNED",
   TERRITORY_PARTNER_VACATED: "TERRITORY_PARTNER_VACATED",
+  // FA-5.3 — additive only. Written by
+  // modules/fieldAgent/services/acquisitionClaim.service.js.
+  // Referral issuance/cancellation are agent-initiated (actorType
+  // AGENT); redemption is owner-initiated (actorType SYSTEM, since no
+  // OWNER value exists in AUDIT_ACTOR_TYPE and none is invented here —
+  // see that service's own header for the full reasoning); claim
+  // ending is actorType AGENT (self-withdrawal) or ADMIN (reject/
+  // reassign) depending on who actually called the endpoint.
+  ACQUISITION_REFERRAL_CREATED: "ACQUISITION_REFERRAL_CREATED",
+  ACQUISITION_REFERRAL_CONSUMED: "ACQUISITION_REFERRAL_CONSUMED",
+  ACQUISITION_REFERRAL_CANCELLED: "ACQUISITION_REFERRAL_CANCELLED",
+  ACQUISITION_CLAIM_CREATED: "ACQUISITION_CLAIM_CREATED",
+  ACQUISITION_CLAIM_ENDED: "ACQUISITION_CLAIM_ENDED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string
@@ -172,11 +185,14 @@ export const AUDIT_ACTION = Object.freeze({
 // never had to name it explicitly); "FIELD_AGENT" is new in FA-4.1.
 // "COMMERCIAL_POLICY_VERSION" is new in FA-5.1.
 // "COMMERCIAL_TERRITORY" is new in FA-5.2.
+// "ACQUISITION_REFERRAL"/"ACQUISITION_CLAIM" are new in FA-5.3.
 export const AUDIT_ENTITY_TYPE = Object.freeze({
   APPLICATION: "APPLICATION",
   FIELD_AGENT: "FIELD_AGENT",
   COMMERCIAL_POLICY_VERSION: "COMMERCIAL_POLICY_VERSION",
   COMMERCIAL_TERRITORY: "COMMERCIAL_TERRITORY",
+  ACQUISITION_REFERRAL: "ACQUISITION_REFERRAL",
+  ACQUISITION_CLAIM: "ACQUISITION_CLAIM",
 });
 
 // FA-4.1 — the FieldAgent operational profile's own status, DELIBERATELY
