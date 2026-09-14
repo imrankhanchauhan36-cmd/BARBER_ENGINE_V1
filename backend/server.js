@@ -14,6 +14,7 @@ import { startSlaScannerJob } from "./jobs/slaScanner.job.js"; // ← Phase G St
 import { startRatingOutboxJob } from "./jobs/ratingOutbox.job.js"; // ← Rating & Review Engine Phase 2 — distributed-safe RatingEvent outbox consumer
 import { startWeeklyScheduleMaterializerJob } from "./jobs/weeklyScheduleMaterializer.job.js"; // ← C4 Phase 2 — converts WeeklyScheduleTemplate into concrete ProfessionalChairAssignment rows for each salon's rolling booking window
 import { startFieldAgentKycSyncJob } from "./modules/kyc/jobs/fieldAgentKycSync.job.js"; // ← FA-3.2 consistency layer — durable FieldAgentKycSyncEvent outbox consumer + reconciliation
+import { startFraudDetectionJob } from "./modules/fieldAgent/jobs/fraudDetection.job.js"; // ← FA-7.2 — stateless, read-only REFERRAL_VELOCITY/WITHDRAW_RECLAIM_CYCLE detection over one closed hour, writing only advisory FraudSignal evidence
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -201,6 +202,19 @@ const weeklyScheduleMaterializerJob = startWeeklyScheduleMaterializerJob();
 const fieldAgentKycSyncJob = startFieldAgentKycSyncJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7l: START FRAUD DETECTION JOB (FA-7.2)
+//
+// Runs at most hourly, stateless — recomputes the most recently
+// closed hour on every tick from Date.now(), never a historical
+// backfill. Reads AcquisitionReferral/AcquisitionClaim (frozen FA-5.3)
+// read-only; writes only advisory FraudSignal evidence via the
+// frozen FA-7.1 recordSignal(). See
+// modules/fieldAgent/jobs/fraudDetection.job.js.
+//////////////////////////////////////////////////////////////
+
+const fraudDetectionJob = startFraudDetectionJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -211,7 +225,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -271,6 +285,9 @@ const shutdown = async (signal) => {
 
       fieldAgentKycSyncJob.stop();
       console.log("✅ Field Agent KYC sync job stopped");
+
+      fraudDetectionJob.stop();
+      console.log("✅ Fraud detection job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.
