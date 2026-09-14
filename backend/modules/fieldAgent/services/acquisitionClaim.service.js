@@ -60,6 +60,13 @@ import AcquisitionClaim from "../models/AcquisitionClaim.js";
 import FieldAgent from "../models/FieldAgent.js";
 import FieldAgentAuditEvent from "../models/FieldAgentAuditEvent.js";
 import { getFieldAgentByUserId } from "./fieldAgentProfile.service.js";
+// FA-9 CORRECTIVE (target snapshot architecture, Finding B-2) —
+// additive integration point only. This import creates a new,
+// additive AcquisitionEarningProgress document immediately after
+// claim creation; it never reads, writes, or otherwise touches
+// AcquisitionClaim's own schema, fields, or lifecycle. See the call
+// site inside redeemReferral below for the exact coupling.
+import { createAcquisitionEarningProgressForClaim } from "./fieldAgentEarning.service.js";
 // FA-5.2 — read-only imports. Never written by this file.
 import CommercialTerritory from "../models/CommercialTerritory.js";
 import TerritoryAssignment from "../models/TerritoryAssignment.js";
@@ -379,7 +386,30 @@ export const redeemReferral = async ({ ownerId, referralCode }) => {
         { session }
       );
 
+      // FA-9 CORRECTIVE (Finding B-2) — additive only, does not modify
+      // AcquisitionClaim's own fields/lifecycle. Attempts to snapshot
+      // the acquisition target from whichever commercial policy is
+      // applicable AT this exact claim-creation instant, inside the
+      // SAME transaction (so claim + progress are atomically coupled
+      // when a policy exists). If no policy exists yet, this
+      // deliberately does NOT fail the redemption — the referral
+      // redemption / claim-creation flow is unchanged, frozen, and
+      // fully independent of commercial-policy state (exactly as its
+      // own file header has always documented). The absence is instead
+      // durably recorded as an auditable CLAIM_PROGRESS_GAP (outside
+      // this transaction, fire-and-forget, mirroring safeAuditEvent's
+      // own non-blocking pattern) for later reconciliation once a
+      // policy is published — never inventing a target, never using a
+      // future policy, never silently defaulting to zero.
+      const progress = await createAcquisitionEarningProgressForClaim({ claim, salon, session });
+
       await session.commitTransaction();
+
+      if (!progress) {
+        console.warn(
+          `⚠️ FA-9 CLAIM_PROGRESS_GAP: AcquisitionClaim ${claim._id} created with no applicable commercial policy at ${claim.createdAt.toISOString()} — acquisition target not yet snapshotted. Durably tracked in FieldAgentEarningPolicyGap; will resolve automatically once a CommercialPolicyVersion or CommercialPolicyOverride applicable at claim-creation time is published.`
+        );
+      }
 
       // See file header — redemption is owner-initiated, actorType
       // SYSTEM with the owner's own User._id for traceability.

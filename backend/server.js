@@ -17,6 +17,7 @@ import { startFieldAgentKycSyncJob } from "./modules/kyc/jobs/fieldAgentKycSync.
 import { startFraudDetectionJob } from "./modules/fieldAgent/jobs/fraudDetection.job.js"; // ← FA-7.2 — stateless, read-only REFERRAL_VELOCITY/WITHDRAW_RECLAIM_CYCLE detection over one closed hour, writing only advisory FraudSignal evidence
 import { startCrossAgentOverlapJob } from "./modules/fieldAgent/jobs/crossAgentOverlap.job.js"; // ← FA-7.3 — stateless, read-only CROSS_AGENT_SALON_CYCLING detection over full AcquisitionClaim history, writing only advisory FraudSignal evidence
 import { startTerritoryAssignmentOverlapJob } from "./modules/fieldAgent/jobs/territoryAssignmentOverlap.job.js"; // ← FA-7.4 — stateless, read-only TERRITORY_ASSIGNMENT_CYCLING detection over full TerritoryAssignment history, writing only advisory FraudSignal evidence
+import { startFieldAgentEarningJob } from "./modules/fieldAgent/jobs/fieldAgentEarning.job.js"; // ← FA-9 — durable-checkpoint, compound-cursor discovery of newly COMPLETED Bookings, crediting Acquisition/Territory Partner earning via the immutable FieldAgentEarningLedger
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -244,6 +245,22 @@ const crossAgentOverlapJob = startCrossAgentOverlapJob();
 const territoryAssignmentOverlapJob = startTerritoryAssignmentOverlapJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7o: START FIELD AGENT EARNING JOB (FA-9)
+//
+// Runs every 30s. Durable-checkpoint, compound (completedAt,_id)
+// cursor discovery of newly COMPLETED Bookings (frozen, read-only —
+// see the new partial {status,completedAt,_id} index on Booking.js).
+// Resolves policy (national CommercialPolicyVersion or geography-scoped
+// CommercialPolicyOverride) as-of Booking.completedAt, credits
+// Acquisition (atomic, capped) or Territory Partner via the immutable
+// FieldAgentEarningLedger. Never mutates Booking, AcquisitionClaim,
+// CommercialTerritory, or CommercialPolicyVersion. See
+// modules/fieldAgent/jobs/fieldAgentEarning.job.js.
+//////////////////////////////////////////////////////////////
+
+const fieldAgentEarningJob = startFieldAgentEarningJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -254,7 +271,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap + Territory Assignment Overlap RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap + Territory Assignment Overlap + Field Agent Earning RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -323,6 +340,9 @@ const shutdown = async (signal) => {
 
       territoryAssignmentOverlapJob.stop();
       console.log("✅ Territory assignment overlap job stopped");
+
+      fieldAgentEarningJob.stop();
+      console.log("✅ Field Agent earning job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

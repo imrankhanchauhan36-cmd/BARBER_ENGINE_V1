@@ -896,6 +896,23 @@ BookingSchema.index(
   }
 );
 
+// ── FIELD AGENT EARNING ENGINE — used by fieldAgentEarning.job.js ──
+// Exact query the worker runs on a compound (completedAt,_id) cursor:
+//   { status: COMPLETED, completedAt: {$gt/$gte: cursor} }
+//   .sort({ completedAt: 1, _id: 1 })
+// Schema-neutral: no field added, no lifecycle/CommissionService
+// change — purely a query-performance structure (FA-9 corrected plan
+// §O). Partial filter keeps it small since most bookings are not
+// COMPLETED at any given time relative to the full historical set.
+BookingSchema.index(
+  { status: 1, completedAt: 1, _id: 1 },
+  {
+    partialFilterExpression: {
+      status: BOOKING_STATUS.COMPLETED,
+    },
+  }
+);
+
 //////////////////////////////////////////////////////////////
 // 🔥 PRE-SAVE: AUTO STATUS HISTORY TRACKING
 //

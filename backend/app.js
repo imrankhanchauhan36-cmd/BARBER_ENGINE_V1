@@ -51,6 +51,7 @@ import adminFieldAgentApprovalRoutes from "./modules/fieldAgent/routes/adminFiel
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
+import adminCommercialPolicyOverrideRoutes from "./modules/fieldAgent/routes/adminCommercialPolicyOverride.routes.js"; // ← NEW — FA-9 admin geography-scoped commercial policy override authoring/governance
 import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldAgentAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 Field Agent acquisition referral/claim self-service
 import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
 import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
@@ -389,6 +390,11 @@ app.use("/api/acquisition", acquisitionRedeemRoutes);
 // FA-5.3 — admin AcquisitionClaim review. Read AND reject/reassign
 // scoping mirrors adminCommercialTerritoryRoutes exactly.
 app.use("/api/admin/acquisition-claims", protect, adminAcquisitionClaimRoutes);
+// FA-9 — admin CommercialPolicyOverride authoring/governance
+// (geography-scoped commercial policy, additive to the national
+// CommercialPolicyVersion above). Read AND write are INDIA-only, same
+// rationale as adminCommercialPolicyRoutes.
+app.use("/api/admin/commercial-policy-overrides", protect, adminCommercialPolicyOverrideRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
