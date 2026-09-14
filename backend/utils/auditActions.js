@@ -36,4 +36,15 @@ export const AUDIT_ACTIONS = {
 
   // Area Discovery Resolution (AREA-2.5.3)
   SALON_AREA_RESOLVED: "SALON_AREA_RESOLVED",
+
+  // Commercial Territory lifecycle (FA-5.2). Partner
+  // assign/vacate events use the separate, transactional
+  // FieldAgentAuditEvent convention instead — see
+  // modules/fieldAgent/constants/fieldAgent.constants.js's own
+  // AUDIT_ACTION.TERRITORY_PARTNER_ASSIGNED/VACATED comment.
+  TERRITORY_CREATED: "TERRITORY_CREATED",
+  TERRITORY_UPDATED: "TERRITORY_UPDATED",
+  TERRITORY_ACTIVATED: "TERRITORY_ACTIVATED",
+  TERRITORY_SUSPENDED: "TERRITORY_SUSPENDED",
+  TERRITORY_RETIRED: "TERRITORY_RETIRED",
 };

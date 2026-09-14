@@ -149,6 +149,20 @@ export const AUDIT_ACTION = Object.freeze({
   COMMERCIAL_POLICY_CREATED: "COMMERCIAL_POLICY_CREATED",
   COMMERCIAL_POLICY_PUBLISHED: "COMMERCIAL_POLICY_PUBLISHED",
   COMMERCIAL_POLICY_RETIRED: "COMMERCIAL_POLICY_RETIRED",
+  // FA-5.2 — additive only, per the FA-5.2 hardened implementation
+  // plan §10/§12. Written by
+  // modules/fieldAgent/services/commercialTerritory.service.js
+  // (assignPartner/vacatePartner/retireTerritory's auto-vacate step),
+  // entityType COMMERCIAL_TERRITORY, actorType ADMIN, inside the same
+  // transaction as the CommercialTerritory/TerritoryAssignment write
+  // itself — mirrors COMMERCIAL_MODEL_SELECTED's own transactional
+  // discipline. Territory lifecycle events (created/updated/activated/
+  // suspended/retired) use the existing fire-and-forget AdminAuditLog
+  // convention instead (see utils/auditActions.js) — same split
+  // already proven between AreaServiceability (AdminAuditLog) and
+  // this module's own FieldAgentAuditEvent.
+  TERRITORY_PARTNER_ASSIGNED: "TERRITORY_PARTNER_ASSIGNED",
+  TERRITORY_PARTNER_VACATED: "TERRITORY_PARTNER_VACATED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string
@@ -157,10 +171,12 @@ export const AUDIT_ACTION = Object.freeze({
 // always FieldAgentAuditEvent's own implicit schema default (FA-2
 // never had to name it explicitly); "FIELD_AGENT" is new in FA-4.1.
 // "COMMERCIAL_POLICY_VERSION" is new in FA-5.1.
+// "COMMERCIAL_TERRITORY" is new in FA-5.2.
 export const AUDIT_ENTITY_TYPE = Object.freeze({
   APPLICATION: "APPLICATION",
   FIELD_AGENT: "FIELD_AGENT",
   COMMERCIAL_POLICY_VERSION: "COMMERCIAL_POLICY_VERSION",
+  COMMERCIAL_TERRITORY: "COMMERCIAL_TERRITORY",
 });
 
 // FA-4.1 — the FieldAgent operational profile's own status, DELIBERATELY
