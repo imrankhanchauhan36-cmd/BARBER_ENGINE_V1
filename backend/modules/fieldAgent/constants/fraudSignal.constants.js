@@ -17,9 +17,20 @@
 // The two detectors approved for FA-7.2 — defined here only because
 // FraudSignal.signalType must be a closed enum from day one. FA-7.1
 // itself contains no detection logic that produces either value.
+//
+// FA-7.3 — CROSS_AGENT_SALON_CYCLING added additively (explicit, narrow
+// frozen-boundary exception authorized for FA-7.3 only). Cannot reuse
+// WITHDRAW_RECLAIM_CYCLE's dedupeKey namespace: that signal is already
+// keyed to the identical triggering claim a cross-agent detector would
+// use, so a second recordSignal() call under that same type would just
+// return FA-7.2's own already-persisted (and differently-shaped)
+// document, immutably, never carrying the distinct-agent evidence this
+// detector needs. No detection logic for this value exists in this
+// file — see modules/fieldAgent/services/crossAgentOverlap.service.js.
 export const SIGNAL_TYPE = Object.freeze({
   REFERRAL_VELOCITY: "REFERRAL_VELOCITY",
   WITHDRAW_RECLAIM_CYCLE: "WITHDRAW_RECLAIM_CYCLE",
+  CROSS_AGENT_SALON_CYCLING: "CROSS_AGENT_SALON_CYCLING",
 });
 
 // What a signal is fundamentally ABOUT, for future "all signals
