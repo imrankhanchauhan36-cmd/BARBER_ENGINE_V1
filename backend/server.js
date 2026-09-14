@@ -16,6 +16,7 @@ import { startWeeklyScheduleMaterializerJob } from "./jobs/weeklyScheduleMateria
 import { startFieldAgentKycSyncJob } from "./modules/kyc/jobs/fieldAgentKycSync.job.js"; // ← FA-3.2 consistency layer — durable FieldAgentKycSyncEvent outbox consumer + reconciliation
 import { startFraudDetectionJob } from "./modules/fieldAgent/jobs/fraudDetection.job.js"; // ← FA-7.2 — stateless, read-only REFERRAL_VELOCITY/WITHDRAW_RECLAIM_CYCLE detection over one closed hour, writing only advisory FraudSignal evidence
 import { startCrossAgentOverlapJob } from "./modules/fieldAgent/jobs/crossAgentOverlap.job.js"; // ← FA-7.3 — stateless, read-only CROSS_AGENT_SALON_CYCLING detection over full AcquisitionClaim history, writing only advisory FraudSignal evidence
+import { startTerritoryAssignmentOverlapJob } from "./modules/fieldAgent/jobs/territoryAssignmentOverlap.job.js"; // ← FA-7.4 — stateless, read-only TERRITORY_ASSIGNMENT_CYCLING detection over full TerritoryAssignment history, writing only advisory FraudSignal evidence
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -229,6 +230,20 @@ const fraudDetectionJob = startFraudDetectionJob();
 const crossAgentOverlapJob = startCrossAgentOverlapJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7n: START TERRITORY ASSIGNMENT OVERLAP JOB (FA-7.4)
+//
+// Runs at most hourly, stateless — no time-bucket, evaluates the full
+// persisted TerritoryAssignment (frozen FA-5.2) history read-only every
+// tick, discovered via the small CommercialTerritory master collection.
+// Writes only advisory TERRITORY_ASSIGNMENT_CYCLING FraudSignal
+// evidence via the frozen FA-7.1 recordSignal(). Deliberately a
+// separate scheduler from the FA-7.2/FA-7.3 fraud detection jobs — see
+// modules/fieldAgent/jobs/territoryAssignmentOverlap.job.js for why.
+//////////////////////////////////////////////////////////////
+
+const territoryAssignmentOverlapJob = startTerritoryAssignmentOverlapJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -239,7 +254,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap + Territory Assignment Overlap RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -305,6 +320,9 @@ const shutdown = async (signal) => {
 
       crossAgentOverlapJob.stop();
       console.log("✅ Cross-agent overlap job stopped");
+
+      territoryAssignmentOverlapJob.stop();
+      console.log("✅ Territory assignment overlap job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

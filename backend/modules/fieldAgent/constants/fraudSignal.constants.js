@@ -27,10 +27,21 @@
 // document, immutably, never carrying the distinct-agent evidence this
 // detector needs. No detection logic for this value exists in this
 // file — see modules/fieldAgent/services/crossAgentOverlap.service.js.
+//
+// FA-7.4 — TERRITORY_ASSIGNMENT_CYCLING added additively (same narrow,
+// explicit frozen-boundary exception pattern, authorized for FA-7.4
+// only). The TerritoryAssignment analogue of CROSS_AGENT_SALON_CYCLING:
+// a Commercial Territory whose ENDED, PARTNER_EXIT-only assignment
+// history involves >= 2 distinct Field Agents. Needs its own type for
+// the identical reason CROSS_AGENT_SALON_CYCLING did — a differently-
+// shaped evidence payload keyed to a differently-shaped triggering
+// event. No detection logic for this value exists in this file — see
+// modules/fieldAgent/services/territoryAssignmentOverlap.service.js.
 export const SIGNAL_TYPE = Object.freeze({
   REFERRAL_VELOCITY: "REFERRAL_VELOCITY",
   WITHDRAW_RECLAIM_CYCLE: "WITHDRAW_RECLAIM_CYCLE",
   CROSS_AGENT_SALON_CYCLING: "CROSS_AGENT_SALON_CYCLING",
+  TERRITORY_ASSIGNMENT_CYCLING: "TERRITORY_ASSIGNMENT_CYCLING",
 });
 
 // What a signal is fundamentally ABOUT, for future "all signals
