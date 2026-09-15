@@ -55,6 +55,7 @@ import adminCommercialPolicyOverrideRoutes from "./modules/fieldAgent/routes/adm
 import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldAgentAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 Field Agent acquisition referral/claim self-service
 import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
 import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
+import adminFieldAgentPerformanceRoutes from "./modules/fieldAgent/routes/adminFieldAgentPerformance.routes.js"; // ← NEW — FA-11.3 admin Field Agent Performance read API
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -369,6 +370,17 @@ app.use("/api/admin/field-agent-test", protect, adminFieldAgentTestRoutes);
 // requireAdminLevel per-route pattern as adminFieldAgentTestRoutes
 // above (approve/reject need INDIA level, read ops allow
 // INDIA/STATE/DISTRICT).
+// FA-11.3 — admin Field Agent Performance read API. Read-only (no
+// write route exists here); INDIA sees all, STATE is scoped
+// server-side to TERRITORY_PARTNER agents in their own state only
+// (ACQUISITION_AGENT is INDIA-only in V1 — see fieldAgentPerformance
+// .service.js's own header for why). MUST be mounted before the
+// broader "/api/admin/field-agents" prefix immediately below —
+// Express matches app.use() prefixes in registration order, and
+// "/api/admin/field-agents" would otherwise swallow every request to
+// "/api/admin/field-agents/performance" first (confirmed by a real
+// test failure during implementation — see the FA-11.3 report).
+app.use("/api/admin/field-agents/performance", protect, adminFieldAgentPerformanceRoutes);
 app.use("/api/admin/field-agents", protect, adminFieldAgentApprovalRoutes);
 // FA-5.1 — admin CommercialPolicyVersion authoring/versioning. Read
 // AND write are INDIA-only (see adminCommercialPolicy.routes.js's own
