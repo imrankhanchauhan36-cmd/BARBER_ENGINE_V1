@@ -12,6 +12,19 @@
  * shape exactly (same window/max/key-generator pattern), scoped with
  * their own key prefix so field-agent OTP abuse can never exhaust or
  * be exhausted by the existing user/partner OTP quotas.
+ *
+ * FA-13A — additive only. The two /login/* routes below are the
+ * APPROVED FIELD AGENT OPERATIONAL LOGIN contract (day-to-day login
+ * for an already-approved agent), deliberately separate from
+ * /send-otp and /verify-otp above (FA-2's own apply/application flow,
+ * byte-for-byte unchanged — same handlers, same limiters, same
+ * validator). /login/send-otp reuses sendFieldAgentOtp UNMODIFIED
+ * (sending an OTP is role-scoped, not journey-scoped, so no new logic
+ * or Redis key namespace is needed for it) with its own dedicated
+ * rate limiter so operational-login OTP traffic can never exhaust or
+ * be exhausted by the apply-flow's own quota. /login/verify-otp is a
+ * genuinely new handler (fieldAgentOperationalAuth.controller.js) —
+ * see that file's own header for the full contract.
  */
 
 import express from "express";
@@ -21,6 +34,7 @@ import {
   sendFieldAgentOtp,
   verifyFieldAgentOtp,
 } from "../controllers/fieldAgentAuth.controller.js";
+import { verifyFieldAgentOperationalOtp } from "../controllers/fieldAgentOperationalAuth.controller.js";
 import { fieldAgentSchemas } from "../validators/fieldAgentApplication.validator.js";
 
 const router = express.Router();
@@ -41,6 +55,45 @@ const fieldAgentVerifyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// FA-13A — isolated quota, same shape as the two limiters above, so
+// operational-login abuse/traffic can never exhaust (or be exhausted
+// by) the apply-flow's own OTP quota.
+//
+// NOTE (pre-existing bug found, NOT fixed here): every other
+// keyGenerator in this codebase that uses ipKeyGenerator — both above
+// in this same file and in routes/auth.routes.js — calls it as
+// `ipKeyGenerator(req)`, passing the whole Express request object.
+// express-rate-limit's ipKeyGenerator signature is actually
+// `(ip: string, ipv6Subnet?) => string` — it expects the IP itself,
+// not a request. Passing a non-string object makes it fail the
+// isIPv6() check and fall through to `return ip` (the object,
+// template-coerced to the literal string "[object Object]"), so
+// EVERY caller collapses onto the SAME rate-limit bucket regardless
+// of source IP — the limiter still enforces its max, just globally
+// instead of per-IP. This is a real, pre-existing, unrelated bug
+// affecting OWNER/USER/ADMIN/FA-2-apply login rate limiting too — out
+// of scope to fix here (touches frozen, shared auth.routes.js and
+// this file's own frozen fieldAgentOtpLimiter/fieldAgentVerifyLimiter
+// above), flagged in the FA-13A deliverable report instead. Fixed
+// ONLY in these two NEW limiters (not pre-existing/frozen code) so
+// FA-13A doesn't ship a freshly-written limiter with a known-broken
+// per-IP key.
+const fieldAgentLoginOtpLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => `field_agent_login_otp_${ipKeyGenerator(req.ip)}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const fieldAgentLoginVerifyLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => `field_agent_login_verify_${ipKeyGenerator(req.ip)}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 router.post(
   "/send-otp",
   fieldAgentOtpLimiter,
@@ -53,6 +106,21 @@ router.post(
   fieldAgentVerifyLimiter,
   validate(fieldAgentSchemas.verifyOtp),
   verifyFieldAgentOtp
+);
+
+// FA-13A — APPROVED FIELD AGENT OPERATIONAL LOGIN.
+router.post(
+  "/login/send-otp",
+  fieldAgentLoginOtpLimiter,
+  validate(fieldAgentSchemas.sendOtp),
+  sendFieldAgentOtp
+);
+
+router.post(
+  "/login/verify-otp",
+  fieldAgentLoginVerifyLimiter,
+  validate(fieldAgentSchemas.verifyOtp),
+  verifyFieldAgentOperationalOtp
 );
 
 export default router;
