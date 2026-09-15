@@ -145,6 +145,24 @@ fieldAgentPerformanceSnapshotSchema.index({ fieldAgentRef: 1, cycleKey: 1 }, { u
 // an unbounded scan.
 fieldAgentPerformanceSnapshotSchema.index({ fieldAgentRef: 1, computedAt: -1 });
 
+// FA-11.4 — matches the admin list API's own hardcoded sort exactly
+// (adminListFieldAgentPerformanceSnapshots: .sort({computedAt:-1,_id:-1})).
+// Previously every non-fieldAgentRef-filtered list query (including the
+// bare/filterless case) required a full COLLSCAN followed by a blocking
+// in-memory SORT (confirmed by the FA-11.4 audit: 5000/5000 docs
+// examined at a 5,000-row fixture scale). Index-only addition — the
+// query/sort/API contract are unchanged.
+fieldAgentPerformanceSnapshotSchema.index({ computedAt: -1, _id: -1 });
+
+// FA-11.4 — supports the admin list API's cycleKey-only filter shape
+// ("show every agent's result from one computation cycle"), the one
+// non-agent-scoped filter judged to have a clear, common operational
+// use case and reasonably high cardinality. commercialPath (cardinality
+// 2) and policyVersionRef (rare/audit-style filter) were deliberately
+// NOT given dedicated indexes — see the FA-11.4 audit's redundancy
+// analysis for why they are not yet justified.
+fieldAgentPerformanceSnapshotSchema.index({ cycleKey: 1, computedAt: -1 });
+
 //////////////////////////////////////////////////////////////
 // Immutable — a snapshot is a historical fact, never corrected in
 // place. A wrong computation is fixed by computing a new cycle, never

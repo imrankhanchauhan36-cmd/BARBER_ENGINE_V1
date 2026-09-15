@@ -325,21 +325,44 @@ const run = async () => {
         snapshotIndexes.some((i) => !i.unique && Object.keys(i.key).join(",") === "fieldAgentRef,computedAt")
       );
       check(
-        "8. No unauthorized speculative index exists on FieldAgentPerformanceSnapshot beyond _id/unique/lookup",
-        snapshotIndexes.length === 3,
+        "8. FieldAgentPerformanceSnapshot has the FA-11.4 (computedAt,_id) list-sort index",
+        snapshotIndexes.some((i) => !i.unique && Object.keys(i.key).join(",") === "computedAt,_id")
+      );
+      check(
+        "8. FieldAgentPerformanceSnapshot has the FA-11.4 (cycleKey,computedAt) index",
+        snapshotIndexes.some((i) => !i.unique && Object.keys(i.key).join(",") === "cycleKey,computedAt")
+      );
+      // Updated FA-11.4 — the FA-11.1-era "exactly 3" count is now
+      // obsolete by design: 2 additional indexes were explicitly
+      // audited, approved, and implemented in FA-11.4 (see F3). This
+      // assertion is updated (not deleted) to keep protecting against
+      // any FUTURE unapproved/speculative index, now against the
+      // current approved baseline of 5 (_id + 2 FA-11.1 + 2 FA-11.4).
+      check(
+        "8. No unauthorized speculative index exists on FieldAgentPerformanceSnapshot beyond the 5 approved (_id, fieldAgentRef+cycleKey, fieldAgentRef+computedAt, computedAt+_id, cycleKey+computedAt)",
+        snapshotIndexes.length === 5,
         snapshotIndexes.map((i) => Object.keys(i.key).join(","))
       );
     }
 
-    // ── 9. NO CLIENT-TRUSTED VALUE PATH EXISTS YET ───────────────────
+    // ── 9. ADMIN CONTROLLER/ROUTE — FA-11.3 CUMULATIVE STATE ─────────
     {
-      // No admin controller/route file exists yet — the only write
-      // path is the service functions above (adminId/versionId/
-      // fieldAgentRef are function arguments, never parsed from an
-      // HTTP body here).
+      // Updated FA-11.4 — this assertion originally documented that no
+      // admin controller/route existed yet (true at FA-11.1/11.2 time).
+      // FA-11.3 has since been implemented, reviewed, and frozen
+      // (commit 4efe471), so the accurate current-state assertion is
+      // the opposite: the controller/route/validator DO exist, and the
+      // service's own exported admin-read functions remain the only
+      // path a controller can call (never invented client-write path).
       const fs = await import("node:fs");
       const controllerExists = fs.existsSync(new URL("../modules/fieldAgent/controllers/adminFieldAgentPerformance.controller.js", import.meta.url));
-      check("9. No admin controller/route file exists yet (correctly deferred to FA-11.3)", !controllerExists);
+      const routesExist = fs.existsSync(new URL("../modules/fieldAgent/routes/adminFieldAgentPerformance.routes.js", import.meta.url));
+      const validatorExists = fs.existsSync(new URL("../modules/fieldAgent/validators/adminFieldAgentPerformance.validator.js", import.meta.url));
+      check("9. Admin controller/route/validator now exist (FA-11.3 cumulative state)", controllerExists && routesExist && validatorExists);
+
+      const routesSrc = fs.readFileSync(new URL("../modules/fieldAgent/routes/adminFieldAgentPerformance.routes.js", import.meta.url), "utf8");
+      const hasOnlyGetRoutes = !/router\.(post|put|patch|delete)\(/.test(routesSrc);
+      check("9. Admin routes remain read-only (no POST/PUT/PATCH/DELETE route exists)", hasOnlyGetRoutes);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -576,6 +599,37 @@ const run = async () => {
       const beforeBoundaryPayload = await computeFieldAgentPerformanceSnapshotPayload({ fieldAgentRef: tpAgent._id, cycleKey: "FA11-2-TERM-BEFORE", now: beforeBoundaryNow });
       check("20. now === termExpiresAt => expired TRUE (matches FA-10's own >= boundary)", atBoundaryPayload.currentState.termStatus.expired === true);
       check("20. now === termExpiresAt-1ms => expired FALSE", beforeBoundaryPayload.currentState.termStatus.expired === false);
+
+      // ── FA-11.4 (F1) — TerritoryAssignment.find({fieldAgentRef}) index ──
+      // Bury tpAgent's 4 real assignments among 1000 unrelated ones so a
+      // COLLSCAN vs IXSCAN distinction is actually meaningful, not just
+      // structurally visible on a near-empty collection.
+      const noiseAssignments = [];
+      for (let i = 0; i < 1000; i++) {
+        noiseAssignments.push({
+          territoryRef: oid(),
+          fieldAgentRef: oid(),
+          status: "ENDED",
+          effectiveFrom: new Date(NOW.getTime() - (i + 600) * MS_PER_DAY),
+          effectiveUntil: new Date(NOW.getTime() - (i + 500) * MS_PER_DAY),
+          endReason: "ADMIN_REASSIGNED",
+          assignedBy: indiaAdmin._id,
+          endedBy: indiaAdmin._id,
+        });
+      }
+      const insertedNoise = await TerritoryAssignment.insertMany(noiseAssignments);
+      insertedNoise.forEach((a) => fixtureAssignmentIds.push(a._id));
+
+      const f1Plan = await TerritoryAssignment.find({ fieldAgentRef: tpAgent._id }).sort({ effectiveFrom: -1 }).explain("executionStats");
+      const f1PlanStr = JSON.stringify(f1Plan.queryPlanner.winningPlan);
+      check("FA-11.4/F1. TerritoryAssignment(fieldAgentRef).sort(effectiveFrom) uses IXSCAN, not COLLSCAN", f1PlanStr.includes("IXSCAN") && !f1PlanStr.includes("COLLSCAN"), f1PlanStr.slice(0, 250));
+      check("FA-11.4/F1. Uses the new {fieldAgentRef,effectiveFrom} index specifically", f1PlanStr.includes("fieldAgentRef_1_effectiveFrom_-1"));
+      check("FA-11.4/F1. No blocking in-memory SORT stage (order satisfied by the index itself)", !f1PlanStr.includes('"stage":"SORT"'));
+      check("FA-11.4/F1. Perfectly selective — totalDocsExamined equals nReturned (4), not the full 1004-row collection", f1Plan.executionStats.totalDocsExamined === 4 && f1Plan.executionStats.nReturned === 4, { examined: f1Plan.executionStats.totalDocsExamined, returned: f1Plan.executionStats.nReturned });
+
+      const f1ActivePlan = await TerritoryAssignment.find({ fieldAgentRef: tpAgent._id, status: "ACTIVE" }).explain("executionStats");
+      const f1ActivePlanStr = JSON.stringify(f1ActivePlan.queryPlanner.winningPlan);
+      check("FA-11.4/F1. Existing ACTIVE-only query still uses its own pre-existing partial index (unaffected)", f1ActivePlanStr.includes("fieldAgentRef_1_status_1"));
     }
 
     // ── 21-25. CURRENT STATE (KYC/training/test/account/operational) ─
@@ -734,11 +788,17 @@ const run = async () => {
       const activeAssignmentPlanStr = JSON.stringify(activeAssignmentPlan.queryPlanner?.winningPlan || {});
       check("35. TerritoryAssignment(fieldAgentRef,status=ACTIVE) lookup uses the partial unique index", activeAssignmentPlanStr.includes("IXSCAN") && !activeAssignmentPlanStr.includes("COLLSCAN"), activeAssignmentPlanStr.slice(0, 200));
 
-      const fullHistoryPlan = await TerritoryAssignment.find({ fieldAgentRef: acqAgent._id }).explain("queryPlanner");
+      // Updated FA-11.4 — this assertion originally documented the F1
+      // finding (COLLSCAN confirmed, flagged for approval). FA-11.4
+      // added TerritoryAssignment{fieldAgentRef,effectiveFrom}
+      // specifically to fix this query; the accurate current-state
+      // assertion is the opposite of the original one.
+      const fullHistoryPlan = await TerritoryAssignment.find({ fieldAgentRef: acqAgent._id }).sort({ effectiveFrom: -1 }).explain("queryPlanner");
       const fullHistoryPlanStr = JSON.stringify(fullHistoryPlan.queryPlanner?.winningPlan || {});
       check(
-        "35. FINDING (documented, not a failure): TerritoryAssignment(fieldAgentRef) full-history query has no covering index (partial index cannot serve a status-less query) — COLLSCAN confirmed, flagged for explicit approval before FA-11.4",
-        fullHistoryPlanStr.includes("COLLSCAN")
+        "35. FIXED (FA-11.4): TerritoryAssignment(fieldAgentRef) full-history query now uses IXSCAN on {fieldAgentRef,effectiveFrom}, no COLLSCAN",
+        fullHistoryPlanStr.includes("fieldAgentRef_1_effectiveFrom_-1") && !fullHistoryPlanStr.includes("COLLSCAN"),
+        fullHistoryPlanStr.slice(0, 250)
       );
 
       const fraudPlan = await FraudSignal.find({ fieldAgentRef: acqAgent._id }).explain("queryPlanner");

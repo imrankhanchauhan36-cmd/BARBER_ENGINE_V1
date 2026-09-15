@@ -95,5 +95,16 @@ TerritoryAssignmentSchema.index(
 // Full chronological history per territory.
 TerritoryAssignmentSchema.index({ territoryRef: 1, effectiveFrom: -1 });
 
+// FA-11.4 — full chronological history per FIELD AGENT (the symmetric
+// counterpart to the territory-keyed index above). Supports
+// fieldAgentPerformance.service.js#computeTerritoryMetrics's
+// TerritoryAssignment.find({fieldAgentRef}).sort({effectiveFrom:-1}) —
+// previously a full COLLSCAN + in-memory SORT (confirmed by the FA-11.4
+// audit: 2008/2008 docs examined for 8 matches), since neither
+// existing fieldAgentRef index is usable (both are partial, ACTIVE-only)
+// and the only non-partial history index is keyed by territoryRef, not
+// fieldAgentRef. Index-only addition — the query itself is unchanged.
+TerritoryAssignmentSchema.index({ fieldAgentRef: 1, effectiveFrom: -1 });
+
 export default mongoose.models.TerritoryAssignment ||
   mongoose.model("TerritoryAssignment", TerritoryAssignmentSchema);

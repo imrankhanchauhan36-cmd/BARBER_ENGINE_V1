@@ -536,6 +536,65 @@ const run = async () => {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // FA-11.4 (F3) — admin list query-plan matrix
+    // ═══════════════════════════════════════════════════════════════
+    {
+      // Bury the real fixtures among 500 noise snapshots so the
+      // COLLSCAN-vs-IXSCAN distinction is meaningful, not merely
+      // structural on a near-empty collection.
+      const noiseSnapshots = [];
+      const auditCycleKey = "FA114-AUDIT-CYCLE";
+      for (let i = 0; i < 500; i++) {
+        noiseSnapshots.push({
+          fieldAgentRef: oid(),
+          commercialPath: i % 2 === 0 ? "TERRITORY_PARTNER" : "ACQUISITION_AGENT",
+          cycleKey: i < 10 ? auditCycleKey : `FA114-NOISE-${i}`,
+          policyVersionRef: oid(),
+          computedAt: new Date(Date.now() - i * 3600000),
+          rollingWindowDays: 90,
+          rollingWindow: { claimsIssuedCount: 0, acquisitionCreditedBookingCount: 0, acquisitionCreditedAmountInPaise: 0, territoryCreditedBookingCount: 0, territoryCreditedAmountInPaise: 0, adminActionCount: 0 },
+          lifetime: { salonsAcquiredCount: 0, targetCompletionCount: 0, targetCompletionRate: null },
+          currentState: { claimsActiveCount: 0, kycStatus: null, trainingStatus: null, testStatus: null, accountStatus: "ACTIVE", operationalStatus: "ACTIVE" },
+        });
+      }
+      const insertedNoise = await FieldAgentPerformanceSnapshot.insertMany(noiseSnapshots);
+      insertedNoise.forEach((s) => fixtureSnapshotIds.push(s._id));
+
+      const planFor = async (filter) => FieldAgentPerformanceSnapshot.find(filter).sort({ computedAt: -1, _id: -1 }).limit(50).explain("executionStats");
+      const hasCollscan = (plan) => JSON.stringify(plan.queryPlanner.winningPlan).includes("COLLSCAN");
+      const hasBlockingSort = (plan) => JSON.stringify(plan.queryPlanner.winningPlan).includes('"stage":"SORT"');
+
+      const planA = await planFor({});
+      check("FA-11.4/F3-A. No filter: no COLLSCAN (uses {computedAt,_id} index)", !hasCollscan(planA));
+      check("FA-11.4/F3-A. No filter: no blocking in-memory SORT stage", !hasBlockingSort(planA));
+
+      const planB = await planFor({ commercialPath: "TERRITORY_PARTNER" });
+      check("FA-11.4/F3-B. commercialPath only: no COLLSCAN", !hasCollscan(planB));
+      check("FA-11.4/F3-B. commercialPath only: no blocking SORT (index order still satisfies it, filter applied as residual)", !hasBlockingSort(planB));
+
+      const planC = await planFor({ cycleKey: auditCycleKey });
+      const planCStr = JSON.stringify(planC.queryPlanner.winningPlan);
+      check("FA-11.4/F3-C. cycleKey only: uses the new {cycleKey,computedAt} index, no COLLSCAN", planCStr.includes("cycleKey_1_computedAt_-1") && !hasCollscan(planC));
+      check("FA-11.4/F3-C. cycleKey only: perfectly selective (totalDocsExamined equals the 10 real matches, not the full collection)", planC.executionStats.totalDocsExamined === 10, planC.executionStats.totalDocsExamined);
+      // Documented, not asserted-away: MongoDB may still add a small
+      // residual in-memory SORT over the already-narrow matched set for
+      // this shape — negligible cost at 10 rows, reported honestly per
+      // the FA-11.4 instruction not to force every plan into a single
+      // sort-free IXSCAN.
+      console.log(`   (info) FA-11.4/F3-C residual SORT stage present: ${hasBlockingSort(planC)} — expected/documented, not a failure either way.`);
+
+      const planD = await planFor({ policyVersionRef: oid() }); // no real match
+      check("FA-11.4/F3-D. policyVersionRef only: no COLLSCAN label (still index-scanned via {computedAt,_id}, even though this filter has no dedicated index)", !hasCollscan(planD));
+      console.log(`   (info) FA-11.4/F3-D totalDocsExamined for a non-matching policyVersionRef: ${planD.executionStats.totalDocsExamined} — expected to approach collection size since no dedicated index exists for this filter (deferred per the FA-11.4 audit's redundancy analysis).`);
+
+      const planE = await planFor({ fieldAgentRef: insertedNoise[100].fieldAgentRef });
+      check("FA-11.4/F3-E. fieldAgentRef: still uses the pre-existing {fieldAgentRef,cycleKey} index, unaffected by this round's changes", JSON.stringify(planE.queryPlanner.winningPlan).includes("fieldAgentRef_1_cycleKey_1"));
+
+      const planF = await FieldAgentPerformanceSnapshot.find({}).sort({ computedAt: -1, _id: -1 }).skip(20).limit(20).explain("executionStats");
+      check("FA-11.4/F3-F. Pagination (skip+limit) remains index-backed, no COLLSCAN", !hasCollscan(planF));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // 31-32. Frozen FA-9/FA-10 untouched (static + DB check)
     // ═══════════════════════════════════════════════════════════════
     {
