@@ -53,6 +53,7 @@ import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommer
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
 import adminCommercialPolicyOverrideRoutes from "./modules/fieldAgent/routes/adminCommercialPolicyOverride.routes.js"; // ← NEW — FA-9 admin geography-scoped commercial policy override authoring/governance
 import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldAgentAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 Field Agent acquisition referral/claim self-service
+import fieldAgentEarningRoutes from "./modules/fieldAgent/routes/fieldAgentEarning.routes.js"; // ← NEW — FA-14 Field Agent earnings self-service (read-only)
 import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
 import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
 import adminFieldAgentPerformanceRoutes from "./modules/fieldAgent/routes/adminFieldAgentPerformance.routes.js"; // ← NEW — FA-11.3 admin Field Agent Performance read API
@@ -396,6 +397,7 @@ app.use("/api/admin/commercial-territories", protect, adminCommercialTerritoryRo
 // protect/onboardingBypass at the mount level, same convention as
 // fieldAgentTrainingRoutes/fieldAgentTestRoutes above.
 app.use("/api/field-agent/acquisition", protect, onboardingBypass, fieldAgentAcquisitionClaimRoutes);
+app.use("/api/field-agent/earnings", protect, onboardingBypass, fieldAgentEarningRoutes); // ← NEW — FA-14 Field Agent earnings self-service (read-only)
 // FA-5.3 — Salon Owner referral redemption bridge. protect +
 // requireRole("OWNER") are applied INSIDE the router itself, same
 // convention as salonOnboardingRouter (no extra middleware here).
