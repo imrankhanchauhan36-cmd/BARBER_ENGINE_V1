@@ -56,6 +56,7 @@ import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldA
 import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
 import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
 import adminFieldAgentPerformanceRoutes from "./modules/fieldAgent/routes/adminFieldAgentPerformance.routes.js"; // ← NEW — FA-11.3 admin Field Agent Performance read API
+import adminFieldAgentComplianceRoutes from "./modules/fieldAgent/routes/adminFieldAgentCompliance.routes.js"; // ← NEW — FA-12.2 admin compliance case/evidence workflow API
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
@@ -407,6 +408,13 @@ app.use("/api/admin/acquisition-claims", protect, adminAcquisitionClaimRoutes);
 // CommercialPolicyVersion above). Read AND write are INDIA-only, same
 // rationale as adminCommercialPolicyRoutes.
 app.use("/api/admin/commercial-policy-overrides", protect, adminCommercialPolicyOverrideRoutes);
+// FA-12.2 — admin compliance case/evidence workflow. Read (list/detail)
+// and evidence-filing/case-opening are INDIA/STATE (STATE scoped to
+// its own FA-11.3 Territory Partner set at the service layer);
+// transition/reopen are INDIA-only (zero STATE decision authority,
+// per the FA-12 lock) — see adminFieldAgentCompliance.routes.js's own
+// header for the exact split.
+app.use("/api/admin/field-agent-compliance", protect, adminFieldAgentComplianceRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
