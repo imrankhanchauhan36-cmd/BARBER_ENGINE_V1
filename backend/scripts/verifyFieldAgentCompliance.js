@@ -426,6 +426,98 @@ const run = async () => {
       check("12. A different category for the same agent is never blocked by another category's active case", !!c3._id);
     }
 
+    // ── 12-CORRECTION. WARNING_ISSUED/ESCALATED REMAIN ACTIVE ────────
+    // Pre-FA-12.2-implementation architecture ruling: WARNING_ISSUED
+    // and ESCALATED are NOT terminal — a warned/escalated case is
+    // continuing compliance workflow and must keep occupying the
+    // one-active-case-per-(fieldAgentRef,category) slot. Only
+    // DISMISSED/RESOLVED actually free the slot. This corrects
+    // FA-12.1's own original (mistaken) classification.
+    {
+      check(
+        "1. FA12_CASE_ACTIVE_STATUSES contains exactly the 4 corrected active statuses",
+        [...FA12_CASE_ACTIVE_STATUSES].sort().join(",") === ["OPEN", "UNDER_REVIEW", "WARNING_ISSUED", "ESCALATED"].sort().join(","),
+        FA12_CASE_ACTIVE_STATUSES
+      );
+      check(
+        "2. FA12_CASE_TERMINAL_STATUSES contains exactly DISMISSED/RESOLVED, no more",
+        [...FA12_CASE_TERMINAL_STATUSES].sort().join(",") === ["DISMISSED", "RESOLVED"].sort().join(","),
+        FA12_CASE_TERMINAL_STATUSES
+      );
+
+      // 3/5. WARNING_ISSUED retains activeCaseMarker and still blocks a
+      // second active case for the same (fieldAgentRef, category).
+      const agentW = await mkFieldAgent("TERRITORY_PARTNER");
+      const caseW = await FieldAgentComplianceCase.create({
+        fieldAgentRef: agentW._id,
+        commercialPath: "TERRITORY_PARTNER",
+        category: FA12_VIOLATION_CATEGORY.ADMIN_OBSERVED_POLICY_BREACH,
+        openedBy: indiaAdmin._id,
+      });
+      fixtureCaseIds.push(caseW._id);
+      // Simulate what FA-12.2's transition service will do on reaching
+      // WARNING_ISSUED — status changes, marker is left untouched.
+      await FieldAgentComplianceCase.collection.updateOne({ _id: caseW._id }, { $set: { status: FA12_CASE_STATUS.WARNING_ISSUED, version: 1 } });
+      const caseWFresh = await FieldAgentComplianceCase.findById(caseW._id).lean();
+      check("3. A case at WARNING_ISSUED retains activeCaseMarker:true", caseWFresh.status === FA12_CASE_STATUS.WARNING_ISSUED && caseWFresh.activeCaseMarker === true);
+
+      let blockedAtWarning = false;
+      try {
+        await FieldAgentComplianceCase.create({
+          fieldAgentRef: agentW._id,
+          commercialPath: "TERRITORY_PARTNER",
+          category: FA12_VIOLATION_CATEGORY.ADMIN_OBSERVED_POLICY_BREACH,
+          openedBy: indiaAdmin._id,
+        });
+      } catch (err) {
+        blockedAtWarning = err.code === 11000;
+      }
+      check("5. A second active case for the same (fieldAgentRef, category) is still rejected while the first sits at WARNING_ISSUED", blockedAtWarning);
+
+      // 4/6. ESCALATED retains activeCaseMarker and still blocks a
+      // second active case for the same (fieldAgentRef, category).
+      const agentE = await mkFieldAgent("TERRITORY_PARTNER");
+      const caseE = await FieldAgentComplianceCase.create({
+        fieldAgentRef: agentE._id,
+        commercialPath: "TERRITORY_PARTNER",
+        category: FA12_VIOLATION_CATEGORY.ADMIN_OBSERVED_POLICY_BREACH,
+        openedBy: indiaAdmin._id,
+      });
+      fixtureCaseIds.push(caseE._id);
+      await FieldAgentComplianceCase.collection.updateOne({ _id: caseE._id }, { $set: { status: FA12_CASE_STATUS.ESCALATED, version: 1 } });
+      const caseEFresh = await FieldAgentComplianceCase.findById(caseE._id).lean();
+      check("4. A case at ESCALATED retains activeCaseMarker:true", caseEFresh.status === FA12_CASE_STATUS.ESCALATED && caseEFresh.activeCaseMarker === true);
+
+      let blockedAtEscalated = false;
+      try {
+        await FieldAgentComplianceCase.create({
+          fieldAgentRef: agentE._id,
+          commercialPath: "TERRITORY_PARTNER",
+          category: FA12_VIOLATION_CATEGORY.ADMIN_OBSERVED_POLICY_BREACH,
+          openedBy: indiaAdmin._id,
+        });
+      } catch (err) {
+        blockedAtEscalated = err.code === 11000;
+      }
+      check("6. A second active case for the same (fieldAgentRef, category) is still rejected while the first sits at ESCALATED", blockedAtEscalated);
+
+      // 7. Only once WARNING_ISSUED/ESCALATED progress to an actual
+      // terminal status (DISMISSED/RESOLVED) and the marker is unset
+      // does a new case become possible again.
+      await FieldAgentComplianceCase.collection.updateOne({ _id: caseW._id }, { $set: { status: FA12_CASE_STATUS.RESOLVED, version: 2 }, $unset: { activeCaseMarker: "" } });
+      const caseWTerminal = await FieldAgentComplianceCase.findById(caseW._id).lean();
+      check("Terminal-state marker: RESOLVED case has activeCaseMarker absent", caseWTerminal.status === FA12_CASE_STATUS.RESOLVED && caseWTerminal.activeCaseMarker === undefined);
+
+      const caseWNew = await FieldAgentComplianceCase.create({
+        fieldAgentRef: agentW._id,
+        commercialPath: "TERRITORY_PARTNER",
+        category: FA12_VIOLATION_CATEGORY.ADMIN_OBSERVED_POLICY_BREACH,
+        openedBy: indiaAdmin._id,
+      });
+      fixtureCaseIds.push(caseWNew._id);
+      check("7. A new case for the same (fieldAgentRef, category) becomes possible only after the prior one reaches a real terminal status (RESOLVED) with marker unset", !!caseWNew._id);
+    }
+
     // ── 13. EXACT INDEX INVENTORY ─────────────────────────────────────
     {
       const evidenceIndexes = await FieldAgentComplianceEvidence.collection.indexes();
@@ -474,8 +566,8 @@ const run = async () => {
     // ── 14-15. LIFECYCLE / AUDIT-ACTION CONSTANTS ────────────────────
     {
       check("14. FA12_CASE_STATUS has exactly the 6 approved values", Object.values(FA12_CASE_STATUS).sort().join(",") === ["OPEN", "UNDER_REVIEW", "WARNING_ISSUED", "ESCALATED", "DISMISSED", "RESOLVED"].sort().join(","));
-      check("14. FA12_CASE_TERMINAL_STATUSES contains exactly WARNING_ISSUED/ESCALATED/DISMISSED/RESOLVED", [...FA12_CASE_TERMINAL_STATUSES].sort().join(",") === ["WARNING_ISSUED", "ESCALATED", "DISMISSED", "RESOLVED"].sort().join(","));
-      check("14. FA12_CASE_ACTIVE_STATUSES contains exactly OPEN/UNDER_REVIEW", [...FA12_CASE_ACTIVE_STATUSES].sort().join(",") === ["OPEN", "UNDER_REVIEW"].sort().join(","));
+      check("14. FA12_CASE_TERMINAL_STATUSES contains exactly DISMISSED/RESOLVED (corrected)", [...FA12_CASE_TERMINAL_STATUSES].sort().join(",") === ["DISMISSED", "RESOLVED"].sort().join(","));
+      check("14. FA12_CASE_ACTIVE_STATUSES contains exactly OPEN/UNDER_REVIEW/WARNING_ISSUED/ESCALATED (corrected)", [...FA12_CASE_ACTIVE_STATUSES].sort().join(",") === ["OPEN", "UNDER_REVIEW", "WARNING_ISSUED", "ESCALATED"].sort().join(","));
       check("14. No SUSPENDED/BLOCKED value exists anywhere in FA12_CASE_STATUS (locked)", !Object.values(FA12_CASE_STATUS).some((v) => /SUSPEND|BLOCK/i.test(v)));
 
       check(

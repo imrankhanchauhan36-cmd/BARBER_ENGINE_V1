@@ -60,17 +60,33 @@ export const FA12_CASE_STATUS = Object.freeze({
 // (FA-12.2) returns a case to UNDER_REVIEW. Not enforced here — this
 // is the domain-foundation's own documentation of the allowed lifecycle
 // shape for FA-12.2 to implement against.
-export const FA12_CASE_TERMINAL_STATUSES = Object.freeze([
-  FA12_CASE_STATUS.WARNING_ISSUED,
-  FA12_CASE_STATUS.ESCALATED,
-  FA12_CASE_STATUS.DISMISSED,
-  FA12_CASE_STATUS.RESOLVED,
-]);
+//
+// FA-12.2 CORRECTION (pre-FA-12.2-implementation architecture ruling):
+// WARNING_ISSUED and ESCALATED are NOT terminal — a warned or escalated
+// case represents CONTINUING compliance workflow, not a closed matter.
+// Only DISMISSED and RESOLVED actually close a case. The original
+// FA-12.1 classification below was a genuine correctness defect,
+// caught and corrected before any FA-12.2 code depended on it.
+export const FA12_CASE_TERMINAL_STATUSES = Object.freeze([FA12_CASE_STATUS.DISMISSED, FA12_CASE_STATUS.RESOLVED]);
 
 // Statuses that count as "active" for the at-most-one-active-case-per
 // (fieldAgentRef,category) invariant — see FieldAgentComplianceCase.js's
 // own activeCaseMarker field for how this is enforced at the index level.
-export const FA12_CASE_ACTIVE_STATUSES = Object.freeze([FA12_CASE_STATUS.OPEN, FA12_CASE_STATUS.UNDER_REVIEW]);
+//
+// FA-12.2 CORRECTION — see FA12_CASE_TERMINAL_STATUSES's own comment
+// above for the identical reasoning. WARNING_ISSUED/ESCALATED remain
+// ACTIVE (activeCaseMarker present) until the case reaches DISMISSED or
+// RESOLVED — a case cannot be reopened via a new case being opened for
+// the same (fieldAgentRef,category) while it sits at WARNING_ISSUED or
+// ESCALATED; the ONLY path back from those two states is a further
+// FA-12.2 transition (to RESOLVED/ESCALATED/DISMISSED as applicable),
+// never a second concurrently-active case.
+export const FA12_CASE_ACTIVE_STATUSES = Object.freeze([
+  FA12_CASE_STATUS.OPEN,
+  FA12_CASE_STATUS.UNDER_REVIEW,
+  FA12_CASE_STATUS.WARNING_ISSUED,
+  FA12_CASE_STATUS.ESCALATED,
+]);
 
 export const FA12_CASE_DECISION_OUTCOME = Object.freeze({
   WARNING_ISSUED: "WARNING_ISSUED",

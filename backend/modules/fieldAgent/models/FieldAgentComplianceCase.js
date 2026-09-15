@@ -31,9 +31,17 @@
  * ACTIVE-CASE UNIQUENESS: `activeCaseMarker` is a domain-foundation
  * mechanism, not yet driven by any transition logic (FA-12.2's job).
  * It defaults to `true` on a freshly-opened case; FA-12.2's transition
- * service is expected to `$unset` it when a case enters any terminal
- * status (WARNING_ISSUED/ESCALATED/DISMISSED/RESOLVED) and restore it
- * to `true` on an admin-initiated reopen. The partial unique index
+ * service is expected to `$unset` it when a case enters a TERMINAL
+ * status — DISMISSED or RESOLVED ONLY — and restore it to `true` on an
+ * admin-initiated reopen. WARNING_ISSUED and ESCALATED are NOT
+ * terminal (pre-FA-12.2-implementation architecture ruling,
+ * correcting FA-12.1's own original mislabeling): both represent
+ * continuing compliance workflow and keep `activeCaseMarker` present,
+ * so a case sitting at WARNING_ISSUED or ESCALATED still occupies the
+ * one-active-case-per-(fieldAgentRef,category) slot — see
+ * compliance.constants.js's own FA12_CASE_ACTIVE_STATUSES/
+ * FA12_CASE_TERMINAL_STATUSES for the authoritative classification.
+ * The partial unique index
  * below uses `{activeCaseMarker: {$exists: true}}` (a filter operator
  * unambiguously supported by MongoDB partial indexes, unlike relying
  * on an untested `$in`/`$nin` over multiple status values) — so at
