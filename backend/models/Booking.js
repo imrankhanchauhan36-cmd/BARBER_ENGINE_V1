@@ -238,14 +238,33 @@ const BookingSchema = new mongoose.Schema(
       },
     },
 
-    // Breakdown of totalAmountInPaise — needed because commission
-    // is now charged ON TOP of the service price (not deducted from
-    // it): totalAmountInPaise = serviceAmountInPaise + commissionAmountInPaise.
+    // Breakdown of totalAmountInPaise — needed because the Platform Fee
+    // is charged ON TOP of the service price (not deducted from it):
+    // totalAmountInPaise = serviceAmountInPaise + commissionAmountInPaise
+    //                      + (gstAmountInPaise || 0).
     // The full serviceAmountInPaise goes to the salon on confirm;
-    // the full commissionAmountInPaise stays with the platform.
-    // Stored per-booking (rather than re-deriving from the current
-    // commission rate at cancel time) so a later rate change never
-    // alters the split for bookings made under the old rate.
+    // commissionAmountInPaise and gstAmountInPaise both stay with the
+    // platform. Stored per-booking (rather than re-deriving from the
+    // current Platform Fee/GST configuration at cancel time) so a later
+    // configuration change never alters the split for bookings made
+    // under the old configuration.
+    //
+    // commissionAmountInPaise is ZEMISH's ONE customer-facing Platform
+    // Fee (also referred to as "Platform Fee"/"Convenience Fee" in
+    // product/business language — never a second, separate charge).
+    // As of the area-based Platform Fee architecture, its value is
+    // resolved from the salon's authoritative area
+    // (Salon.location.territory.areaRef) via
+    // services/areaPlatformFee.service.js#resolvePlatformFeeForArea,
+    // NOT from CommissionService.js's percentage-of-service calculation
+    // (that service is deliberately left unmodified and unused for new
+    // bookings — see lockSlot below). The field name is unchanged so
+    // every existing downstream reader (Field Agent earning,
+    // cancelBooking/ownerCancelBooking, RefundExecutionService, both
+    // frontends) keeps working with zero code change — only the source
+    // of the value changed. Historical bookings retain whatever value
+    // was resolved under the calculation method active at their own
+    // lockSlot time; never recalculated.
     serviceAmountInPaise: {
       type:     Number,
       default:  0,
@@ -262,6 +281,30 @@ const BookingSchema = new mongoose.Schema(
       validate: {
         validator: Number.isInteger,
         message:   "commissionAmountInPaise must be a whole number (paise, not rupees)",
+      },
+    },
+
+    // GST snapshot — PAN-India Platform Fee + GST architecture.
+    // gstRatePercent/gstAmountInPaise default to null (NOT 0) so a
+    // booking that predates this feature is distinguishable from one
+    // where GST was genuinely computed as zero — same null-guarded
+    // convention already established by cancellationPolicy/
+    // refundAmountInPaise below. GST base = serviceAmountInPaise +
+    // commissionAmountInPaise (locked business rule), resolved once at
+    // lockSlot from the currently PUBLISHED GstPolicyVersion and never
+    // re-read for an existing booking — a later rate change can never
+    // retroactively alter it.
+    gstRatePercent: {
+      type:    Number,
+      default: null,
+      min:     [0, "gstRatePercent cannot be negative"],
+    },
+    gstAmountInPaise: {
+      type:    Number,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message:   "gstAmountInPaise must be a non-negative whole number (paise) or null",
       },
     },
 

@@ -199,6 +199,33 @@ export const bookingSchemas = {
   }).unknown(false),
 
   //////////////////////////////////////////////////////////
+  // 3B. OWNER CANCEL BOOKING — FA-15
+  // POST /v1/bookings/admin/cancel
+  //
+  // Separate schema from `cancel` above (that one is the customer's
+  // own /v1/bookings/user/cancel contract, untouched). Adds an
+  // optional free-text `reason`, capped at 300 chars to match
+  // Booking.cancelReason's own schema maxlength. No client-supplied
+  // authorization/financial field is ever accepted here — ownership,
+  // cancelledBy, and every refund figure are server-derived only.
+  //
+  // Example body:
+  // { "bookingId": "64a1b2c3d4e5f6a7b8c9d0e1", "reason": "Chair unavailable" }
+  //////////////////////////////////////////////////////////
+  ownerCancel: Joi.object({
+    bookingId: objectId
+      .required()
+      .messages({ "any.required": "bookingId is required" }),
+
+    reason: Joi.string()
+      .trim()
+      .max(300)
+      .optional()
+      .messages({ "string.max": "reason must be 300 characters or fewer" }),
+
+  }).unknown(false),
+
+  //////////////////////////////////////////////////////////
   // 4. CHECK-IN
   // POST /v1/bookings/user/check-in
   //

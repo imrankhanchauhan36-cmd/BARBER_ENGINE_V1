@@ -7,6 +7,11 @@
  * Nothing above this comment block was changed — all original frozen
  * functions (listBookingsForAdmin, getBookingDetail, adminCancelBooking,
  * adminUpdateBookingStatus, getBookingsSummary) are byte-for-byte identical.
+ *
+ * PAN-India Platform Fee + GST — getBookingDetail() additively extended:
+ * serviceAmountInPaise/commissionAmountInPaise/gstRatePercent/
+ * gstAmountInPaise/refundBreakdown added to its response. No existing
+ * field, computation, or scope-guard in this function was changed.
  */
 
 import mongoose from "mongoose"; // ← P0-1 — admin completion/cancellation now settle atomically
@@ -22,6 +27,7 @@ import WalletTransaction, {
 } from "../models/WalletTransaction.js"; // ← P0-1 — admin cancellation refund, identical shape to booking.controller.js's cancelBooking()
 import CancellationPolicyService from "../services/CancellationPolicyService.js"; // ← P0-1
 import WalletBalanceService from "../services/WalletBalanceService.js"; // ← P0-1
+import { splitRefundComponents, REFUND_FRACTION_BY_POLICY } from "../services/refundComponentSplitter.js"; // ← NEW — PAN-India Platform Fee + GST: derives the admin-visible refund breakdown, never invents a value
 import { transitionBookingStatus, validateBookingTransition } from "../utils/bookingState.machine.js"; // ← P0-1 — canonical state machine
 import { Errors, successResponse } from "../utils/response.js";
 
@@ -254,6 +260,36 @@ export const getBookingDetail = async (req, res, next) => {
     // ── Transaction ──────────────────────────────────
     const transaction = await Transaction.findOne({ bookingId: booking._id }).lean();
 
+    // PAN-India Platform Fee + GST — refund breakdown for a cancelled
+    // booking is DERIVED here, never stored/invented: the exact same
+    // REFUND_FRACTION_BY_POLICY restatement + splitRefundComponents()
+    // helper RefundExecutionService uses, applied to this booking's own
+    // frozen snapshot (serviceAmountInPaise/commissionAmountInPaise/
+    // gstAmountInPaise) and its own recorded cancellationPolicy. Absent
+    // entirely for a non-cancelled booking or one with no recorded
+    // cancellationPolicy (e.g. a legacy booking) — never fabricated.
+    let refundBreakdown = null;
+    if (booking.status === BOOKING_STATUS.CANCELLED && booking.cancellationPolicy) {
+      const refundFraction = REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
+      if (refundFraction !== undefined) {
+        const { serviceRefundPaise, commissionRefundPaise, gstRefundPaise, totalRefundPaise } = splitRefundComponents({
+          refundFraction,
+          serviceAmountInPaise: booking.serviceAmountInPaise,
+          commissionAmountInPaise: booking.commissionAmountInPaise,
+          gstAmountInPaise: booking.gstAmountInPaise,
+        });
+        refundBreakdown = {
+          refundPolicy: booking.cancellationPolicy,
+          refundPercent: Math.round(refundFraction * 100),
+          serviceRefundPaise,
+          commissionRefundPaise, // Platform Fee refund
+          gstRefundPaise,
+          totalRefundPaise,
+          totalRefundRupees: Math.round(totalRefundPaise / 100),
+        };
+      }
+    }
+
     return successResponse(res, {
       message: "Booking detail fetched",
       data: {
@@ -270,6 +306,16 @@ export const getBookingDetail = async (req, res, next) => {
         source:          booking.source          ?? null,
         rating:          booking.rating          ?? null,
         cancelReason:    booking.cancelReason    ?? null,
+
+        // PAN-India Platform Fee + GST — additive financial breakdown.
+        // serviceAmountInPaise/commissionAmountInPaise already existed
+        // on Booking; gstRatePercent/gstAmountInPaise are new, null for
+        // any booking created before this feature shipped.
+        serviceAmountInPaise:    booking.serviceAmountInPaise    ?? 0,
+        commissionAmountInPaise: booking.commissionAmountInPaise ?? 0, // Platform Fee — the one customer-facing fee
+        gstRatePercent:          booking.gstRatePercent          ?? null,
+        gstAmountInPaise:        booking.gstAmountInPaise        ?? null,
+        refundBreakdown,
 
         user: booking.userRef ? {
           id:           booking.userRef._id,

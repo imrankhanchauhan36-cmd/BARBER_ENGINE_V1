@@ -57,21 +57,7 @@ import WalletTransaction, {
   WALLET_TXN_SOURCE,
 } from "../models/WalletTransaction.js";
 import WalletBalanceService from "./WalletBalanceService.js";
-
-// Static restatement of CancellationPolicyService's own refundFraction
-// meaning (FULL_REFUND=100%, HALF_REFUND=50%, NO_REFUND/NO_PAYMENT=0%)
-// — never a call into that service, which would throw on an
-// already-cancelled booking and would be time-drifted even if it
-// didn't. Kept intentionally tiny and inline rather than exported
-// from CancellationPolicyService.js itself, to avoid modifying that
-// file's documented "PURE CALCULATION ONLY" contract for a single
-// constant lookup.
-const REFUND_FRACTION_BY_POLICY = {
-  FULL_REFUND: 1,
-  HALF_REFUND: 0.5,
-  NO_REFUND: 0,
-  NO_PAYMENT: 0,
-};
+import { splitRefundComponents, REFUND_FRACTION_BY_POLICY } from "./refundComponentSplitter.js";
 
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
@@ -134,9 +120,16 @@ export async function issueRefundForCancelledBooking({ bookingId, triggeredBy, t
       throw Object.assign(new Error(`Unrecognized cancellationPolicy: ${booking.cancellationPolicy}`), { status: 500 });
     }
 
-    const serviceRefundPaise = Math.round((booking.serviceAmountInPaise || 0) * refundFraction);
-    const commissionRefundPaise = Math.round((booking.commissionAmountInPaise || 0) * refundFraction);
-    const refundPaise = serviceRefundPaise + commissionRefundPaise;
+    // Same shared helper cancelBooking/ownerCancelBooking use — PAN-India
+    // Platform Fee + GST architecture — extends this path to the GST
+    // component without re-deriving anything from live config (GST here
+    // still comes from booking.gstAmountInPaise, the frozen snapshot).
+    const { serviceRefundPaise, commissionRefundPaise, gstRefundPaise, totalRefundPaise: refundPaise } = splitRefundComponents({
+      refundFraction,
+      serviceAmountInPaise: booking.serviceAmountInPaise,
+      commissionAmountInPaise: booking.commissionAmountInPaise,
+      gstAmountInPaise: booking.gstAmountInPaise,
+    });
 
     if (
       booking.refundAmountInPaise !== null &&
@@ -198,7 +191,7 @@ export async function issueRefundForCancelledBooking({ bookingId, triggeredBy, t
         requestId: `refund:${booking._id}`,
         balanceBeforeInPaise,
         balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
-        metadata: { refundPolicy: booking.cancellationPolicy, bookingId: booking._id.toString(), executedVia: "SUPPORT_VERIFIED_ACTION" },
+        metadata: { refundPolicy: booking.cancellationPolicy, bookingId: booking._id.toString(), executedVia: "SUPPORT_VERIFIED_ACTION", serviceRefundPaise, commissionRefundPaise, gstRefundPaise },
       }],
       { session }
     );

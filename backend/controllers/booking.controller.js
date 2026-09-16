@@ -17,7 +17,9 @@ import WalletTransaction, {
   WALLET_TXN_TYPE,
 } from "../models/WalletTransaction.js";
 import CancellationPolicyService from "../services/CancellationPolicyService.js";
-import CommissionService from "../services/CommissionService.js";
+import { getPublishedGstPolicy } from "../services/gstPolicy.service.js";
+import { resolvePlatformFeeForArea } from "../services/areaPlatformFee.service.js";
+import { splitRefundComponents } from "../services/refundComponentSplitter.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { sendOtpSms } from "../services/sms.service.js";
@@ -680,25 +682,50 @@ export const lockSlot = async (req, res) => {
       );
 
       //////////////////////////////////////////////////////////
-      // 💰 COMMISSION IS CHARGED ON TOP OF THE SERVICE PRICE —
-      // NOT deducted from it. totalAmountInPaise (what the user
-      // actually pays via Razorpay) = service + commission. The
-      // full serviceAmountInPaise goes to the salon on confirm;
-      // the commission stays with the platform. Both are stored on
-      // the booking (see Booking.js) so the split survives even if
-      // the commission rate changes later.
+      // 💰 PLATFORM FEE — the ONE customer-facing fee (product
+      // terminology: "Platform Fee"/"Convenience Fee" — never a
+      // second, separate charge). Charged ON TOP OF the service
+      // price, not deducted from it. As of the PAN-India Platform
+      // Fee + GST architecture, this is resolved from the salon's
+      // own authoritative area (Salon.location.territory.areaRef),
+      // server-side only — never from CommissionService.js's
+      // percentage-of-service calculation, which is deliberately
+      // left completely unmodified and unused here (frozen; its
+      // per-salon override Salon.business.commissionRate and the
+      // admin endpoint that sets it remain untouched but become
+      // inert for pricing purposes going forward). The result is
+      // still stored in commissionAmountInPaise — no new
+      // customer-facing field — so every existing downstream reader
+      // (Field Agent earning, cancelBooking/ownerCancelBooking,
+      // RefundExecutionService, both frontends) keeps working
+      // unchanged. PAN-India fallback: an area with no PUBLISHED fee
+      // resolves to 0 — the booking is never blocked.
       //////////////////////////////////////////////////////////
-      const salonForCommission = await Salon.findById(salonId)
-        .select("business.commissionRate")
+      const salonForPricing = await Salon.findById(salonId)
+        .select("location.territory.areaRef")
         .session(lockSession)
         .lean();
 
-      const { commissionInPaise } = await CommissionService.calculate({
-        amountInPaise: serviceAmountInPaise,
-        salon: salonForCommission,
-      });
+      const { feeInPaise: commissionInPaise } = await resolvePlatformFeeForArea(
+        salonForPricing?.location?.territory?.areaRef
+      );
 
-      const totalAmountInPaise = serviceAmountInPaise + commissionInPaise;
+      //////////////////////////////////////////////////////////
+      // 💰 GST — taxable base is Service + Platform Fee (locked
+      // business rule). Resolved from whichever GstPolicyVersion is
+      // currently PUBLISHED; null (not 0) when none has ever been
+      // published, so a legacy-equivalent "GST doesn't apply" state
+      // is distinguishable from "GST was computed and is genuinely
+      // zero". Snapshotted onto the booking — never re-derived from
+      // live config again.
+      //////////////////////////////////////////////////////////
+      const gstPolicy = await getPublishedGstPolicy();
+      const gstRatePercent = gstPolicy ? gstPolicy.ratePercent : null;
+      const gstAmountInPaise = gstPolicy
+        ? Math.round((serviceAmountInPaise + commissionInPaise) * gstPolicy.ratePercent / 100)
+        : null;
+
+      const totalAmountInPaise = serviceAmountInPaise + commissionInPaise + (gstAmountInPaise || 0);
 
       [booking] = await Booking.create(
         [
@@ -718,6 +745,8 @@ export const lockSlot = async (req, res) => {
             totalAmountInPaise,
             serviceAmountInPaise,
             commissionAmountInPaise: commissionInPaise,
+            gstRatePercent,
+            gstAmountInPaise,
             status:             BOOKING_STATUS.HOLD,
           },
         ],
@@ -785,9 +814,11 @@ export const lockSlot = async (req, res) => {
       // confirmBooking's Razorpay order will actually charge.
       serviceAmountInPaise:    booking.serviceAmountInPaise,
       commissionAmountInPaise: booking.commissionAmountInPaise,
+      gstRatePercent:          booking.gstRatePercent,
+      gstAmountInPaise:        booking.gstAmountInPaise,
       totalAmountInPaise:      booking.totalAmountInPaise,
     });
-  
+
   } catch (error) {
     console.error("lockSlot error:", error);
     return res.status(error.status || 500).json({
@@ -1838,23 +1869,33 @@ export const cancelBooking = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////////
-    // 💰 REFUND/PENALTY CALCULATION
+    // 💰 REFUND CALCULATION
     // Based on how far before startTime cancellation happens.
-    // Delegated to CancellationPolicyService — the single source
-    // of truth for cancellation refund policy (pure calculation,
-    // no side effects; this controller remains responsible for
-    // executing the workflow using the returned values).
+    // Delegated to CancellationPolicyService — the single source of
+    // truth for the cancellation refund FRACTION (pure calculation,
+    // no side effects; unchanged by the PAN-India Platform Fee + GST
+    // architecture). The same fraction is then applied to every
+    // refund-eligible component (service, Platform Fee, GST) via the
+    // shared splitRefundComponents() helper — the exact same helper
+    // ownerCancelBooking and RefundExecutionService use, so all three
+    // refund paths can never drift apart.
     //////////////////////////////////////////////////////////
 
     const now = new Date();
 
+    const { refundPolicy, refundFraction } = CancellationPolicyService.evaluate({ booking, now });
+
     const {
-      refundPolicy,
       serviceRefundPaise,
       commissionRefundPaise,
-      refundPaise,
-      penaltyPaise,
-    } = CancellationPolicyService.evaluate({ booking, now });
+      gstRefundPaise,
+      totalRefundPaise: refundPaise,
+    } = splitRefundComponents({
+      refundFraction,
+      serviceAmountInPaise: booking.serviceAmountInPaise,
+      commissionAmountInPaise: booking.commissionAmountInPaise,
+      gstAmountInPaise: booking.gstAmountInPaise,
+    });
 
     //////////////////////////////////////////////////////////
     // 💰 WALLET ADJUSTMENT — deduct refund from salon wallet
@@ -1926,7 +1967,7 @@ export const cancelBooking = async (req, res) => {
           requestId:     `refund:${booking._id}`,
           balanceBeforeInPaise,
           balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
-          metadata:      { refundPolicy, bookingId: booking._id.toString() },
+          metadata:      { refundPolicy, bookingId: booking._id.toString(), serviceRefundPaise, commissionRefundPaise, gstRefundPaise },
         }],
         { session }
       );
@@ -2053,6 +2094,256 @@ export const cancelBooking = async (req, res) => {
     }
 
     console.error("cancelBooking error:", error);
+    return res.status(error.statusCode || error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to cancel booking",
+    });
+    }
+  }
+};
+
+//////////////////////////////////////////////////////////////
+// 🚀 6B. OWNER CANCEL BOOKING — FA-15
+//
+// Separate, standalone controller — NOT a refactor of cancelBooking
+// above, which stays byte-for-byte unchanged. Reuses the exact same
+// transactional retry pattern, the exact same CancellationPolicyService
+// (no new/changed refund percentages, timing thresholds, GST or
+// convenience-fee treatment), the exact same wallet/notification/
+// socket/cache side effects. The ONLY difference from cancelBooking
+// is the authorization check: an Owner is verified against
+// booking.salonRef (via their own Salon document) instead of
+// booking.userRef. Owner identity/salon ownership is always
+// server-derived — never accepted from the client.
+//////////////////////////////////////////////////////////////
+
+export const ownerCancelBooking = async (req, res) => {
+  // Same bounded-retry rationale as cancelBooking above: two
+  // concurrent cancel attempts for the same booking can legitimately
+  // collide at the physical write (TransientTransactionError); the
+  // loser retries on a fresh session and lands on the normal
+  // "Invalid booking state: CANCELLED" 400 path.
+  const MAX_ATTEMPTS = 3;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+    const { bookingId, reason } = req.body;
+
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) throw Object.assign(new Error("Booking not found"), { status: 404 });
+
+    // OWNER OWNERSHIP CHECK — resolve the caller's own salon server-side
+    // (same Salon.findOne({ ownerId }) pattern used throughout this
+    // codebase, e.g. getSalonBookings above) and verify the booking
+    // belongs to THAT salon. salonId/ownerId are never read from the
+    // request body.
+    const salon = await Salon.findOne({ ownerId: req.user._id }).session(session).select("_id");
+    if (!salon) throw Object.assign(new Error("Salon not found"), { status: 404 });
+
+    if (booking.salonRef.toString() !== salon._id.toString()) {
+      throw Object.assign(new Error("Unauthorized"), { status: 403 });
+    }
+
+    // STATE MACHINE VALIDATION — identical call, same central rules.
+    if (!validateBookingTransition(booking.status, BOOKING_STATUS.CANCELLED)) {
+      throw Object.assign(new Error("This booking cannot be cancelled"), { status: 400 });
+    }
+
+    //////////////////////////////////////////////////////////
+    // 💰 REFUND CALCULATION — identical to cancelBooking, including
+    // the shared splitRefundComponents() helper (service/Platform Fee/
+    // GST). CancellationPolicyService is the single source of truth
+    // for the refund fraction regardless of who initiates the
+    // cancellation; this introduces no owner-specific percentage,
+    // fee, or penalty.
+    //////////////////////////////////////////////////////////
+
+    const now = new Date();
+
+    const { refundPolicy, refundFraction } = CancellationPolicyService.evaluate({ booking, now });
+
+    const {
+      serviceRefundPaise,
+      commissionRefundPaise,
+      gstRefundPaise,
+      totalRefundPaise: refundPaise,
+    } = splitRefundComponents({
+      refundFraction,
+      serviceAmountInPaise: booking.serviceAmountInPaise,
+      commissionAmountInPaise: booking.commissionAmountInPaise,
+      gstAmountInPaise: booking.gstAmountInPaise,
+    });
+
+    // 💰 WALLET ADJUSTMENT — identical to cancelBooking (see its
+    // comments above for the full rationale: only the service-amount
+    // portion is clawed back from the salon's PENDING balance;
+    // commission was never the salon's money).
+    if (refundPaise > 0 && booking.status === BOOKING_STATUS.CONFIRMED) {
+      if (serviceRefundPaise > 0) {
+        await WalletBalanceService.debitPending({
+          salonId:        booking.salonRef,
+          amountInPaise:  serviceRefundPaise,
+          action:         "REFUND",
+          entityType:     "BOOKING",
+          entityId:       booking._id,
+          idempotencyKey: `booking:refund:${booking._id}`,
+          session,
+          triggeredBy:    "SYSTEM",
+          remarks:        "Booking cancelled by salon — refund claws back salon's pending balance",
+        });
+      }
+
+      const userBefore = await User.findOne({ _id: booking.userRef, isDeleted: false })
+        .select("walletBalance")
+        .session(session);
+
+      const refundRupees = refundPaise / 100;
+      const balanceBeforeInPaise = Math.round((userBefore?.walletBalance || 0) * 100);
+
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: booking.userRef, isDeleted: false },
+        { $inc: { walletBalance: refundRupees } },
+        { new: true, session }
+      ).select("walletBalance");
+
+      await WalletTransaction.create(
+        [{
+          userId:        booking.userRef,
+          bookingId:     booking._id,
+          direction:     WALLET_TXN_DIRECTION.CREDIT,
+          type:          WALLET_TXN_TYPE.REFUND,
+          status:        WALLET_TXN_STATUS.SUCCESS,
+          source:        WALLET_TXN_SOURCE.BOOKING,
+          amountInPaise: refundPaise,
+          requestId:     `refund:${booking._id}`,
+          balanceBeforeInPaise,
+          balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
+          metadata:      { refundPolicy, bookingId: booking._id.toString(), serviceRefundPaise, commissionRefundPaise, gstRefundPaise },
+        }],
+        { session }
+      );
+    }
+
+    // Store cancellation + audit details on booking. cancelledBy/
+    // cancelReason already exist on the schema (declared, previously
+    // unpopulated by either cancellation path) — populated here for
+    // the first time, additive only, no schema change.
+    booking.cancellationPolicy  = refundPolicy;
+    booking.refundAmountInPaise = refundPaise;
+    booking.cancelledAt         = now;
+    booking.cancelledBy         = req.user._id;
+    if (reason) booking.cancelReason = reason;
+
+    await transitionBookingStatus({
+      booking,
+      nextStatus: BOOKING_STATUS.CANCELLED,
+      actor:      req.user._id,
+      session,
+    });
+
+    // Tag this transition's audit entry with the actor's role — reuses
+    // statusHistory's existing Mixed `meta` field, no parallel audit
+    // system. transitionBookingStatus doesn't accept a meta param, so
+    // it's set directly on the just-pushed history entry before save.
+    const lastHistoryEntry = booking.statusHistory[booking.statusHistory.length - 1];
+    if (lastHistoryEntry) {
+      lastHistoryEntry.meta = { ...(lastHistoryEntry.meta || {}), performedByRole: "OWNER" };
+      // meta is a Mixed field inside an array subdocument — Mongoose
+      // does not reliably auto-detect a plain property assignment on
+      // Mixed, so markModified is required for this second save to
+      // actually persist it (isModified("status") is false here, so
+      // the pre-save hook itself won't push a duplicate entry).
+      booking.markModified("statusHistory");
+      await booking.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    //////////////////////////////////////////////////////////
+    // 🗑️ CACHE INVALIDATION — identical to cancelBooking.
+    //////////////////////////////////////////////////////////
+
+    await invalidateNextSlotCache(
+      booking.salonRef.toString(),
+      booking.startTime.toISOString().split("T")[0]
+    );
+    emitBookingEvent(req, {
+      event:   "booking:cancelled",
+      salonId: booking.salonRef.toString(),
+      userId:  booking.userRef.toString(),
+      payload: {
+        bookingId: booking._id,
+        chairId:   booking.chairRef,
+        startTime: booking.startTime,
+        endTime:   booking.endTime,
+        status:    BOOKING_STATUS.CANCELLED,
+      },
+    });
+
+    const refundMsg = refundPaise > 0
+      ? ` ₹${Math.round(refundPaise / 100)} has been refunded to your wallet.`
+      : "";
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CANCELLED,
+      variables:     { refundMessage: refundMsg },
+      title:         "Booking Cancelled",
+      message:       `Your booking has been cancelled by the salon.${refundMsg}`,
+      type:          "BOOKING",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}`,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK"), refundAmountInPaise: refundPaise },
+    });
+
+    return res.status(200).json({
+      success:            true,
+      bookingId:          booking._id,
+      refundPolicy,
+      refundAmountInPaise: refundPaise,
+      refundAmountRupees:  Math.round(refundPaise / 100),
+      message:            "Booking cancelled successfully",
+    });
+
+    } catch (error) {
+    // Guarded exactly like cancelBooking — only abort a still-open
+    // transaction (post-commit code can throw without this becoming
+    // a masking double-abort error).
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
+
+    const isTransientConflict =
+      typeof error.hasErrorLabel === "function" &&
+      error.hasErrorLabel("TransientTransactionError");
+
+    if (isTransientConflict && attempt < MAX_ATTEMPTS) {
+      continue;
+    }
+
+    if (isTransientConflict) {
+      console.error("ownerCancelBooking error (transient conflict, retries exhausted):", error);
+      return res.status(409).json({
+        success: false,
+        message: "This booking is being updated. Please try again in a moment.",
+      });
+    }
+
+    if (error.message?.startsWith("Booking already in state:")) {
+      const status = error.message.replace("Booking already in state: ", "");
+      return res.status(400).json({
+        success: false,
+        message: `Invalid booking state: ${status}`,
+      });
+    }
+
+    console.error("ownerCancelBooking error:", error);
     return res.status(error.statusCode || error.status || 500).json({
       success: false,
       message: error.message || "Failed to cancel booking",

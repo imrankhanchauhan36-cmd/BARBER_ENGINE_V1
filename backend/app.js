@@ -61,6 +61,8 @@ import adminFieldAgentComplianceRoutes from "./modules/fieldAgent/routes/adminFi
 import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // ← NEW — Phase G Step 1 SLA Policy CRUD
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
+import adminGstPolicyRoutes from "./routes/adminGstPolicy.routes.js"; // ← NEW — PAN-India GST configuration authoring/governance
+import adminAreaPlatformFeeRoutes from "./routes/adminAreaPlatformFee.routes.js"; // ← NEW — PAN-India area-wise Platform Fee configuration authoring/governance
 import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
 import adminQueueRoutes from "./modules/support/routes/adminQueue.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Queues
 import adminRoutingRuleRoutes from "./modules/support/routes/adminRoutingRule.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Routing Rules
@@ -417,6 +419,13 @@ app.use("/api/admin/commercial-policy-overrides", protect, adminCommercialPolicy
 // per the FA-12 lock) — see adminFieldAgentCompliance.routes.js's own
 // header for the exact split.
 app.use("/api/admin/field-agent-compliance", protect, adminFieldAgentComplianceRoutes);
+// PAN-India Platform Fee + GST architecture — admin authoring/
+// governance for both the global GST rate and area-wise Platform Fee.
+// Read AND write are INDIA-only for both, same rationale as
+// adminCommercialPolicyRoutes/adminCommercialPolicyOverrideRoutes
+// above (see each route file's own header).
+app.use("/api/admin/finance/gst", protect, adminGstPolicyRoutes);
+app.use("/api/admin/finance/platform-fee", protect, adminAreaPlatformFeeRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////

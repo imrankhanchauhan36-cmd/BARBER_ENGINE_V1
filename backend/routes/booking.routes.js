@@ -16,6 +16,7 @@ import {
   getUpcomingBookings,
   lockSlot,
   markNoShow,
+  ownerCancelBooking, // FA-15 — owner booking cancellation
   resendReminder,
   startService,
 } from "../controllers/booking.controller.js";
@@ -347,6 +348,23 @@ adminRouter.post(
   validate(bookingSchemas.confirmNoShowCancellation),
   checkBookingState(["CONFIRMED"]),
   confirmNoShowCancellation
+);
+
+// ── Owner cancel booking (FA-15) — CONFIRMED/CHECKED_IN → CANCELLED ──
+// Separate controller from the customer's /v1/bookings/user/cancel —
+// ownerCancelBooking verifies booking.salonRef against the caller's
+// own salon (Salon.findOne({ ownerId: req.user._id })) instead of the
+// customer ownership check cancelBooking uses. Same existing
+// CancellationPolicyService/wallet/notification/socket effects reused
+// unchanged — no new refund/timing policy. HOLD is excluded here
+// (unlike the customer route) — an Owner's salon schedule never shows
+// an un-paid HOLD as an actionable row.
+adminRouter.post(
+  "/cancel",
+  bookingRateLimiter,
+  validate(bookingSchemas.ownerCancel),
+  checkBookingState(["CONFIRMED", "CHECKED_IN"]),
+  ownerCancelBooking
 );
 
 //////////////////////////////////////////////////////////////
