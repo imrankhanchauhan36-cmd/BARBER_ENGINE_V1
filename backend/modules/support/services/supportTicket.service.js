@@ -281,7 +281,11 @@ export async function createTicket({ requesterId, role, categoryRef, subject, bo
   });
 
   const routingSnapshot = await captureRoutingSnapshot(resolvedSalonId);
-  const requesterType = role === "OWNER" ? REQUESTER_TYPE.SALON_OWNER : REQUESTER_TYPE.USER;
+  // FA-10 — FIELD_AGENT must never silently fall through to USER.
+  const requesterType =
+    role === "OWNER" ? REQUESTER_TYPE.SALON_OWNER :
+    role === "FIELD_AGENT" ? REQUESTER_TYPE.FIELD_AGENT :
+    REQUESTER_TYPE.USER;
 
   // Phase G Step 2 — resolve + snapshot SLA targets once, here,
   // before the retry loop (same treatment as routingSnapshot just

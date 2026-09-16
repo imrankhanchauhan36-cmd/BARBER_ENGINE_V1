@@ -45,6 +45,10 @@ export const VALID_TRANSITIONS = Object.freeze({
 export const REQUESTER_TYPE = Object.freeze({
   SALON_OWNER: "SALON_OWNER",
   USER: "USER",
+  // FA-10 — Field Agent Support Integration. SupportTicket.requesterType's
+  // enum is Object.values(REQUESTER_TYPE), so this extends validation
+  // automatically — no model file change needed.
+  FIELD_AGENT: "FIELD_AGENT",
 });
 
 export const PRIORITY = Object.freeze({

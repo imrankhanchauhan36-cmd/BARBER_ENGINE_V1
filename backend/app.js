@@ -38,6 +38,7 @@ import userRoutes from "./routes/user.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
 import wishlistRoutes from "./routes/wishlist.routes.js";
 import supportCustomerRoutes from "./modules/support/routes/supportCustomer.routes.js"; // ← NEW — Phase C Support Core
+import fieldAgentSupportRoutes from "./modules/support/routes/fieldAgentSupport.routes.js"; // ← NEW — FA-10 Field Agent Support Integration
 import supportAgentRoutes from "./modules/support/routes/agentSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
 import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
 import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
@@ -310,6 +311,10 @@ app.use("/api/upload", uploadRoutes);
 // routes — see PUBLIC ROUTES section above.)
 ///////////////////////////////////////////////////////////
 app.use("/api/support/customer", protect, onboardingBypass, supportCustomerRoutes);
+// FA-10 — Field Agent Support Integration. Same protect/onboardingBypass
+// pattern as every other Support mount; requireRole("FIELD_AGENT") is
+// applied inside the router itself.
+app.use("/api/support/field-agent", protect, onboardingBypass, fieldAgentSupportRoutes);
 // FA-2 — authenticated Field Agent application endpoints (own
 // application CRUD only). requireRole("FIELD_AGENT") is applied
 // inside fieldAgent.routes.js itself, same pattern as

@@ -47,6 +47,35 @@ export const supportSchemas = {
     attachments: Joi.array().items(attachmentSchema).max(10).default([]),
   }).unknown(false),
 
+  // FA-10 — Field Agent Support Integration. Same shape as createTicket
+  // above, minus relatedSalonRef/relatedBookingRef, which are explicitly
+  // .forbidden() (not simply omitted) — createTicket()'s
+  // resolveRelatedReferences() only recognizes "USER"/"OWNER" roles and
+  // silently skips its ownership check for any other role, so relying on
+  // the Field Agent frontend to just not send these fields would leave a
+  // real server-side gap. Field Agent V1 has no booking/salon linkage.
+  createFieldAgentTicket: Joi.object({
+    categoryRef: objectId.required().messages({ "any.required": "categoryRef is required" }),
+
+    subject: Joi.string().trim().min(3).max(200).required().messages({
+      "any.required": "subject is required",
+      "string.min": "subject must be at least 3 characters",
+    }),
+
+    body: Joi.string().trim().min(1).max(5000).required().messages({
+      "any.required": "body is required",
+    }),
+
+    priority: Joi.string().valid(...Object.values(PRIORITY)).default(PRIORITY.NORMAL),
+
+    language: Joi.string().valid(...SUPPORTED_LANGUAGES).default("en"),
+
+    relatedSalonRef: Joi.any().forbidden().messages({ "any.unknown": "relatedSalonRef is not supported for Field Agent tickets" }),
+    relatedBookingRef: Joi.any().forbidden().messages({ "any.unknown": "relatedBookingRef is not supported for Field Agent tickets" }),
+
+    attachments: Joi.array().items(attachmentSchema).max(10).default([]),
+  }).unknown(false),
+
   addMessage: Joi.object({
     body: Joi.string().trim().min(1).max(5000).required().messages({
       "any.required": "body is required",
