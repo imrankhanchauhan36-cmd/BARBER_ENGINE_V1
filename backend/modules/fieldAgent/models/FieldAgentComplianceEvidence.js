@@ -133,6 +133,15 @@ fieldAgentComplianceEvidenceSchema.index({ fieldAgentRef: 1, reportedAt: -1 });
 fieldAgentComplianceEvidenceSchema.index({ caseRef: 1 }, { sparse: true });
 fieldAgentComplianceEvidenceSchema.index({ dedupeKey: 1 }, { unique: true, sparse: true });
 
+// FA-15 Phase B — scale hardening. adminListComplianceEvidence
+// (complianceEvidence.service.js) runs with an EMPTY query for an
+// INDIA admin with no fieldAgentRef/caseRef given, sorted
+// { reportedAt: -1 }. {fieldAgentRef,reportedAt} requires the
+// fieldAgentRef equality prefix to be useful; {caseRef} is unrelated
+// to reportedAt ordering. Without this, that admin view degrades into
+// a collection scan + in-memory sort at scale. Additive only.
+fieldAgentComplianceEvidenceSchema.index({ reportedAt: -1 });
+
 //////////////////////////////////////////////////////////////
 // Immutable — evidence is a historical fact, never corrected in
 // place. A mistaken filing is addressed by the case/decision layer

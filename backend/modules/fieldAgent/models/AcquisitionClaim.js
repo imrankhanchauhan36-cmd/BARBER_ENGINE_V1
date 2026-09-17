@@ -107,5 +107,15 @@ AcquisitionClaimSchema.index({ stateRef: 1, status: 1 });
 // index above only serves status:"ACTIVE" queries.
 AcquisitionClaimSchema.index({ salonRef: 1, createdAt: -1 });
 
+// FA-15 Phase B — scale hardening. adminListClaims (acquisitionClaim.
+// service.js) runs with an EMPTY filter for an INDIA admin with no
+// status/fieldAgentRef given, sorted { createdAt: -1 }. None of the
+// compound indexes above have createdAt as a sole/leading key, so none
+// can serve that specific query+sort — {status,createdAt} is ordered
+// by status first, not a global createdAt ordering. Without this,
+// that admin view degrades into a collection scan + in-memory sort at
+// scale. Additive only — does not replace or duplicate any index above.
+AcquisitionClaimSchema.index({ createdAt: -1 });
+
 export default mongoose.models.AcquisitionClaim ||
   mongoose.model("AcquisitionClaim", AcquisitionClaimSchema);

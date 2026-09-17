@@ -130,6 +130,14 @@ fieldAgentComplianceCaseSchema.index({ fieldAgentRef: 1, status: 1 });
 fieldAgentComplianceCaseSchema.index({ fieldAgentRef: 1, createdAt: -1 });
 fieldAgentComplianceCaseSchema.index({ status: 1, createdAt: -1 });
 
+// FA-15 Phase B — scale hardening. adminListComplianceCases
+// (complianceCase.service.js) runs with an EMPTY query for an INDIA
+// admin with no fieldAgentRef/category/status given, sorted
+// { createdAt: -1 }. None of the three compound indexes above has
+// createdAt as a sole/leading key, so none can serve that query+sort
+// without a collection scan + in-memory sort at scale. Additive only.
+fieldAgentComplianceCaseSchema.index({ createdAt: -1 });
+
 // At most one ACTIVE case per (fieldAgentRef, category) — see file
 // header for why $exists:true (not $in over status values) is used.
 fieldAgentComplianceCaseSchema.index(
