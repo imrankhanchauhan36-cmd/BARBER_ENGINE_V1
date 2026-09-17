@@ -39,10 +39,28 @@ import { fieldAgentSchemas } from "../validators/fieldAgentApplication.validator
 
 const router = express.Router();
 
+// FA-15 Phase A — fixed the ipKeyGenerator misuse found in the FA-15
+// security audit: express-rate-limit's ipKeyGenerator signature is
+// `(ip: string, ipv6Subnet?) => string` — it expects the IP itself,
+// not the whole Express request object. The previous
+// `ipKeyGenerator(req)` call passed a non-string, which fails the
+// internal isIPv6() check and falls through to returning the object
+// template-coerced to the literal string "[object Object]" — every
+// caller collapsed onto the SAME bucket regardless of source IP, so
+// the limiter enforced its max globally instead of per-IP. Fixed by
+// switching to `ipKeyGenerator(req.ip)`, the same correct pattern
+// already used below by fieldAgentLoginOtpLimiter/
+// fieldAgentLoginVerifyLimiter.
+//
+// NOTE — the identical root-cause bug also exists in the platform's
+// shared globalLimiter (app.js) and in routes/auth.routes.js's
+// OWNER/USER OTP limiters. Those are explicitly OUT OF SCOPE for this
+// FA-15 phase (frozen/shared code, not owned by this feature) and are
+// tracked as a separate backlog observation, not fixed here.
 const fieldAgentOtpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => `field_agent_otp_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `field_agent_otp_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -50,34 +68,15 @@ const fieldAgentOtpLimiter = rateLimit({
 const fieldAgentVerifyLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => `field_agent_verify_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `field_agent_verify_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 // FA-13A — isolated quota, same shape as the two limiters above, so
 // operational-login abuse/traffic can never exhaust (or be exhausted
-// by) the apply-flow's own OTP quota.
-//
-// NOTE (pre-existing bug found, NOT fixed here): every other
-// keyGenerator in this codebase that uses ipKeyGenerator — both above
-// in this same file and in routes/auth.routes.js — calls it as
-// `ipKeyGenerator(req)`, passing the whole Express request object.
-// express-rate-limit's ipKeyGenerator signature is actually
-// `(ip: string, ipv6Subnet?) => string` — it expects the IP itself,
-// not a request. Passing a non-string object makes it fail the
-// isIPv6() check and fall through to `return ip` (the object,
-// template-coerced to the literal string "[object Object]"), so
-// EVERY caller collapses onto the SAME rate-limit bucket regardless
-// of source IP — the limiter still enforces its max, just globally
-// instead of per-IP. This is a real, pre-existing, unrelated bug
-// affecting OWNER/USER/ADMIN/FA-2-apply login rate limiting too — out
-// of scope to fix here (touches frozen, shared auth.routes.js and
-// this file's own frozen fieldAgentOtpLimiter/fieldAgentVerifyLimiter
-// above), flagged in the FA-13A deliverable report instead. Fixed
-// ONLY in these two NEW limiters (not pre-existing/frozen code) so
-// FA-13A doesn't ship a freshly-written limiter with a known-broken
-// per-IP key.
+// by) the apply-flow's own OTP quota. Already used the correct
+// `ipKeyGenerator(req.ip)` pattern from the start.
 const fieldAgentLoginOtpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,

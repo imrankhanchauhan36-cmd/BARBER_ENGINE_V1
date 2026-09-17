@@ -16,6 +16,7 @@
 
 import express from "express";
 import { requireRole } from "../../../middlewares/role.middleware.js";
+import { requireActiveFieldAgent } from "../middlewares/requireActiveFieldAgent.js";
 import { validate } from "../../../middlewares/validate.middleware.js";
 import { listMyEarningsHandler } from "../controllers/fieldAgentEarning.controller.js";
 import { fieldAgentEarningSchemas } from "../validators/fieldAgentEarning.validator.js";
@@ -23,6 +24,10 @@ import { fieldAgentEarningSchemas } from "../validators/fieldAgentEarning.valida
 const router = express.Router();
 
 router.use(requireRole("FIELD_AGENT"));
+// FA-15 Phase A — request-level operationalStatus re-check. This
+// read-only surface previously had NO operationalStatus check at all
+// (the audit's own finding) — this closes that gap.
+router.use(requireActiveFieldAgent);
 
 router.get(
   "/mine",

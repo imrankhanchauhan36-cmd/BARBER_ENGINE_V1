@@ -80,6 +80,19 @@ async function resolveRelatedReferences({ relatedBookingRef, relatedSalonRef, re
     } else if (role === "OWNER") {
       const salon = await Salon.findOne({ _id: booking.salonRef, ownerId: requesterId }).select("_id").lean();
       if (!salon) throw Errors.forbidden("This booking is not linked to your salon");
+    } else {
+      // FA-15 Phase A — defense-in-depth. Any role other than USER/OWNER
+      // (FIELD_AGENT today, and any future role) has no ownership
+      // relationship to a booking that this function knows how to
+      // verify — the two branches above are the only established
+      // proofs of ownership this function has. The Field Agent
+      // ticket-create validator already forbids relatedBookingRef
+      // outright (createFieldAgentTicket schema), but that must not be
+      // the ONLY thing standing between a caller and an unverified
+      // reference — reject explicitly here too, at the service layer,
+      // so a future caller that reaches this function by any other
+      // path can never silently skip the check.
+      throw Errors.forbidden("relatedBookingRef is not supported for this account type");
     }
 
     return { resolvedSalonId: booking.salonRef, resolvedBookingId: booking._id };

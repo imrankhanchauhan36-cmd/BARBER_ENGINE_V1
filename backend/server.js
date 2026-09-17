@@ -24,6 +24,23 @@ import { initSocket } from "./socket/index.js";
 // 🔑 STEP 1: LOAD ENVIRONMENT VARIABLES
 //////////////////////////////////////////////////////////////
 
+// FA-15 Phase A — fail-closed startup guardrail. ALLOW_FIXED_OTP
+// (utils/otp.helpers.js) makes OTP verification for EVERY role,
+// including FIELD_AGENT, accept a hardcoded "123456" — deliberately
+// kept independent of NODE_ENV (see that file's own header comment)
+// so it can be toggled without touching Razorpay's own
+// NODE_ENV-gated verification. That independence means nothing
+// previously stopped it from being left on in a real production
+// deployment. This is the single authoritative boot-time check for
+// that combination — do not duplicate it elsewhere.
+if (process.env.NODE_ENV === "production" && process.env.ALLOW_FIXED_OTP === "true") {
+  console.error(
+    "❌ Refusing to start: ALLOW_FIXED_OTP=true is set while NODE_ENV=production. " +
+    "The fixed-OTP bypass must never be enabled in production. " +
+    "Unset ALLOW_FIXED_OTP (or set it to \"false\") and restart."
+  );
+  process.exit(1);
+}
 
 //////////////////////////////////////////////////////////////
 // 🔑 STEP 2: CONNECT DATABASE (MongoDB)
