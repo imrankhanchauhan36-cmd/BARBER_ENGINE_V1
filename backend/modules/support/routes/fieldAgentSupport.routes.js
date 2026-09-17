@@ -24,6 +24,7 @@
 import express from "express";
 import { idempotency } from "../../../middlewares/idempotency.middleware.js";
 import { requireRole } from "../../../middlewares/role.middleware.js";
+import { createRedisRateLimiter, RATE_LIMIT_ACTIONS, RATE_LIMIT_CONFIG } from "../../../middlewares/redisRateLimit.middleware.js";
 import { validate } from "../../../middlewares/validate.middleware.js";
 import {
   addMyTicketMessage,
@@ -38,13 +39,29 @@ import { supportSchemas } from "../validators/supportTicket.validator.js";
 const router = express.Router();
 
 router.use(requireRole("FIELD_AGENT"));
+// FA-15 Phase C1 — no requireActiveFieldAgent here (unchanged,
+// deliberate exemption already independently audited in Phase A — a
+// PENDING_ACTIVATION agent must still be able to reach Support).
+
+// Abuse/cost-containment only — sits before the existing
+// idempotency+validator+handler chain for each route; does not alter
+// ticket category, requesterType, ownership, related-reference
+// restrictions, SLA, ticket status, or routing in any way.
+const supportCreateLimiter = createRedisRateLimiter({
+  action: RATE_LIMIT_ACTIONS.FIELD_AGENT_SUPPORT_CREATE,
+  ...RATE_LIMIT_CONFIG[RATE_LIMIT_ACTIONS.FIELD_AGENT_SUPPORT_CREATE],
+});
+const supportMessageLimiter = createRedisRateLimiter({
+  action: RATE_LIMIT_ACTIONS.FIELD_AGENT_SUPPORT_MESSAGE,
+  ...RATE_LIMIT_CONFIG[RATE_LIMIT_ACTIONS.FIELD_AGENT_SUPPORT_MESSAGE],
+});
 
 router.get("/categories", listCategoriesHandler);
 
-router.post("/tickets", idempotency, validate(supportSchemas.createFieldAgentTicket), createMyTicket);
+router.post("/tickets", supportCreateLimiter, idempotency, validate(supportSchemas.createFieldAgentTicket), createMyTicket);
 router.get("/tickets", listMyTicketsHandler);
 router.get("/tickets/:id", getMyTicketHandler);
-router.post("/tickets/:id/messages", idempotency, validate(supportSchemas.addMessage), addMyTicketMessage);
+router.post("/tickets/:id/messages", supportMessageLimiter, idempotency, validate(supportSchemas.addMessage), addMyTicketMessage);
 router.post("/tickets/:id/reopen", idempotency, validate(supportSchemas.reopenTicket), reopenMyTicket);
 
 export default router;

@@ -17,6 +17,8 @@
 import express from "express";
 import { idempotency } from "../../../middlewares/idempotency.middleware.js";
 import { requireRole } from "../../../middlewares/role.middleware.js";
+import { requireActiveFieldAgent } from "../middlewares/requireActiveFieldAgent.js";
+import { createRedisRateLimiter, RATE_LIMIT_ACTIONS, RATE_LIMIT_CONFIG } from "../../../middlewares/redisRateLimit.middleware.js";
 import { validate } from "../../../middlewares/validate.middleware.js";
 import {
   issueReferralHandler,
@@ -30,8 +32,22 @@ import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validato
 const router = express.Router();
 
 router.use(requireRole("FIELD_AGENT"));
+// FA-15 Phase A — request-level operationalStatus re-check, uniform
+// across this whole "operational" surface (issueReferral/withdrawClaim
+// already had their own ad-hoc ACTIVE check via assertClaimEligible;
+// this closes the gap on the read-only list endpoints too).
+router.use(requireActiveFieldAgent);
 
-router.post("/referrals", idempotency, issueReferralHandler);
+// FA-15 Phase C1 — abuse/cost-containment only, sits before the
+// existing idempotency+handler chain; does not alter referral
+// generation, acquisition attribution, territory rules, referral
+// ownership, cancellation, or claim creation in any way.
+const referralCreateLimiter = createRedisRateLimiter({
+  action: RATE_LIMIT_ACTIONS.FIELD_AGENT_REFERRAL_CREATE,
+  ...RATE_LIMIT_CONFIG[RATE_LIMIT_ACTIONS.FIELD_AGENT_REFERRAL_CREATE],
+});
+
+router.post("/referrals", referralCreateLimiter, idempotency, issueReferralHandler);
 
 router.get(
   "/referrals/mine",
