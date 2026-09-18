@@ -381,12 +381,43 @@ UserSchema.set("toJSON", {
 // ⭐ INDEXES (CLEAN + NO DUPLICATE)
 /////////////////////////////////////////////////////
 
-// Unique phone
+// FA-17 F3 REMEDIATION — the previous declarations here combined
+// `sparse: true` with `partialFilterExpression`, a combination MongoDB
+// rejects outright (error 67, "cannot mix partialFilterExpression and
+// sparse options"). Because the index could never actually be built,
+// the live collection was left running on a stale, non-unique legacy
+// index instead — phone/email uniqueness was NOT enforced in
+// production. Confirmed live via direct query against the real
+// database during this remediation (see scripts/verifyUserIdentityUniqueness.js).
+//
+// Scope decision (per-role, not global) — confirmed against real data,
+// not assumed: a live query of the ACTIVE User collection found 11
+// real, currently-in-use accounts sharing a phone number ACROSS
+// different roles (predominantly OWNER+USER, i.e. the same person
+// booking as a customer and separately owning a salon — an existing,
+// functioning, real production pattern), plus 2 ADMIN+OWNER/USER
+// overlaps. A GLOBAL unique index would either fail to build against
+// this real data or require deleting/merging real accounts — neither
+// of which this remediation is authorized to do. By contrast, EVERY
+// actual application-level uniqueness check already in this codebase
+// (createOrFindUser in utils/otp.helpers.js; the ADMIN-provisioning
+// checks in controllers/state.controller.js and
+// controllers/district.controller.js) scopes its own pre-save lookup
+// by {phone/email, role} — never globally. A live query also found
+// ZERO same-role duplicates and ZERO email duplicates of any kind
+// today, so a per-role unique index is safe to create immediately: it
+// enforces exactly the invariant the application already assumes
+// (closing the real concurrency-race gap where two simultaneous
+// requests could otherwise both pass the same findOne-then-create
+// check and both succeed), without conflicting with the real,
+// pre-existing cross-role accounts above. Cross-role phone/email
+// uniqueness (the broader invariant implied by the original global
+// declaration) remains an OPEN question requiring an explicit product
+// decision — not resolved here.
 UserSchema.index(
-  { phone: 1 },
+  { phone: 1, role: 1 },
   {
     unique: true,
-    sparse: true,
     partialFilterExpression: {
       isDeleted: false,
       phone: { $type: "string" },
@@ -394,12 +425,10 @@ UserSchema.index(
   }
 );
 
-// Unique email
 UserSchema.index(
-  { email: 1 },
+  { email: 1, role: 1 },
   {
     unique: true,
-    sparse: true,
     partialFilterExpression: {
       isDeleted: false,
       email: { $type: "string" },

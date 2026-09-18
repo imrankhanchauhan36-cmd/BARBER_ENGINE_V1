@@ -200,6 +200,16 @@ export const verifyOtp = async (req, res) => {
     });
 
   } catch (error) {
+    // FA-17 F3 remediation — a real unique index on {phone,role} now
+    // exists (previously it silently failed to build); a genuine
+    // concurrent-race duplicate must surface as the same safe 409
+    // conflict this codebase already uses elsewhere (errorHandler.js's
+    // own E11000 branch, state.controller.js's admin-provisioning
+    // conflict responses) — never a raw 500.
+    if (error.code === 11000) {
+      logger.error("verifyOtp duplicate identity conflict", { message: error.message });
+      return sendError(res, 409, "CONFLICT", "An account with this phone number already exists");
+    }
     logger.error("verifyOtp error", { message: error.message, stack: error.stack });
     return sendError(res, 500, "SERVER_ERROR", "Internal server error during verification");
   }
@@ -320,6 +330,11 @@ export const verifyUserOtp = async (req, res) => {
     });
 
   } catch (error) {
+    // FA-17 F3 remediation — see verifyOtp's identical comment above.
+    if (error.code === 11000) {
+      logger.error("verifyUserOtp duplicate identity conflict", { message: error.message });
+      return sendError(res, 409, "CONFLICT", "An account with this phone number already exists");
+    }
     logger.error("verifyUserOtp error", { message: error.message, stack: error.stack });
     return sendError(res, 500, "SERVER_ERROR", "Internal server error");
   }
