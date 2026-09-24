@@ -43,6 +43,7 @@ import supportAgentRoutes from "./modules/support/routes/agentSupport.routes.js"
 import supportAdminRoutes from "./modules/support/routes/adminSupport.routes.js"; // ← NEW — Phase F.3.7 Support API layer
 import supportAuthRoutes from "./modules/support/routes/supportAuth.routes.js"; // ← NEW — Phase F.3.9 AGENT/SUPPORT_ADMIN login
 import fieldAgentAuthRoutes from "./modules/fieldAgent/routes/fieldAgentAuth.routes.js"; // ← NEW — FA-2 Field Agent OTP apply/login
+import fieldAgentGeoRoutes from "./modules/fieldAgent/routes/fieldAgentGeo.routes.js"; // ← NEW — Field Agent Applicant public geo reference (states list)
 import fieldAgentRoutes from "./modules/fieldAgent/routes/fieldAgent.routes.js"; // ← NEW — FA-2 Field Agent Application Engine
 import fieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/fieldAgentTraining.routes.js"; // ← NEW — FA-3.3 Field Agent Training Engine
 import fieldAgentHelpRoutes from "./modules/fieldAgentTraining/routes/fieldAgentHelp.routes.js"; // ← NEW — FA-3.3 Field Agent Help (curated operational reference)
@@ -247,6 +248,11 @@ app.use("/api/support/auth", supportAuthRoutes);
 // app.use("/api", protect, ...) mount further below, since send-otp/
 // verify-otp have no session yet. No protect/onboardingBypass here.
 app.use("/api/field-agent/auth", fieldAgentAuthRoutes);
+// Field Agent Applicant public geo reference — same reasoning as
+// /api/field-agent/auth immediately above: GET /states must be
+// callable from the Application Profile step, which happens right
+// after apply-OTP verify. Read-only, no protect/onboardingBypass.
+app.use("/api/field-agent/geo", fieldAgentGeoRoutes);
 // Phase H Step 9 — same reasoning as /api/support/auth immediately
 // above: an inbound email webhook has no user session at all, so it
 // must be mounted here, before the generic protect-wrapping mounts
