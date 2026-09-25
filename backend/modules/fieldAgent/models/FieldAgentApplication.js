@@ -22,6 +22,7 @@
 import mongoose from "mongoose";
 import {
   APPLICATION_STATUS,
+  COMMERCIAL_PATH,
   GENDER,
 } from "../constants/fieldAgent.constants.js";
 
@@ -75,6 +76,18 @@ const fieldAgentApplicationSchema = new mongoose.Schema(
     requestedZone: {
       type: requestedZoneSchema,
       default: () => ({}),
+    },
+
+    // Applicant's REQUEST only — mirrors requestedZone's own boundary
+    // (see above): this grants no authority and does not set
+    // FieldAgent.commercialPath, which remains the sole authoritative,
+    // one-time-only value set by an admin post-approval
+    // (commercialModel.service.js#selectCommercialPath). Editable only
+    // while status is DRAFT (enforced in the service layer, not here).
+    requestedCommercialPath: {
+      type: String,
+      enum: [...Object.values(COMMERCIAL_PATH), null],
+      default: null,
     },
 
     // No `index: true` here — the {status,createdAt} compound index

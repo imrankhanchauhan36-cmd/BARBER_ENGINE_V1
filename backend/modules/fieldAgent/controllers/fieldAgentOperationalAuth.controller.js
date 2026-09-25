@@ -35,6 +35,17 @@
  * no `role` field, and the query below is `{phone, role:"FIELD_AGENT"}`
  * — an OWNER-role user's phone simply never matches, returns 404,
  * never a wrong-role session.
+ *
+ * OTP-1 — sendFieldAgentOperationalOtp (below) is a NEW handler, added
+ * so this flow's send-otp no longer shares fieldAgentAuth.controller.js's
+ * sendFieldAgentOtp. Before OTP-1 both flows called the exact same
+ * function with no purpose distinction, which meant they also shared
+ * one Redis key (`otp:hash:FIELD_AGENT:{phone}`) — an agent with an
+ * in-flight apply-OTP and an in-flight operational-login OTP at the
+ * same time would silently overwrite one with the other. Both
+ * send-otp and verify-otp for this flow now use
+ * OTP_PURPOSE.FIELD_AGENT_LOGIN, its own isolated Redis namespace
+ * (see modules/otp/constants/otpPurpose.constants.js).
  */
 
 import FieldAgent from "../models/FieldAgent.js";
@@ -42,13 +53,45 @@ import User from "../../../models/User.js";
 import { createSession } from "../../../services/session.service.js";
 import { generateAccessToken } from "../../../services/token.service.js";
 import logger from "../../../utils/logger.js";
-import { verifyOtpAttempt } from "../../../utils/otp.helpers.js";
+import { sendOtp as sendOtpEngine, verifyOtp as verifyOtpEngine } from "../../../modules/otp/services/otp.service.js";
+import { OTP_PURPOSE } from "../../../modules/otp/constants/otpPurpose.constants.js";
 import {
   REFRESH_COOKIE_NAME,
   getRefreshCookieOptions as getCookieOptions,
 } from "../../../utils/refreshCookie.js";
 import { Errors } from "../../../utils/response.js";
 import { FIELD_AGENT_OTP_ROLE, FIELD_AGENT_OPERATIONAL_STATUS } from "../constants/fieldAgent.constants.js";
+
+export const sendFieldAgentOperationalOtp = async (req, res, next) => {
+  try {
+    const { phone } = req.body; // already normalized/validated by Joi
+
+    const redis = req.redis;
+    if (!redis) {
+      logger.error("Redis unavailable during sendFieldAgentOperationalOtp", { phone });
+      return next(Errors.internal("Service temporarily unavailable. Please try again."));
+    }
+
+    const result = await sendOtpEngine({ phone, purpose: OTP_PURPOSE.FIELD_AGENT_LOGIN, role: FIELD_AGENT_OTP_ROLE, req, redis });
+
+    if (!result.success) {
+      if (result.code === "RESEND_TOO_SOON") {
+        res.set("Retry-After", String(result.retryAfterSeconds));
+        return next(Errors.tooMany("Please wait before requesting another OTP."));
+      }
+      logger.warn("Field agent operational OTP send failed", { phone, provider: result.provider, error: result.error });
+      return next(Errors.badRequest("Could not send OTP. Please try again."));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully",
+      ...(result.otp && { otp: result.otp }),
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
 
 export const verifyFieldAgentOperationalOtp = async (req, res, next) => {
   try {
@@ -60,7 +103,7 @@ export const verifyFieldAgentOperationalOtp = async (req, res, next) => {
       return next(Errors.internal("Service temporarily unavailable. Please try again."));
     }
 
-    const attempt = await verifyOtpAttempt(redis, phone, FIELD_AGENT_OTP_ROLE, otp);
+    const attempt = await verifyOtpEngine({ phone, purpose: OTP_PURPOSE.FIELD_AGENT_LOGIN, otp, role: FIELD_AGENT_OTP_ROLE, req, redis });
     if (!attempt.ok) {
       const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
       return res.status(status).json({

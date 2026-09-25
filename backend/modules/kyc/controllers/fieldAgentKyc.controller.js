@@ -9,12 +9,19 @@
  */
 
 import { Errors, successResponse } from "../../../utils/response.js";
+import VerificationLog from "../models/VerificationLog.js";
 import {
     attachFieldAgentDocument,
     getOrCreateFieldAgentKYC,
     submitFieldAgentBank,
     submitFieldAgentIdentity,
     submitFieldAgentKYC,
+    verifyFieldAgentAadhaarComplete,
+    verifyFieldAgentAadhaarInitiate,
+    verifyFieldAgentBank,
+    verifyFieldAgentFaceMatch,
+    verifyFieldAgentGST,
+    verifyFieldAgentLiveness,
     verifyFieldAgentPAN,
 } from "../services/fieldAgentKyc.service.js";
 
@@ -54,6 +61,21 @@ const toFieldAgentKYCDTO = async (kyc) => {
       bankName:      kyc.bank?.bankName ?? null,
       verified:      kyc.verification?.bank?.verified ?? false,
     },
+
+    // Phase 7A (Cashfree Secure ID)
+    faceMatch: { verified: kyc.verification?.face?.verified ?? false },
+    liveness:  { verified: kyc.verification?.liveness?.verified ?? false },
+    // GST has no stored verification.gst field (audit fix — see KYC.js
+    // header: optional, never gates anything, so its outcome is
+    // derived on read from the existing VerificationLog trail instead
+    // of a dedicated schema slot). Only queried when a GST number was
+    // actually submitted, to avoid a wasted lookup on the common case.
+    gst: kyc.identity?.gst?.maskedNumber
+      ? {
+          maskedNumber: kyc.identity.gst.maskedNumber,
+          verified: !!(await VerificationLog.findOne({ kycId: kyc._id, field: "gst" }).sort({ createdAt: -1 }).select("success").lean())?.success,
+        }
+      : { maskedNumber: null, verified: false },
 
     documents: Object.fromEntries(
       DOCUMENT_FIELDS.map((key) => {
@@ -196,6 +218,130 @@ export const verifyFieldAgentPANHandler = async (req, res, next) => {
         source:  result.source,
         remarks: result.remarks,
       },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/aadhaar/initiate
+ * Phase 7A — sends an Aadhaar OTP via Cashfree Secure ID. The pending
+ * refId is held server-side (on the KYC document's own aadhaar.*
+ * session fields — see KYC.js) — never returned to the client.
+ */
+export const verifyFieldAgentAadhaarInitiateHandler = async (req, res, next) => {
+  try {
+    const { success, result } = await verifyFieldAgentAadhaarInitiate({
+      userId:        req.user._id,
+      aadhaarNumber: req.body.aadhaarNumber,
+      requestId:     req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "OTP sent to your Aadhaar-linked mobile number" : "Could not send Aadhaar OTP — you can continue with Manual KYC",
+      data: { success, source: result.source, remarks: result.remarks },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/aadhaar/verify
+ * Phase 7A — completes the pending Aadhaar OTP exchange.
+ */
+export const verifyFieldAgentAadhaarCompleteHandler = async (req, res, next) => {
+  try {
+    const { success, result, kyc } = await verifyFieldAgentAadhaarComplete({
+      userId:    req.user._id,
+      otp:       req.body.otp,
+      requestId: req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "Aadhaar verified successfully" : "Aadhaar OTP verification failed — you can continue with Manual KYC",
+      data: {
+        success, source: result.source, remarks: result.remarks,
+        // Phase 2B — the verification session id downstream Face
+        // Match/Liveness calls need, only meaningful on success.
+        verificationId: success ? (kyc.aadhaar?.verificationId ?? null) : null,
+      },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/verify/bank
+ * Phase 7A — self-serve instant bank account verification.
+ */
+export const verifyFieldAgentBankHandler = async (req, res, next) => {
+  try {
+    const { success, result } = await verifyFieldAgentBank({
+      userId:        req.user._id,
+      accountHolder: req.body.accountHolder,
+      accountNumber: req.body.accountNumber,
+      ifsc:          req.body.ifsc,
+      bankName:      req.body.bankName,
+      requestId:     req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "Bank account verified successfully" : "Automatic bank verification did not succeed — you can continue with Manual KYC",
+      data: { success, source: result.source, remarks: result.remarks },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/verify/face
+ * Phase 7A — face match against the already-uploaded selfie.
+ */
+export const verifyFieldAgentFaceMatchHandler = async (req, res, next) => {
+  try {
+    const { success, result } = await verifyFieldAgentFaceMatch({
+      userId:    req.user._id,
+      requestId: req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "Face match passed" : "Face match did not succeed — you can continue with Manual KYC",
+      data: { success, source: result.source, remarks: result.remarks },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/verify/liveness
+ * Phase 7A — liveness check against the already-uploaded selfie.
+ */
+export const verifyFieldAgentLivenessHandler = async (req, res, next) => {
+  try {
+    const { success, result } = await verifyFieldAgentLiveness({
+      userId:    req.user._id,
+      requestId: req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "Liveness confirmed" : "Liveness check did not succeed — you can continue with Manual KYC",
+      data: { success, source: result.source, remarks: result.remarks },
+    });
+  } catch (err) { forwardServiceError(err, next); }
+};
+
+/**
+ * POST /api/field-agent/kyc/verify/gst
+ * Phase 7A — OPTIONAL. Only ever called when the applicant supplies a
+ * GST number; skipping this step entirely is always allowed and never
+ * blocks progression.
+ */
+export const verifyFieldAgentGSTHandler = async (req, res, next) => {
+  try {
+    const { success, result } = await verifyFieldAgentGST({
+      userId:    req.user._id,
+      gstNumber: req.body.gstNumber,
+      requestId: req.requestId ?? null,
+    });
+
+    return successResponse(res, {
+      message: success ? "GST verified successfully" : "GST verification did not succeed — this is optional and will not block your application",
+      data: { success, source: result.source, remarks: result.remarks },
     });
   } catch (err) { forwardServiceError(err, next); }
 };

@@ -249,9 +249,12 @@ const run = async () => {
     {
       const { phone } = await mkFieldAgentUser({ operationalStatus: "ACTIVE" });
       await sendLoginOtp(phone);
-      await redis.del(`otp:hash:FIELD_AGENT:${phone}`);
+      // OTP Engine V1.0 Revision 3 — key format is now
+      // otp:{role}:{purpose}:{phone}:hash — see
+      // modules/otp/services/otp.service.js#otpBaseKey.
+      await redis.del(`otp:field_agent:field_agent_login:${phone}:hash`);
       const verifyRes = await verifyLoginOtp(phone, "123456");
-      check("Expired OTP -> 401, shared verifyOtpAttempt logic (unmodified) correctly rejects", verifyRes.status === 401, verifyRes.status);
+      check("Expired OTP -> 401, atomic verify script correctly rejects a missing hash", verifyRes.status === 401, verifyRes.status);
     }
 
     // ── Concurrent verification (real races, same correct OTP) ───────

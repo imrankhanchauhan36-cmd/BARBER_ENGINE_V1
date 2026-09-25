@@ -18,13 +18,22 @@
  * for an already-approved agent), deliberately separate from
  * /send-otp and /verify-otp above (FA-2's own apply/application flow,
  * byte-for-byte unchanged — same handlers, same limiters, same
- * validator). /login/send-otp reuses sendFieldAgentOtp UNMODIFIED
- * (sending an OTP is role-scoped, not journey-scoped, so no new logic
- * or Redis key namespace is needed for it) with its own dedicated
- * rate limiter so operational-login OTP traffic can never exhaust or
- * be exhausted by the apply-flow's own quota. /login/verify-otp is a
- * genuinely new handler (fieldAgentOperationalAuth.controller.js) —
- * see that file's own header for the full contract.
+ * validator), with its own dedicated rate limiter so operational-login
+ * OTP traffic can never exhaust or be exhausted by the apply-flow's
+ * own quota.
+ *
+ * OTP-1 — UPDATED: /login/send-otp previously reused sendFieldAgentOtp
+ * UNMODIFIED (both flows called the exact same handler). That handler
+ * now dispatches through the centralized OTP engine with an explicit
+ * purpose (Part C: purpose is mandatory, never inferred) — the apply
+ * flow uses FIELD_AGENT_APPLY, this operational-login flow now uses
+ * its own dedicated handler, sendFieldAgentOperationalOtp
+ * (fieldAgentOperationalAuth.controller.js), with purpose
+ * FIELD_AGENT_LOGIN. Before this, both flows shared ONE Redis key
+ * (`otp:hash:FIELD_AGENT:{phone}`) — an agent with an in-flight
+ * apply-OTP and an in-flight operational-login OTP at the same time
+ * would silently overwrite one with the other. They are now isolated.
+ * /login/verify-otp was already a genuinely separate handler.
  */
 
 import express from "express";
@@ -34,7 +43,10 @@ import {
   sendFieldAgentOtp,
   verifyFieldAgentOtp,
 } from "../controllers/fieldAgentAuth.controller.js";
-import { verifyFieldAgentOperationalOtp } from "../controllers/fieldAgentOperationalAuth.controller.js";
+import {
+  sendFieldAgentOperationalOtp,
+  verifyFieldAgentOperationalOtp,
+} from "../controllers/fieldAgentOperationalAuth.controller.js";
 import { fieldAgentSchemas } from "../validators/fieldAgentApplication.validator.js";
 
 const router = express.Router();
@@ -108,11 +120,13 @@ router.post(
 );
 
 // FA-13A — APPROVED FIELD AGENT OPERATIONAL LOGIN.
+// OTP-1 — now its own handler (sendFieldAgentOperationalOtp), purpose
+// FIELD_AGENT_LOGIN — see this file's own header for why.
 router.post(
   "/login/send-otp",
   fieldAgentLoginOtpLimiter,
   validate(fieldAgentSchemas.sendOtp),
-  sendFieldAgentOtp
+  sendFieldAgentOperationalOtp
 );
 
 router.post(

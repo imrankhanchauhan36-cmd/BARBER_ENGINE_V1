@@ -1,15 +1,10 @@
 import Salon from "../models/Salon.js";
 import { createSession } from "../services/session.service.js";
-import { sendOtpSms } from "../services/sms.service.js";
 import { generateAccessToken } from "../services/token.service.js";
 import logger from "../utils/logger.js";
-import {
-  createOrFindUser,
-  generateOtp,
-  isValidOtpFormat,
-  storeOtpHash,
-  verifyOtpAttempt,
-} from "../utils/otp.helpers.js";
+import { createOrFindUser, isValidOtpFormat } from "../utils/otp.helpers.js";
+import { sendOtp as sendOtpEngine, verifyOtp as verifyOtpEngine } from "../modules/otp/services/otp.service.js";
+import { OTP_PURPOSE } from "../modules/otp/constants/otpPurpose.constants.js";
 import {
   REFRESH_COOKIE_NAME,
   getRefreshCookieOptions as getCookieOptions,
@@ -73,31 +68,23 @@ export const sendOtp = async (req, res) => {
       return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const otp = generateOtp();
-    await storeOtpHash(redis, normalizedPhone, "OWNER", otp);
-    const smsResult = await sendOtpSms(normalizedPhone, otp);
+    const result = await sendOtpEngine({ phone: normalizedPhone, purpose: OTP_PURPOSE.SALON_LOGIN, role: "OWNER", req, redis });
 
-    if (!smsResult.success) {
-      trackEvent("otp_send_failed", {
-        role: "OWNER",
-        phone: normalizedPhone,
-        provider: smsResult.provider,
-        error: smsResult.error,
-      });
+    if (!result.success) {
+      if (result.code === "RESEND_TOO_SOON") {
+        res.set("Retry-After", String(result.retryAfterSeconds));
+        return sendError(res, 429, "RESEND_TOO_SOON", "Please wait before requesting another OTP.");
+      }
+      trackEvent("otp_send_failed", { role: "OWNER", phone: normalizedPhone, provider: result.provider, error: result.error });
       return sendError(res, 502, "SMS_SEND_FAILED", "Could not send OTP. Please try again.");
     }
 
-    trackEvent("otp_sent", {
-      role: "OWNER",
-      phone: normalizedPhone,
-      provider: smsResult.provider,
-      latencyMs: smsResult.latencyMs,
-    });
+    trackEvent("otp_sent", { role: "OWNER", phone: normalizedPhone, provider: result.provider, latencyMs: result.latencyMs });
 
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      ...((process.env.NODE_ENV !== "production" || process.env.ALLOW_FIXED_OTP === "true") && { otp }),
+      ...(result.otp && { otp: result.otp }),
     });
 
   } catch (error) {
@@ -128,7 +115,7 @@ export const verifyOtp = async (req, res) => {
       return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const attempt = await verifyOtpAttempt(redis, normalizedPhone, "OWNER", otp);
+    const attempt = await verifyOtpEngine({ phone: normalizedPhone, purpose: OTP_PURPOSE.SALON_LOGIN, otp, role: "OWNER", req, redis });
     if (!attempt.ok) {
       const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
       trackEvent("otp_verify_failed", { role: "OWNER", phone: normalizedPhone, code: attempt.code });
@@ -232,31 +219,23 @@ export const sendUserOtp = async (req, res) => {
       return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const otp = generateOtp();
-    await storeOtpHash(redis, normalizedPhone, "USER", otp);
-    const smsResult = await sendOtpSms(normalizedPhone, otp);
+    const result = await sendOtpEngine({ phone: normalizedPhone, purpose: OTP_PURPOSE.LOGIN, role: "USER", req, redis });
 
-    if (!smsResult.success) {
-      trackEvent("otp_send_failed", {
-        role: "USER",
-        phone: normalizedPhone,
-        provider: smsResult.provider,
-        error: smsResult.error,
-      });
+    if (!result.success) {
+      if (result.code === "RESEND_TOO_SOON") {
+        res.set("Retry-After", String(result.retryAfterSeconds));
+        return sendError(res, 429, "RESEND_TOO_SOON", "Please wait before requesting another OTP.");
+      }
+      trackEvent("otp_send_failed", { role: "USER", phone: normalizedPhone, provider: result.provider, error: result.error });
       return sendError(res, 502, "SMS_SEND_FAILED", "Could not send OTP. Please try again.");
     }
 
-    trackEvent("otp_sent", {
-      role: "USER",
-      phone: normalizedPhone,
-      provider: smsResult.provider,
-      latencyMs: smsResult.latencyMs,
-    });
+    trackEvent("otp_sent", { role: "USER", phone: normalizedPhone, provider: result.provider, latencyMs: result.latencyMs });
 
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      ...((process.env.NODE_ENV !== "production" || process.env.ALLOW_FIXED_OTP === "true") && { otp }),
+      ...(result.otp && { otp: result.otp }),
     });
 
   } catch (error) {
@@ -287,7 +266,7 @@ export const verifyUserOtp = async (req, res) => {
       return sendError(res, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable. Please try again.");
     }
 
-    const attempt = await verifyOtpAttempt(redis, normalizedPhone, "USER", otp);
+    const attempt = await verifyOtpEngine({ phone: normalizedPhone, purpose: OTP_PURPOSE.LOGIN, otp, role: "USER", req, redis });
     if (!attempt.ok) {
       const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
       trackEvent("otp_verify_failed", { role: "USER", phone: normalizedPhone, code: attempt.code });

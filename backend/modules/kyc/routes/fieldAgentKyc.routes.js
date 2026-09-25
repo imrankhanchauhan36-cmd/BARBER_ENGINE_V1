@@ -26,6 +26,12 @@ import {
     submitFieldAgentIdentityHandler,
     submitFieldAgentKYCHandler,
     uploadFieldAgentDocumentHandler,
+    verifyFieldAgentAadhaarCompleteHandler,
+    verifyFieldAgentAadhaarInitiateHandler,
+    verifyFieldAgentBankHandler,
+    verifyFieldAgentFaceMatchHandler,
+    verifyFieldAgentGSTHandler,
+    verifyFieldAgentLivenessHandler,
     verifyFieldAgentPANHandler,
 } from "../controllers/fieldAgentKyc.controller.js";
 import { fieldAgentKycSchemas } from "../validators/fieldAgentKyc.validator.js";
@@ -124,6 +130,56 @@ router.post(
   idempotency,
   validate(fieldAgentKycSchemas.verifyPan),
   verifyFieldAgentPANHandler
+);
+
+// ─── Phase 7A — Cashfree Secure ID self-serve routes ────────────────
+// Same protect/requireRole (applied above)/rate-limiter/idempotency
+// pattern as the existing /verify/pan route — each may hit a real,
+// billed Cashfree API call.
+router.post(
+  "/aadhaar/initiate",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  validate(fieldAgentKycSchemas.aadhaarInitiate),
+  verifyFieldAgentAadhaarInitiateHandler
+);
+
+router.post(
+  "/aadhaar/verify",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  validate(fieldAgentKycSchemas.aadhaarVerify),
+  verifyFieldAgentAadhaarCompleteHandler
+);
+
+router.post(
+  "/verify/bank",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  validate(fieldAgentKycSchemas.verifyBank),
+  verifyFieldAgentBankHandler
+);
+
+router.post(
+  "/verify/face",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  verifyFieldAgentFaceMatchHandler
+);
+
+router.post(
+  "/verify/liveness",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  verifyFieldAgentLivenessHandler
+);
+
+router.post(
+  "/verify/gst",
+  fieldAgentKycProviderRateLimiter,
+  idempotency,
+  validate(fieldAgentKycSchemas.verifyGst),
+  verifyFieldAgentGSTHandler
 );
 
 router.post("/submit", fieldAgentKycSubmissionRateLimiter, idempotency, submitFieldAgentKYCHandler);

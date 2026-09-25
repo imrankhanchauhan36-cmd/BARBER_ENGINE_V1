@@ -107,13 +107,28 @@ app.use(compression());
 
 ///////////////////////////////////////////////////////////
 // GLOBAL RATE LIMIT
+//
+// OTP-1 Part I — fixed a real, previously out-of-scope bug (tracked
+// but not fixed by FA-15 Phase A, see that phase's own note in
+// modules/fieldAgent/routes/fieldAgentAuth.routes.js): ipKeyGenerator's
+// signature is `(ip: string, ipv6Subnet?) => string` — it expects the
+// IP itself, not the whole Express request object. Passing `req`
+// fails the internal isIPv6() check and returns the object unchanged,
+// which the store then keys on by reference/identity rather than by a
+// stable per-IP string — in practice this collapsed (or risked
+// collapsing) every caller in this app onto one shared global bucket
+// instead of a genuinely per-IP one. This gate runs before every
+// single request in the app, including every OTP endpoint, so it is
+// directly in OTP-1's "ensure limits are truly per caller/IP" scope.
+// Fixed by passing `req.ip` (a string) instead — the max/windowMs
+// values themselves are unchanged.
 ///////////////////////////////////////////////////////////
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
 });
 
 app.use(globalLimiter);

@@ -569,6 +569,14 @@ export const getTestStatus = async ({ userId }) => {
       remainingAttempts > 0 &&
       !cooldownUntil);
 
+  // Phase 4 (Test Module UI) — additive only, read-only display data for
+  // the Test Overview screen (Total Questions / Passing Score). Reuses
+  // `currentVersion`, already loaded above; no new eligibility/grading
+  // logic, no change to any existing field this function already returns.
+  const totalQuestions = currentVersion
+    ? await TestQuestion.countDocuments({ testVersion: currentVersion._id, active: true })
+    : null;
+
   return {
     applicationStatus: application.status,
     testingAvailable,
@@ -580,5 +588,7 @@ export const getTestStatus = async ({ userId }) => {
     maxAttempts,
     remainingAttempts,
     cooldownUntil,
+    passingScore: currentVersion?.passingScore ?? null,
+    totalQuestions,
   };
 };

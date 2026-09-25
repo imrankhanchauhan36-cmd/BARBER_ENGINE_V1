@@ -76,18 +76,30 @@ const run = async () => {
     {
       const ipA = `10.15.${Math.floor(Math.random() * 200)}.1`;
       const ipB = `10.15.${Math.floor(Math.random() * 200)}.2`;
-      const phoneA = `9${Math.floor(100000000 + Math.random() * 899999999)}`;
       const phoneB = `9${Math.floor(100000000 + Math.random() * 899999999)}`;
-      otpRedisKeysToClean.push(`otp:hash:FIELD_AGENT:${phoneA}`, `otp:attempts:FIELD_AGENT:${phoneA}`, `otp:hash:FIELD_AGENT:${phoneB}`, `otp:attempts:FIELD_AGENT:${phoneB}`);
+      // OTP-1 — one DISTINCT phone per send-otp call in this block, not
+      // one shared phoneA. OTP-1 added a phone+purpose-scoped resend
+      // cooldown (30s) in modules/otp/services/otp.service.js, on top
+      // of (not instead of) this IP-based limiter — reusing one phone
+      // for all 6 calls would now correctly trip THAT cooldown before
+      // this test ever reaches the IP limiter's own 6th-request
+      // boundary, conflating two independent protections. Using a
+      // fresh phone per call isolates this block back to testing only
+      // the IP dimension, which is what F1-1/F1-2 are actually about —
+      // the IP limiter itself has never cared about the phone value.
+      const phonesA = Array.from({ length: 6 }, () => `9${Math.floor(100000000 + Math.random() * 899999999)}`);
+      // OTP Engine V1.0 Revision 3 key format — see the note above F1-7.
+      for (const p of phonesA) otpRedisKeysToClean.push(`otp:field_agent:field_agent_apply:${p}:hash`, `otp:field_agent:field_agent_apply:${p}:attempts`, `otp:field_agent:field_agent_apply:${p}:cooldown`);
+      otpRedisKeysToClean.push(`otp:field_agent:field_agent_apply:${phoneB}:hash`, `otp:field_agent:field_agent_apply:${phoneB}:attempts`, `otp:field_agent:field_agent_apply:${phoneB}:cooldown`);
 
       // fieldAgentOtpLimiter: max 5 per 5min. Exhaust IP A's budget.
       let lastA;
       for (let i = 0; i < 5; i++) {
-        lastA = await fetchFrom("/api/field-agent/auth/send-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phoneA }) });
+        lastA = await fetchFrom("/api/field-agent/auth/send-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phonesA[i] }) });
       }
       check("F1-1. IP A's 5th send-otp request succeeds (still within budget)", lastA.status !== 429, lastA);
 
-      const sixthA = await fetchFrom("/api/field-agent/auth/send-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phoneA }) });
+      const sixthA = await fetchFrom("/api/field-agent/auth/send-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phonesA[5] }) });
       check("F1-2. IP A's 6th send-otp request is rate limited (429)", sixthA.status === 429, sixthA);
 
       // THE CORE FIX: a DIFFERENT simulated IP must have its OWN,
@@ -98,11 +110,11 @@ const run = async () => {
       // verify-otp limiter: same per-IP proof, independent budget from send-otp's.
       let lastVerifyA;
       for (let i = 0; i < 10; i++) {
-        lastVerifyA = await fetchFrom("/api/field-agent/auth/verify-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phoneA, otp: "000000" }) });
+        lastVerifyA = await fetchFrom("/api/field-agent/auth/verify-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phonesA[0], otp: "000000" }) });
       }
       check("F1-4. IP A's verify-otp requests are being processed (not immediately 429)", lastVerifyA.status !== 429 || lastVerifyA.data?.message?.toLowerCase().includes("otp"), lastVerifyA);
 
-      const eleventhVerifyA = await fetchFrom("/api/field-agent/auth/verify-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phoneA, otp: "000000" }) });
+      const eleventhVerifyA = await fetchFrom("/api/field-agent/auth/verify-otp", { ip: ipA, method: "POST", body: JSON.stringify({ phone: phonesA[0], otp: "000000" }) });
       check("F1-5. IP A's 11th verify-otp request is rate limited (429)", eleventhVerifyA.status === 429, eleventhVerifyA);
 
       const verifyB = await fetchFrom("/api/field-agent/auth/verify-otp", { ip: ipB, method: "POST", body: JSON.stringify({ phone: phoneB, otp: "000000" }) });
@@ -113,10 +125,19 @@ const run = async () => {
     {
       const phone = `8${Math.floor(100000000 + Math.random() * 899999999)}`;
       const ip = `10.16.${Math.floor(Math.random() * 200)}.1`;
-      otpRedisKeysToClean.push(`otp:hash:FIELD_AGENT:${phone}`, `otp:attempts:FIELD_AGENT:${phone}`);
+      // OTP Engine V1.0 Revision 3 — key format is now
+      // otp:{role}:{purpose}:{phone}:{hash|attempts}; Revision 2 — the
+      // stored VALUE is now {hash, purpose} JSON, not a bare hash
+      // string. /api/field-agent/auth/verify-otp is the FA-2 apply
+      // flow -> role field_agent, purpose field_agent_apply.
+      otpRedisKeysToClean.push(`otp:field_agent:field_agent_apply:${phone}:hash`, `otp:field_agent:field_agent_apply:${phone}:attempts`);
 
       // Seed a real OTP hash so verify attempts have something to check against.
-      await redis.set(`otp:hash:FIELD_AGENT:${phone}`, hashOtp("999999"), { EX: 300 });
+      await redis.set(
+        `otp:field_agent:field_agent_apply:${phone}:hash`,
+        JSON.stringify({ hash: hashOtp("999999"), purpose: "FIELD_AGENT_APPLY" }),
+        { EX: 300 }
+      );
 
       let lastAttempt;
       for (let i = 0; i < 5; i++) {

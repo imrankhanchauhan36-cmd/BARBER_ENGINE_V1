@@ -25,9 +25,24 @@
  *
  * FINANCIAL BOUNDARY (locked, non-negotiable): this file never reads
  * Booking, never computes a commission amount, never mutates Salon,
- * never touches FieldAgent.operationalStatus, and never creates a
- * license/agreement record. TerritoryPartnerLicense remains deferred
- * to a later phase.
+ * and never creates a license/agreement record. TerritoryPartnerLicense
+ * remains deferred to a later phase.
+ *
+ * FA-5 LAUNCH BLOCKER FIX — the one deliberate, explicitly-authorized
+ * exception to the boundary above: assignPartner() sets
+ * FieldAgent.operationalStatus to ACTIVE for a TERRITORY_PARTNER, in
+ * the same transaction as the assignment it just created. Before this
+ * fix, TERRITORY_PARTNER never reached ACTIVE anywhere in the codebase
+ * (commercialModel.service.js#selectCommercialPath only activates
+ * ACQUISITION_AGENT — TERRITORY_PARTNER was left PENDING_ACTIVATION
+ * pending a License mechanism that was never built), so a Territory
+ * Partner could be validly assigned a territory and still never be
+ * able to log in operationally — confirmed live via a real 403 "not
+ * yet operational". Per explicit product decision: a successful,
+ * exclusive territory assignment IS the activation trigger for this
+ * path — no License concept is introduced. vacatePartner is
+ * deliberately NOT touched — operationalStatus is not reverted on
+ * vacate, matching the instruction to keep that behavior unchanged.
  */
 
 import crypto from "crypto";
@@ -51,7 +66,7 @@ import FieldAgentAuditEvent from "../models/FieldAgentAuditEvent.js";
 // assignPartner below for the exact coupling (mirrors
 // acquisitionClaim.service.js's own FA-9 integration exactly).
 import { createTerritoryPartnerTermSnapshot } from "./fieldAgentEarning.service.js";
-import { AUDIT_ACTOR_TYPE, AUDIT_ACTION, AUDIT_ENTITY_TYPE, COMMERCIAL_PATH } from "../constants/fieldAgent.constants.js";
+import { AUDIT_ACTOR_TYPE, AUDIT_ACTION, AUDIT_ENTITY_TYPE, COMMERCIAL_PATH, FIELD_AGENT_OPERATIONAL_STATUS } from "../constants/fieldAgent.constants.js";
 import {
   TERRITORY_SCOPE_TYPE,
   TERRITORY_STATUS,
@@ -534,6 +549,22 @@ export const assignPartner = async ({ territoryId, fieldAgentId, adminId }) => {
       territory.currentAssignmentRef = assignment._id;
       territory.updatedBy = adminId;
       await territory.save({ session });
+
+      // FA-5 LAUNCH BLOCKER FIX — activation happens only here, after
+      // the assignment above has actually been created and the
+      // territory saved in this SAME transaction; if anything earlier
+      // in this function throws, the transaction aborts and this never
+      // runs (see the catch block below). fieldAgent was fetched
+      // .lean() above purely for the eligibility check, so this is an
+      // atomic update, not a save() on that snapshot — and it only
+      // writes when not already ACTIVE, so a reassignment after a
+      // vacate (which never reverts operationalStatus — unchanged, see
+      // vacatePartner below) is a no-op here, not a redundant write.
+      await FieldAgent.updateOne(
+        { _id: fieldAgentId, operationalStatus: { $ne: FIELD_AGENT_OPERATIONAL_STATUS.ACTIVE } },
+        { $set: { operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.ACTIVE } },
+        { session }
+      );
 
       // FA-10 — additive only, does not modify TerritoryAssignment's
       // own fields/lifecycle. Attempts to snapshot the 3-year term from

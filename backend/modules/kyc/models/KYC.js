@@ -143,6 +143,30 @@ const KYCSchema = new mongoose.Schema(
     },
 
     ///////////////////////////////////////////////////
+    // AADHAAR VERIFICATION SESSION — Phase 2B (Cashfree), additive only
+    //
+    // Distinct from identity.aadhaar (raw masked/encrypted value) and
+    // verification.aadhaar (the generic KYC-wide verified/status flag
+    // shared by every field under verification.*). This tracks the
+    // CASHFREE OTP SESSION itself — a `verificationId` downstream Face
+    // Match/Liveness calls need (Cashfree's own error responses require
+    // it — confirmed live), the OTP transaction's own `refId`, and a
+    // small session-lifecycle status independent of the generic
+    // VERIFICATION_STATUS enum. Not registered in calcLevel()/
+    // calcKYCStatus() — a session cache only, never a business-rule
+    // input. Was previously held in Redis only (short-lived, per-user
+    // key); moved here because a LATER, separate request (Face Match/
+    // Liveness) needs to read verificationId, and this document is
+    // already the one thing every one of those self-serve calls loads.
+    ///////////////////////////////////////////////////
+    aadhaar: {
+      verificationId: { type: String, default: null },
+      refId:          { type: String, default: null },
+      sessionStatus:  { type: String, enum: ["NOT_STARTED", "OTP_SENT", "VERIFIED", "FAILED"], default: "NOT_STARTED" },
+      otpGeneratedAt: { type: Date, default: null },
+    },
+
+    ///////////////////////////////////////////////////
     // DOCUMENTS (refs to KYCDocument collection)
     ///////////////////////////////////////////////////
     documents: {
@@ -158,6 +182,30 @@ const KYCSchema = new mongoose.Schema(
     ///////////////////////////////////////////////////
     // VERIFICATION — single source of truth
     // ✅ Fix 1 + Fix 2 — ALL verification state here
+    //
+    // Phase 7A audit fix — re-examined whether `liveness`/`gst` each
+    // genuinely need their own additive slot here, per the "reuse
+    // existing schema wherever possible" directive:
+    //
+    //   GST — REMOVED. GST is optional, never gates auto-approval, and
+    //   is used only for display. Its "verified" outcome is now derived
+    //   on read from the existing, already-queried VerificationLog
+    //   collection (latest {field:"gst"} row's `success`) instead of a
+    //   stored boolean — see fieldAgentKyc.controller.js's DTO. No new
+    //   field needed; identity.gst.{maskedNumber,encryptedNumber}
+    //   (pre-existing, Owner-era fields) already hold the value side.
+    //
+    //   liveness — KEPT. Unlike GST, liveness is MANDATORY and gates
+    //   MANDATORY_AUTO_VERIFY_FIELDS in fieldAgentKyc.service.js,
+    //   evaluated synchronously after every verification step. Every
+    //   other field this checklist reads (pan/aadhaar/bank/face) uses
+    //   this exact stored-boolean VerificationSchema shape; deriving
+    //   liveness differently (e.g. from raw VerificationLog history)
+    //   would need its own "is this still the latest, unsuperseded
+    //   success" rule — a real logic addition, not a pure reuse, and
+    //   the ticket instructing this fix explicitly requires "no
+    //   business logic changes." Keeping it identical in shape to its
+    //   7 existing siblings is the lower-risk, more consistent option.
     ///////////////////////////////////////////////////
     verification: {
       phone:        { ...VerificationSchema.obj },
@@ -167,6 +215,7 @@ const KYCSchema = new mongoose.Schema(
       bank:         { ...VerificationSchema.obj },
       ocr:          { ...VerificationSchema.obj },
       face:         { ...VerificationSchema.obj },
+      liveness:     { ...VerificationSchema.obj },
       manualReview: { ...VerificationSchema.obj },
     },
 

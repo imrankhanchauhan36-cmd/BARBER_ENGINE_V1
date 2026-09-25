@@ -9,7 +9,7 @@
  */
 
 import Joi from "joi";
-import { GENDER } from "../constants/fieldAgent.constants.js";
+import { COMMERCIAL_PATH, GENDER } from "../constants/fieldAgent.constants.js";
 
 const objectId = Joi.string().hex().length(24);
 
@@ -54,6 +54,10 @@ export const fieldAgentSchemas = {
     }).unknown(false).optional(),
 
     requestedZone: requestedZoneSchema.optional(),
+
+    requestedCommercialPath: Joi.string()
+      .valid(...Object.values(COMMERCIAL_PATH))
+      .optional(),
   }).unknown(false),
 
   withdraw: Joi.object({

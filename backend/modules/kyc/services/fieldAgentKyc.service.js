@@ -43,6 +43,7 @@
 
 import crypto from "crypto";
 import mongoose from "mongoose";
+import logger from "../../../utils/logger.js";
 import { APPLICATION_STATUS } from "../../fieldAgent/constants/fieldAgent.constants.js";
 import FieldAgentApplication from "../../fieldAgent/models/FieldAgentApplication.js";
 import { assertValidTransition, setApplicationStatus } from "../../fieldAgent/services/fieldAgentApplication.service.js";
@@ -60,9 +61,17 @@ import FieldAgentKycSyncEvent, {
 import KYCDocument from "../models/KYCDocument.js";
 import VerificationLog from "../models/VerificationLog.js";
 import { encrypt } from "./encryption.service.js";
-import { getOrCreateKYC } from "./kyc.service.js";
+import { approveKYC, getOrCreateKYC } from "./kyc.service.js";
 import { maskAadhaar, maskAccount, maskPAN } from "./masking.service.js";
-import { verifyPAN } from "./verification.service.js";
+import {
+    initiateAadhaarOTP,
+    verifyAadhaarOTP,
+    verifyBank,
+    verifyFaceMatch,
+    verifyGST,
+    verifyLiveness,
+    verifyPAN,
+} from "./verification.service.js";
 
 // ─── Editable Guard — Field Agent-specific, NOT imported from
 // ownerKyc.service.js ─────────────────────────────────────────────
@@ -230,6 +239,77 @@ export const syncFieldAgentApplicationOnRejection = (kyc) =>
     transitionType: FIELD_AGENT_KYC_SYNC_TRANSITION.REJECTION_TO_KYC_REJECTED,
     toStatus: APPLICATION_STATUS.KYC_REJECTED,
   });
+
+/**
+ * ─── AUTO KYC ENGINE — Phase 7A (Cashfree Secure ID) ───────────────
+ * Mandatory checklist for Field Agent auto-approval. GST is
+ * deliberately excluded — optional, never gates progression (locked
+ * business rule). Documents (panCard/aadhaarFront/aadhaarBack/selfie)
+ * are not re-checked here as a separate item: Face Match cannot
+ * succeed without a selfie already uploaded, so a passing Face Match
+ * already implies the selfie exists — no double-count needed.
+ */
+const MANDATORY_AUTO_VERIFY_FIELDS = ["pan", "aadhaar", "bank", "face", "liveness"];
+
+const allMandatoryVerified = (kyc) =>
+  MANDATORY_AUTO_VERIFY_FIELDS.every((field) => kyc.verification?.[field]?.verified === true);
+
+/**
+ * Called after EVERY successful Field Agent verification step (PAN,
+ * Aadhaar OTP, Bank, Face Match, Liveness). Reuses the EXISTING,
+ * unmodified approveKYC() + syncFieldAgentApplicationOnApproval() —
+ * the same two calls adminKyc.controller.js's approveKYCHandler already
+ * makes for a human admin decision — from a new, SYSTEM-triggered call
+ * site. No new lifecycle state, no new sync-job code: KYC.status still
+ * only ever becomes VERIFIED via approveKYC(), and TRAINING_PENDING is
+ * still only ever reached via the same durable FieldAgentKycSyncEvent
+ * the existing consumer job already knows how to apply.
+ *
+ * adminId is passed as `null` deliberately — every ref field this
+ * touches (kyc.review.reviewedBy, verification.manualReview.verifiedBy,
+ * VerificationLog.triggeredBy) already defaults to null in its own
+ * schema, and VerificationLog.triggeredByRole's own comment already
+ * documents "ADMIN / SYSTEM / PROVIDER" as valid values — "SYSTEM" is
+ * not a new concept, just a value nothing has written until now. No
+ * synthetic admin User document is created or needed.
+ *
+ * Idempotent by construction: approveKYC() is only ever called here
+ * once — after the status guard below confirms the record has not
+ * already been (auto-)approved — mirroring approveKYCHandler's own
+ * `if (kyc.status === VERIFIED) return badRequest(...)` guard, which
+ * lives in the controller layer and is therefore replicated here since
+ * this call site bypasses that controller entirely.
+ */
+export const attemptFieldAgentAutoApproval = async (kyc) => {
+  if (kyc.applicantType !== APPLICANT_TYPE.FIELD_AGENT) return null;
+  if (kyc.status === KYC_STATUS.VERIFIED) return null;
+  if (!allMandatoryVerified(kyc)) return null;
+
+  const updated = await approveKYC({
+    kyc,
+    adminId:    null,
+    adminLevel: "SYSTEM",
+    notes:      "Auto-verified — all mandatory Cashfree Secure ID checks passed (PAN, Aadhaar, Bank, Face Match, Liveness)",
+    requestId:  null,
+  });
+
+  await VerificationLog.create({
+    kycId: updated._id, ownerId: updated.ownerId,
+    action: VERIFICATION_ACTION.AUTO_VERIFIED,
+    triggeredByRole: "SYSTEM",
+    success: true,
+    remarks: "All mandatory checks passed — auto-approved without admin action",
+  }).catch((err) => {
+    // Non-fatal — the approval itself already committed and is already
+    // durably logged via approveKYC()'s own ADMIN_APPROVED entry; this
+    // second, human-readable AUTO_VERIFIED marker is a convenience, not
+    // load-bearing for the sync job (which keys off ADMIN_APPROVED).
+    logger.warn("Failed to write AUTO_VERIFIED convenience log", { kycId: updated._id, message: err.message });
+  });
+
+  await syncFieldAgentApplicationOnApproval(updated);
+  return updated;
+};
 
 /**
  * ─── SUBMIT IDENTITY (PAN / Aadhaar) — no GST for Field Agent ──────
@@ -407,20 +487,167 @@ export const attachFieldAgentDocument = async ({ userId, documentKey, cloudinary
  */
 export const verifyFieldAgentPAN = async ({ userId, panNumber, nameOnPAN, requestId }) => {
   const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
 
+  const outcome = await verifyPAN({
+    kyc, panNumber, nameOnPAN, requestId,
+    actorId:      userId,
+    actorRole:    "FIELD_AGENT",
+    actorIsAdmin: false,
+  });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
+};
+
+// ─── Ownership guard, factored out of verifyFieldAgentPAN so every new
+// self-serve verify function below enforces the identical check ──────
+const assertOwnsFieldAgentKYC = (kyc, userId) => {
   const kycOwnerId = kyc.ownerId?._id?.toString() || kyc.ownerId?.toString();
   if (kycOwnerId !== userId.toString() || kyc.applicantType !== APPLICANT_TYPE.FIELD_AGENT) {
     const err = new Error("Not authorized to verify this KYC record");
     err.status = 403;
     throw err;
   }
+};
 
-  return verifyPAN({
-    kyc, panNumber, nameOnPAN, requestId,
-    actorId:      userId,
-    actorRole:    "FIELD_AGENT",
-    actorIsAdmin: false,
+// ─── AADHAAR OTP (2-step) — self-serve ─────────────────────────────
+// Phase 2B — the pending session now lives on the KYC document itself
+// (kyc.aadhaar.*, see KYC.js's own header), not in Redis. The client
+// still only ever sends the OTP back on the verify call — refId is
+// recovered server-side from the KYC document, never trusted from the
+// client.
+export const verifyFieldAgentAadhaarInitiate = async ({ userId, aadhaarNumber, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+  assertFieldAgentKYCEditable(kyc);
+
+  return initiateAadhaarOTP({ kyc, aadhaarNumber, requestId, actorId: userId, actorRole: "FIELD_AGENT" });
+};
+
+export const verifyFieldAgentAadhaarComplete = async ({ userId, otp, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+
+  // Idempotent pending-session guard — identical behavior to the prior
+  // Redis-key-exists check: a session is single-use, so a repeat call
+  // after this one already resolved (VERIFIED or FAILED) correctly
+  // hits this same error, requiring a fresh /aadhaar/initiate.
+  if (kyc.aadhaar?.sessionStatus !== "OTP_SENT" || !kyc.aadhaar?.refId) {
+    const err = new Error("No pending Aadhaar OTP request found, or it has expired — please generate a new OTP");
+    err.status = 400;
+    throw err;
+  }
+
+  const outcome = await verifyAadhaarOTP({
+    kyc, refId: kyc.aadhaar.refId, otp, requestId,
+    actorId: userId, actorRole: "FIELD_AGENT", actorIsAdmin: false,
   });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
+};
+
+// ─── BANK — self-serve ──────────────────────────────────────────────
+export const verifyFieldAgentBank = async ({ userId, accountHolder, accountNumber, ifsc, bankName, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+
+  const outcome = await verifyBank({
+    kyc, accountNumber, ifsc, bankName, accountHolder, requestId,
+    actorId: userId, actorRole: "FIELD_AGENT", actorIsAdmin: false,
+  });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
+};
+
+// ─── FACE MATCH — self-serve ────────────────────────────────────────
+// Requires the selfie document to already be uploaded (POST
+// /documents/selfie). Reference image is the PAN card upload when
+// present (best available government-photo-ID on file for this
+// applicant type — Field Agent has no separate photo-ID document type).
+export const verifyFieldAgentFaceMatch = async ({ userId, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+
+  // Phase 2C — confirmed via live audit: Cashfree's Face Match requires
+  // the verification_id from the existing Aadhaar OTP session
+  // (kyc.aadhaar.verificationId, Phase 2B) — no second session is
+  // created here. Rejected immediately, before even checking the
+  // selfie, exactly as specified.
+  if (!kyc.aadhaar?.verificationId) {
+    const err = new Error("Complete Aadhaar verification first.");
+    err.status = 400;
+    throw err;
+  }
+
+  await kyc.populate({ path: "documents.selfie", select: "originalUrl" });
+  const selfieDoc = kyc.documents?.selfie;
+  if (!selfieDoc?.originalUrl) {
+    const err = new Error("Upload a selfie before requesting face match");
+    err.status = 400;
+    throw err;
+  }
+
+  const outcome = await verifyFaceMatch({
+    kyc, selfieUrl: selfieDoc.originalUrl, requestId,
+    actorId: userId, actorRole: "FIELD_AGENT", actorIsAdmin: false,
+  });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
+};
+
+// ─── LIVENESS — self-serve ──────────────────────────────────────────
+export const verifyFieldAgentLiveness = async ({ userId, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+
+  // Phase 2D — same precondition as Face Match: Cashfree's Liveness
+  // requires the verification_id from the existing Aadhaar OTP session
+  // (kyc.aadhaar.verificationId, Phase 2B) — no second session created.
+  if (!kyc.aadhaar?.verificationId) {
+    const err = new Error("Complete Aadhaar verification first.");
+    err.status = 400;
+    throw err;
+  }
+
+  await kyc.populate({ path: "documents.selfie", select: "originalUrl" });
+  const selfieDoc = kyc.documents?.selfie;
+  if (!selfieDoc?.originalUrl) {
+    const err = new Error("Upload a selfie before requesting a liveness check");
+    err.status = 400;
+    throw err;
+  }
+
+  const outcome = await verifyLiveness({
+    kyc, selfieUrl: selfieDoc.originalUrl, requestId,
+    actorId: userId, actorRole: "FIELD_AGENT", actorIsAdmin: false,
+  });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
+};
+
+// ─── GST — self-serve, OPTIONAL ─────────────────────────────────────
+// Never gates auto-approval and is excluded from
+// MANDATORY_AUTO_VERIFY_FIELDS above — attemptFieldAgentAutoApproval is
+// still called after a successful GST verify purely for consistency
+// (a no-op if the other 5 mandatory checks weren't already done; a
+// legitimate trigger if GST happened to be the LAST of the checks the
+// applicant completed after all 5 mandatory ones already passed).
+export const verifyFieldAgentGST = async ({ userId, gstNumber, requestId }) => {
+  const kyc = await getOrCreateFieldAgentKYC(userId);
+  assertOwnsFieldAgentKYC(kyc, userId);
+
+  const outcome = await verifyGST({
+    kyc, gstNumber, requestId,
+    actorId: userId, actorRole: "FIELD_AGENT",
+  });
+
+  if (outcome.success) await attemptFieldAgentAutoApproval(outcome.kyc);
+  return outcome;
 };
 
 /**

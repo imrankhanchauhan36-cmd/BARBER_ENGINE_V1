@@ -18,6 +18,7 @@ import { startFraudDetectionJob } from "./modules/fieldAgent/jobs/fraudDetection
 import { startCrossAgentOverlapJob } from "./modules/fieldAgent/jobs/crossAgentOverlap.job.js"; // ← FA-7.3 — stateless, read-only CROSS_AGENT_SALON_CYCLING detection over full AcquisitionClaim history, writing only advisory FraudSignal evidence
 import { startTerritoryAssignmentOverlapJob } from "./modules/fieldAgent/jobs/territoryAssignmentOverlap.job.js"; // ← FA-7.4 — stateless, read-only TERRITORY_ASSIGNMENT_CYCLING detection over full TerritoryAssignment history, writing only advisory FraudSignal evidence
 import { startFieldAgentEarningJob } from "./modules/fieldAgent/jobs/fieldAgentEarning.job.js"; // ← FA-9 — durable-checkpoint, compound-cursor discovery of newly COMPLETED Bookings, crediting Acquisition/Territory Partner earning via the immutable FieldAgentEarningLedger
+import { startOtpAuditOutboxJob } from "./modules/otp/jobs/otpAuditOutbox.job.js"; // ← OTP-2 Part D — drains modules/otp/models/OtpAuditOutbox.js into OtpAuditLog asynchronously (claim/apply/reclaim, same shape as ratingOutbox.job.js)
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -278,6 +279,18 @@ const territoryAssignmentOverlapJob = startTerritoryAssignmentOverlapJob();
 const fieldAgentEarningJob = startFieldAgentEarningJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7p: START OTP AUDIT OUTBOX JOB (OTP-2 Part D)
+//
+// Runs every 5s. Drains modules/otp/models/OtpAuditOutbox.js (the
+// fast, fire-and-forget write target every OTP send/verify uses) into
+// modules/otp/models/OtpAuditLog.js — atomic per-row claim, stale-claim
+// reclaim, never deletes a row on failure (always retryable). See
+// modules/otp/jobs/otpAuditOutbox.job.js.
+//////////////////////////////////////////////////////////////
+
+const otpAuditOutboxJob = startOtpAuditOutboxJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -288,7 +301,7 @@ const server = httpServer.listen(PORT, () => {
   console.log(`🗄️  MongoDB:     ${mongoose.connection.readyState === 1 ? "connected" : "connecting..."}`);
   console.log(`🧠 Redis:       ${redis.isReady ? "connected" : "unavailable"}`);
   console.log("📡 Socket.IO:   READY");
-  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap + Territory Assignment Overlap + Field Agent Earning RUNNING");
+  console.log("⚙️  Jobs:        Hold Expiry + Customer Arrival + Service Overdue + Auto Complete + Reminder + Auto Start + SLA Scanner + Rating Outbox + Weekly Schedule Materializer + Field Agent KYC Sync + Fraud Detection + Cross-Agent Overlap + Territory Assignment Overlap + Field Agent Earning + OTP Audit Outbox RUNNING");
   console.log("📡 System Mode: Enterprise Ready (1 Lakh+ Scale)");
   console.log("--------------------------------------------------");
 });
@@ -360,6 +373,9 @@ const shutdown = async (signal) => {
 
       fieldAgentEarningJob.stop();
       console.log("✅ Field Agent earning job stopped");
+
+      otpAuditOutboxJob.stop();
+      console.log("✅ OTP audit outbox job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

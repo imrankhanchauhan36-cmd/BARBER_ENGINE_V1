@@ -33,12 +33,24 @@ RATE LIMITERS
 Fully isolated per role — partner test won't affect
 user quota and vice versa. ipKeyGenerator handles
 IPv4 + IPv6 correctly.
+
+OTP-1 Part I — fixed: every keyGenerator below previously called
+ipKeyGenerator(req) (the whole Express request object) instead of
+ipKeyGenerator(req.ip) (the IP string the helper's signature actually
+expects). This was the "pre-existing, out of scope" rate-limiter
+finding flagged (but not fixed) in earlier phases, and explicitly
+flagged again in OTP-0/OTP-1's own audits — now fixed here, the last
+of the three locations sharing this bug (the other two,
+modules/fieldAgent/routes/fieldAgentAuth.routes.js's own limiters and
+app.js's globalLimiter, were fixed in FA-15 Phase A and OTP-1
+respectively). max/windowMs values are unchanged for all five
+limiters below — only the key now genuinely varies per source IP.
 ===================================================== */
 
 const partnerOtpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => `partner_otp_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `partner_otp_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -46,7 +58,7 @@ const partnerOtpLimiter = rateLimit({
 const partnerVerifyLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => `partner_verify_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `partner_verify_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -54,7 +66,7 @@ const partnerVerifyLimiter = rateLimit({
 const userOtpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => `user_otp_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `user_otp_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -62,7 +74,7 @@ const userOtpLimiter = rateLimit({
 const userVerifyLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => `user_verify_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `user_verify_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -70,7 +82,7 @@ const userVerifyLimiter = rateLimit({
 const adminLoginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => `admin_login_${ipKeyGenerator(req)}`,
+  keyGenerator: (req) => `admin_login_${ipKeyGenerator(req.ip)}`,
   standardHeaders: true,
   legacyHeaders: false,
 });

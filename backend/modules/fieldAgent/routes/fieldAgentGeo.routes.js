@@ -13,11 +13,21 @@
  *
  * No new schema, no write operation, no modification to any existing
  * State/District/City/Area route or model.
+ *
+ * Phase 1 — Territory Engine: added /districts, /cities, /areas —
+ * same public/rate-limited/read-only shape as /states. Each requires
+ * its parent ref as a query param (stateRef/districtRef/cityRef),
+ * enforced in the controller. Pincode is intentionally not exposed.
  */
 
 import express from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { getFieldAgentGeoStates } from "../controllers/fieldAgentGeo.controller.js";
+import {
+  getFieldAgentGeoStates,
+  getFieldAgentGeoDistricts,
+  getFieldAgentGeoCities,
+  getFieldAgentGeoAreas,
+} from "../controllers/fieldAgentGeo.controller.js";
 
 const router = express.Router();
 
@@ -30,5 +40,8 @@ const fieldAgentGeoLimiter = rateLimit({
 });
 
 router.get("/states", fieldAgentGeoLimiter, getFieldAgentGeoStates);
+router.get("/districts", fieldAgentGeoLimiter, getFieldAgentGeoDistricts);
+router.get("/cities", fieldAgentGeoLimiter, getFieldAgentGeoCities);
+router.get("/areas", fieldAgentGeoLimiter, getFieldAgentGeoAreas);
 
 export default router;

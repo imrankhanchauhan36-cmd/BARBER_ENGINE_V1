@@ -44,7 +44,17 @@ export const TERMINAL_APPLICATION_STATUSES = Object.freeze([
 // this map's shape, only call it.
 export const VALID_APPLICATION_TRANSITIONS = Object.freeze({
   [APPLICATION_STATUS.DRAFT]: [APPLICATION_STATUS.SUBMITTED, APPLICATION_STATUS.WITHDRAWN],
-  [APPLICATION_STATUS.SUBMITTED]: [APPLICATION_STATUS.KYC_PENDING, APPLICATION_STATUS.WITHDRAWN],
+  // Phase 2 (KYC Defer) — TRAINING_PENDING added alongside the existing
+  // KYC_PENDING target. submitApplication() now advances straight to
+  // TRAINING_PENDING for every new submission (KYC no longer gates
+  // Training); KYC_PENDING is kept in this list ONLY so it remains a
+  // structurally valid (if now-unused-by-new-code) transition — nothing
+  // else in this map, and no other file, changed.
+  [APPLICATION_STATUS.SUBMITTED]: [
+    APPLICATION_STATUS.KYC_PENDING,
+    APPLICATION_STATUS.TRAINING_PENDING,
+    APPLICATION_STATUS.WITHDRAWN,
+  ],
   [APPLICATION_STATUS.KYC_PENDING]: [
     APPLICATION_STATUS.KYC_REJECTED,
     APPLICATION_STATUS.TRAINING_PENDING,
@@ -114,6 +124,10 @@ export const AUDIT_ACTION = Object.freeze({
   // inline comments for the exact idempotency/concurrency reasoning).
   TEST_STARTED: "TEST_STARTED",
   TEST_SUBMITTED: "TEST_SUBMITTED",
+  // Phase 2 (KYC Defer) — additive only. Written by submitApplication()
+  // immediately after its own APPLICATION_SUBMITTED event, recording the
+  // second, same-call hop from SUBMITTED straight to TRAINING_PENDING.
+  KYC_DEFERRED_TO_TRAINING: "KYC_DEFERRED_TO_TRAINING",
   // FA-4.1 — additive only. Written by
   // modules/fieldAgent/services/fieldAgentProfile.service.js
   // (createFieldAgentProfile), inside the same transaction as the

@@ -22,7 +22,6 @@ import { resolvePlatformFeeForArea } from "../services/areaPlatformFee.service.j
 import { splitRefundComponents } from "../services/refundComponentSplitter.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
-import { sendOtpSms } from "../services/sms.service.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import {
   getEligibleSlotsForProfessional,
@@ -36,12 +35,19 @@ import {
   validateBookingTransition,
 } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
-// generateOtp only — hashOtp is NOT imported here: this file already has
-// its own local hashOtp (HMAC-SHA256 with OTP_SECRET, below) used for
-// check-in OTP, which is stronger than otp.helpers.js's plain SHA-256
-// (no secret). The new no-show OTP is booking-scoped exactly like
-// check-in OTP, so it reuses the SAME local, stronger hashOtp.
-import { generateOtp } from "../utils/otp.helpers.js";
+// generateOtp + dispatchOtpSms only — hashOtp is NOT imported here:
+// this file already has its own local hashOtp (HMAC-SHA256 with
+// OTP_SECRET, below) used for check-in OTP, which is stronger than
+// the centralized engine's plain SHA-256 (no secret). The no-show OTP
+// is booking-scoped exactly like check-in OTP, so it reuses the SAME
+// local, stronger hashOtp and the SAME Booking-document-based storage
+// (noShowOtp/noShowOtpExpiresAt) — NOT Redis. OTP-1 — only the
+// generate + SMS-dispatch step now routes through the centralized
+// modules/otp/services/otp.service.js (for provider abstraction +
+// audit logging, purpose=BOOKING_NOSHOW); the hash/store/verify
+// mechanics on the Booking document below are unchanged.
+import { generateOtp, dispatchOtpSms } from "../modules/otp/services/otp.service.js";
+import { OTP_PURPOSE } from "../modules/otp/constants/otpPurpose.constants.js";
 import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
 
 //////////////////////////////////////////////////////////////
@@ -3014,7 +3020,12 @@ export const generateNoShowOtp = async (req, res) => {
     booking.noShowOtpExpiresAt = expiresAt;
     await booking.save();
 
-    const smsResult = await sendOtpSms(booking.userRef.phone, otp);
+    const smsResult = await dispatchOtpSms({
+      phone: booking.userRef.phone,
+      otp,
+      purpose: OTP_PURPOSE.BOOKING_NOSHOW,
+      req,
+    });
     if (!smsResult.success) {
       throw Object.assign(new Error("Could not send OTP. Please try again."), { status: 502 });
     }

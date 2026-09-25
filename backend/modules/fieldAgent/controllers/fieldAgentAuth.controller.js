@@ -15,15 +15,11 @@
  */
 
 import { createSession } from "../../../services/session.service.js";
-import { sendOtpSms } from "../../../services/sms.service.js";
 import { generateAccessToken } from "../../../services/token.service.js";
 import logger from "../../../utils/logger.js";
-import {
-  createOrFindUser,
-  generateOtp,
-  storeOtpHash,
-  verifyOtpAttempt,
-} from "../../../utils/otp.helpers.js";
+import { createOrFindUser } from "../../../utils/otp.helpers.js";
+import { sendOtp as sendOtpEngine, verifyOtp as verifyOtpEngine } from "../../../modules/otp/services/otp.service.js";
+import { OTP_PURPOSE } from "../../../modules/otp/constants/otpPurpose.constants.js";
 import {
   REFRESH_COOKIE_NAME,
   getRefreshCookieOptions as getCookieOptions,
@@ -42,19 +38,21 @@ export const sendFieldAgentOtp = async (req, res, next) => {
       return next(Errors.internal("Service temporarily unavailable. Please try again."));
     }
 
-    const otp = generateOtp();
-    await storeOtpHash(redis, phone, FIELD_AGENT_OTP_ROLE, otp);
-    const smsResult = await sendOtpSms(phone, otp);
+    const result = await sendOtpEngine({ phone, purpose: OTP_PURPOSE.FIELD_AGENT_APPLY, role: FIELD_AGENT_OTP_ROLE, req, redis });
 
-    if (!smsResult.success) {
-      logger.warn("Field agent OTP send failed", { phone, provider: smsResult.provider, error: smsResult.error });
+    if (!result.success) {
+      if (result.code === "RESEND_TOO_SOON") {
+        res.set("Retry-After", String(result.retryAfterSeconds));
+        return next(Errors.tooMany("Please wait before requesting another OTP."));
+      }
+      logger.warn("Field agent OTP send failed", { phone, provider: result.provider, error: result.error });
       return next(Errors.badRequest("Could not send OTP. Please try again."));
     }
 
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      ...((process.env.NODE_ENV !== "production" || process.env.ALLOW_FIXED_OTP === "true") && { otp }),
+      ...(result.otp && { otp: result.otp }),
     });
   } catch (err) {
     return next(err);
@@ -71,7 +69,7 @@ export const verifyFieldAgentOtp = async (req, res, next) => {
       return next(Errors.internal("Service temporarily unavailable. Please try again."));
     }
 
-    const attempt = await verifyOtpAttempt(redis, phone, FIELD_AGENT_OTP_ROLE, otp);
+    const attempt = await verifyOtpEngine({ phone, purpose: OTP_PURPOSE.FIELD_AGENT_APPLY, otp, role: FIELD_AGENT_OTP_ROLE, req, redis });
     if (!attempt.ok) {
       const status = attempt.code === "TOO_MANY_ATTEMPTS" ? 429 : 401;
       return res.status(status).json({

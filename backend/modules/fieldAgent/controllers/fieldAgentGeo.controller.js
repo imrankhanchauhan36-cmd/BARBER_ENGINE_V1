@@ -28,9 +28,25 @@
  * fixture-naming convention (see backend/scripts/verifyUserIdentityUniqueness.js
  * and this session's own E2E scripts) — no fixture data is touched or
  * deleted, only excluded from this one read.
+ *
+ * Phase 1 — Territory Engine: added getFieldAgentGeoDistricts/Cities/
+ * Areas, same shape/filters as getFieldAgentGeoStates above (public,
+ * {_id,name} only, isActive:true/isDeleted:false, ZTEST_ name
+ * exclusion — confirmed live that the same leftover-fixture leakage
+ * exists in the districts/cities/areas collections too). Each is
+ * additionally scoped by its required parent ref (stateRef/
+ * districtRef/cityRef) so the picker cascade never has to filter a
+ * nationwide list client-side. Pincode is intentionally NOT exposed —
+ * out of scope per this phase's own instructions.
  */
 
+import mongoose from "mongoose";
 import State from "../../../models/State.js";
+import District from "../../../models/District.js";
+import City from "../../../models/City.js";
+import Area from "../../../models/Area.js";
+
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getFieldAgentGeoStates = async (req, res) => {
   try {
@@ -50,5 +66,86 @@ export const getFieldAgentGeoStates = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Failed to fetch states" });
+  }
+};
+
+export const getFieldAgentGeoDistricts = async (req, res) => {
+  try {
+    const { stateRef } = req.query;
+    if (!stateRef || !isValidId(stateRef)) {
+      return res.status(400).json({ success: false, message: "A valid stateRef is required" });
+    }
+
+    const districts = await District.find({
+      stateRef,
+      isActive: true,
+      isDeleted: false,
+      name: { $not: /^ZTEST_/i },
+    })
+      .select("name")
+      .sort({ name: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Districts fetched successfully",
+      data: districts.map((d) => ({ _id: d._id, name: d.name })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to fetch districts" });
+  }
+};
+
+export const getFieldAgentGeoCities = async (req, res) => {
+  try {
+    const { districtRef } = req.query;
+    if (!districtRef || !isValidId(districtRef)) {
+      return res.status(400).json({ success: false, message: "A valid districtRef is required" });
+    }
+
+    const cities = await City.find({
+      districtRef,
+      isActive: true,
+      isDeleted: false,
+      name: { $not: /^ZTEST_/i },
+    })
+      .select("name")
+      .sort({ name: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Cities fetched successfully",
+      data: cities.map((c) => ({ _id: c._id, name: c.name })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to fetch cities" });
+  }
+};
+
+export const getFieldAgentGeoAreas = async (req, res) => {
+  try {
+    const { cityRef } = req.query;
+    if (!cityRef || !isValidId(cityRef)) {
+      return res.status(400).json({ success: false, message: "A valid cityRef is required" });
+    }
+
+    const areas = await Area.find({
+      cityRef,
+      isActive: true,
+      isDeleted: false,
+      name: { $not: /^ZTEST_/i },
+    })
+      .select("name")
+      .sort({ name: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Areas fetched successfully",
+      data: areas.map((a) => ({ _id: a._id, name: a.name })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Failed to fetch areas" });
   }
 };

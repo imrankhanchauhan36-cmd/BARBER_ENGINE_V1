@@ -216,6 +216,7 @@ export const updateDraftApplication = async ({ userId, updates }) => {
   const oldValue = {
     basicProfile: application.basicProfile,
     requestedZone: application.requestedZone,
+    requestedCommercialPath: application.requestedCommercialPath,
   };
 
   if (updates.requestedZone) {
@@ -230,6 +231,10 @@ export const updateDraftApplication = async ({ userId, updates }) => {
     };
   }
 
+  if (updates.requestedCommercialPath) {
+    application.requestedCommercialPath = updates.requestedCommercialPath;
+  }
+
   await application.save();
 
   await writeAuditEvent({
@@ -238,7 +243,11 @@ export const updateDraftApplication = async ({ userId, updates }) => {
     actorType: AUDIT_ACTOR_TYPE.APPLICANT,
     action: AUDIT_ACTION.APPLICATION_UPDATED,
     oldValue,
-    newValue: { basicProfile: application.basicProfile, requestedZone: application.requestedZone },
+    newValue: {
+      basicProfile: application.basicProfile,
+      requestedZone: application.requestedZone,
+      requestedCommercialPath: application.requestedCommercialPath,
+    },
   });
 
   return application.toObject();
@@ -268,6 +277,28 @@ export const submitApplication = async ({ userId }) => {
     actorType: AUDIT_ACTOR_TYPE.APPLICANT,
     action: AUDIT_ACTION.APPLICATION_SUBMITTED,
     oldValue: { status: fromStatus },
+    newValue: { status: application.status },
+  });
+
+  // Phase 2 (KYC Defer) — immediately advance past SUBMITTED into
+  // TRAINING_PENDING within this same call, so Training no longer waits
+  // on KYC approval. KYC itself (routes/controllers/services/Cashfree)
+  // is completely untouched — it simply no longer sits in this
+  // applicant's path; it becomes reachable again later from the
+  // Dashboard (a separate, not-yet-built entry point). SUBMITTED is
+  // still written and audited above first, preserving its place in the
+  // history, before this second hop.
+  assertValidTransition(application.status, APPLICATION_STATUS.TRAINING_PENDING);
+  const fromSubmitted = application.status;
+  setApplicationStatus(application, APPLICATION_STATUS.TRAINING_PENDING);
+  await application.save();
+
+  await writeAuditEvent({
+    entityId: application._id,
+    actorRef: userId,
+    actorType: AUDIT_ACTOR_TYPE.APPLICANT,
+    action: AUDIT_ACTION.KYC_DEFERRED_TO_TRAINING,
+    oldValue: { status: fromSubmitted },
     newValue: { status: application.status },
   });
 

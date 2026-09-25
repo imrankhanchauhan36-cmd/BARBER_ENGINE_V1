@@ -331,6 +331,7 @@ export const getApplicationReviewDetail = async ({ applicationId, adminLevel }) 
       reviewedBy: application.reviewedBy ?? null,
       reviewedAt: application.reviewedAt ?? null,
       rejectionReason: application.rejectionReason ?? null,
+      requestedCommercialPath: application.requestedCommercialPath ?? null,
     },
     kyc: kycVisible ? kycSummaryDTO(kyc) : { restricted: true, reason: "Field Agent KYC detail is not yet available at this admin level" },
     training: trainingSummaryDTO(training, trainingVersionDoc?.versionNumber),

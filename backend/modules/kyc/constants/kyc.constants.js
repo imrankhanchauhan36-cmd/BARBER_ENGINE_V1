@@ -131,6 +131,10 @@ export const VERIFICATION_ACTION = {
   IDENTITY_SUBMITTED:  "IDENTITY_SUBMITTED",
   BANK_SUBMITTED:      "BANK_SUBMITTED",
   KYC_SUBMITTED:       "KYC_SUBMITTED",
+  // ← NEW (Phase 7A — Cashfree Secure ID)
+  LIVENESS_VERIFIED:   "LIVENESS_VERIFIED",
+  GST_VERIFIED:        "GST_VERIFIED",
+  AUTO_VERIFIED:       "AUTO_VERIFIED",
 };
 
 // ─── Penny Drop Config ────────────────────────────────────
@@ -196,8 +200,16 @@ export const REQUIRED_DOCUMENT_KEYS = Object.keys(OWNER_DOCUMENT_KEY_MAP)
 // FA-3.2 — deliberately NOT derived from OWNER_DOCUMENT_KEY_MAP: Field
 // Agent is an individual applicant, not a Salon business, so GST
 // certificate and cancelled cheque (both Salon-business concepts) are
-// excluded by design, not by accident. All 4 keys are required — there
-// is no optional-document concept for Field Agent in this phase.
+// excluded by design, not by accident.
+//
+// Phase 1A — locked product decision: Cashfree Secure ID (PAN Verify +
+// Aadhaar OTP) is now the identity source for Field Agent, replacing
+// manual photo review for panCard/aadhaarFront/aadhaarBack. This map
+// itself is UNCHANGED on purpose — POST /kyc/documents/:documentType
+// still accepts all four documentType values (no API contract change;
+// uploading a legacy photo still works if ever called). Only the
+// COMPLETENESS gate below narrows to what submitFieldAgentKYC() should
+// now actually require.
 export const FIELD_AGENT_DOCUMENT_KEY_MAP = {
   panCard:      DOCUMENT_TYPE.PAN_CARD,
   aadhaarFront: DOCUMENT_TYPE.AADHAAR_FRONT,
@@ -205,4 +217,12 @@ export const FIELD_AGENT_DOCUMENT_KEY_MAP = {
   selfie:       DOCUMENT_TYPE.SELFIE,
 };
 
-export const FIELD_AGENT_REQUIRED_DOCUMENT_KEYS = Object.keys(FIELD_AGENT_DOCUMENT_KEY_MAP);
+// Same "derive, don't hardcode" pattern already used by
+// REQUIRED_DOCUMENT_KEYS above — panCard/aadhaarFront/aadhaarBack move
+// to optional (verification for these now happens via Cashfree, not a
+// photo), selfie stays the one required document (Face Match +
+// Liveness still need it).
+export const FIELD_AGENT_OPTIONAL_DOCUMENT_KEYS = ["panCard", "aadhaarFront", "aadhaarBack"];
+
+export const FIELD_AGENT_REQUIRED_DOCUMENT_KEYS = Object.keys(FIELD_AGENT_DOCUMENT_KEY_MAP)
+  .filter((key) => !FIELD_AGENT_OPTIONAL_DOCUMENT_KEYS.includes(key));
