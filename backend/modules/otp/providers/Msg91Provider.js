@@ -118,10 +118,17 @@ export class Msg91Provider extends OtpProvider {
         `&otp=${encodeURIComponent(otp)}` +
         `&sender=${encodeURIComponent(senderId)}`;
 
+      // HOTFIX — no request body is ever sent (every param is in the
+      // query string above); a Content-Type header here previously
+      // claimed a JSON body that didn't exist. MSG91's server parsed
+      // the (empty) body as the parameter source under that header and
+      // reported template_id as missing, even though it was correctly
+      // present in the URL — confirmed via a live 400 with a
+      // known-correct, active, approved template_id. Removed.
       const response = await withTimeout(
         fetch(url, {
           method: "POST",
-          headers: { authkey: authKey, "Content-Type": "application/JSON" },
+          headers: { authkey: authKey },
         }),
         SMS_TIMEOUT_MS
       );
