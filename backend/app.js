@@ -54,9 +54,14 @@ import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest
 import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
 import adminCommercialPolicyOverrideRoutes from "./modules/fieldAgent/routes/adminCommercialPolicyOverride.routes.js"; // ← NEW — FA-9 admin geography-scoped commercial policy override authoring/governance
+import adminRevenueConfigRoutes from "./modules/fieldAgent/routes/adminRevenueConfig.routes.js"; // ← NEW — FA-P3-A admin Revenue Configuration (wraps commercial policy + override engine)
 import fieldAgentAcquisitionClaimRoutes from "./modules/fieldAgent/routes/fieldAgentAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 Field Agent acquisition referral/claim self-service
 import fieldAgentEarningRoutes from "./modules/fieldAgent/routes/fieldAgentEarning.routes.js"; // ← NEW — FA-14 Field Agent earnings self-service (read-only)
+import razorpayWebhookRoutes from "./routes/razorpayWebhook.routes.js"; // ← NEW — Razorpay P0-B payment webhook (raw body, HMAC-verified)
+import cashfreePayoutWebhookRoutes from "./modules/fieldAgent/routes/cashfreePayoutWebhook.routes.js"; // ← NEW — FA-P4-D Cashfree payout webhook (raw body, HMAC-verified)
+import genericPayoutWebhookRoutes from "./modules/payout/routes/genericPayoutWebhook.routes.js"; // ← NEW — STEP 6.4 Razorpay Route payout webhook for GenericPayoutRequest (raw body, HMAC-verified)
 import fieldAgentPayoutRoutes from "./modules/fieldAgent/routes/fieldAgentPayout.routes.js"; // ← NEW — FA-14 (real) Field Agent payout/withdrawal/disbursement self-service
+import unifiedWalletRoutes from "./modules/wallet/routes/wallet.routes.js"; // ← NEW — STEP 6.5A HTTP exposure for the Unified Wallet / GenericPayoutRequest engine (SALON/ACQUISITION_AGENT/TERRITORY_PARTNER self-service, previously unreachable). NAMING COLLISION, disclosed: this is a DIFFERENT system from ./routes/wallet.routes.js (models/WalletTransaction.js — the CUSTOMER top-up/spend wallet, mounted at /api/v1/wallet below) — aliased distinctly here purely to avoid a JS import-identifier clash; the mount path itself (/api/wallet, no /v1/) does not collide.
 import adminFieldAgentPayoutRoutes from "./modules/fieldAgent/routes/adminFieldAgentPayout.routes.js"; // ← NEW — FA-14 admin Field Agent payout approval/rejection/manual-payout
 import acquisitionRedeemRoutes from "./modules/fieldAgent/routes/acquisitionRedeem.routes.js"; // ← NEW — FA-5.3 Salon Owner referral redemption bridge
 import adminAcquisitionClaimRoutes from "./modules/fieldAgent/routes/adminAcquisitionClaim.routes.js"; // ← NEW — FA-5.3 admin AcquisitionClaim review
@@ -66,6 +71,12 @@ import slaPolicyRoutes from "./modules/support/routes/slaPolicy.routes.js"; // �
 import adminCategoryRoutes from "./modules/support/routes/adminCategory.routes.js"; // ← NEW — Phase G Step 9 SUPPORT_ADMIN category read access
 import adminAgentRoutes from "./modules/support/routes/adminAgent.routes.js"; // ← NEW — Phase H Step 7 Support Agent Management
 import adminGstPolicyRoutes from "./routes/adminGstPolicy.routes.js"; // ← NEW — PAN-India GST configuration authoring/governance
+import adminRevenueSettingsRoutes from "./modules/finance/routes/adminRevenueSettings.routes.js"; // ← NEW — P0 Revenue Calculation Engine, Step 2 (RevenueSettings admin authoring)
+import adminGSTReportRoutes from "./modules/finance/routes/adminGSTReport.routes.js"; // ← NEW — P0 Revenue Calculation Engine, Step 4.3 (GST Reports & Liability Engine, read-only)
+import adminFinanceDashboardRoutes from "./modules/finance/routes/adminFinanceDashboard.routes.js"; // ← NEW — STEP 7.1 Finance Dashboard KPI Engine (read-only, aggregation only)
+import adminFinanceAnalyticsRoutes from "./modules/finance/routes/adminFinanceAnalytics.routes.js"; // ← NEW — STEP 7.2 Finance Analytics Engine (read-only, aggregation only)
+import adminFinanceExportRoutes from "./modules/finance/routes/adminFinanceExport.routes.js"; // ← NEW — STEP 7.4 Finance Export Engine (read-only, xlsx/csv/pdf/json)
+import adminTerritoryRevenueRoutes from "./modules/finance/routes/adminTerritoryRevenue.routes.js"; // ← NEW — STEP 5.1 Territory Revenue Settings Engine (isolated module, does not touch CommercialPolicyVersion)
 import adminAreaPlatformFeeRoutes from "./routes/adminAreaPlatformFee.routes.js"; // ← NEW — PAN-India area-wise Platform Fee configuration authoring/governance
 import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
 import adminQueueRoutes from "./modules/support/routes/adminQueue.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Queues
@@ -190,6 +201,17 @@ app.use(
 ///////////////////////////////////////////////////////////
 // BODY PARSER
 ///////////////////////////////////////////////////////////
+// FA-P4-D Step 1 — Cashfree payout webhook: must read the RAW body for its
+// HMAC signature, so it is mounted before the JSON parser below. No user
+// session (server-to-server) — secured by the signature check in the router.
+app.use("/api/webhooks/cashfree/payout", cashfreePayoutWebhookRoutes);
+// Razorpay P0-B — payment/refund webhook (same reasoning: raw body for the HMAC).
+app.use("/api/webhooks/razorpay", razorpayWebhookRoutes);
+// STEP 6.4 — Razorpay Route (Payouts) webhook for GenericPayoutRequest
+// (SALON/ACQUISITION_AGENT/TERRITORY_PARTNER) — same raw-body-before-
+// JSON-parser reasoning, own signature check inside the router.
+app.use("/api/webhooks/razorpay/payout", genericPayoutWebhookRoutes);
+
 app.use(cookieParser());
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -432,6 +454,17 @@ app.use("/api/field-agent/earnings", protect, onboardingBypass, fieldAgentEarnin
 // protect/onboardingBypass-at-mount + requireRole-inside-route-file
 // convention as fieldAgentEarningRoutes above.
 app.use("/api/field-agent/payouts", protect, onboardingBypass, fieldAgentPayoutRoutes);
+// FA-P4-C Step 1 — singular alias of the same router (same handlers, no
+// second engine): GET /api/field-agent/payout/wallet, POST .../withdraw.
+app.use("/api/field-agent/payout", protect, onboardingBypass, fieldAgentPayoutRoutes);
+// STEP 6.5A — Unified Wallet / GenericPayoutRequest HTTP exposure.
+// Serves SALON (OWNER), ACQUISITION_AGENT and TERRITORY_PARTNER
+// (FIELD_AGENT) self-service against WalletBalanceService (STEP 6.2)
+// and GenericPayoutRequestService (STEP 6.3) — both entirely
+// unmodified, only newly reachable over HTTP for the first time.
+// Same protect/onboardingBypass-at-mount convention as the two routes
+// immediately above.
+app.use("/api/wallet", protect, onboardingBypass, unifiedWalletRoutes);
 // FA-14 — admin Field Agent payout approval/rejection/manual-payout.
 // protect at mount level; requireRole("ADMIN") + requireAdminLevel
 // ("INDIA") inside the route file — INDIA-only, see that file's own
@@ -449,6 +482,11 @@ app.use("/api/admin/acquisition-claims", protect, adminAcquisitionClaimRoutes);
 // CommercialPolicyVersion above). Read AND write are INDIA-only, same
 // rationale as adminCommercialPolicyRoutes.
 app.use("/api/admin/commercial-policy-overrides", protect, adminCommercialPolicyOverrideRoutes);
+// FA-P3-A — admin Revenue Configuration (Phase 1). Thin orchestration
+// over the two route groups above — same INDIA-only rationale. See
+// revenueConfig.service.js's own header for why this is not a new
+// financial model.
+app.use("/api/admin/revenue", protect, adminRevenueConfigRoutes);
 // FA-12.2 — admin compliance case/evidence workflow. Read (list/detail)
 // and evidence-filing/case-opening are INDIA/STATE (STATE scoped to
 // its own FA-11.3 Territory Partner set at the service layer);
@@ -463,6 +501,42 @@ app.use("/api/admin/field-agent-compliance", protect, adminFieldAgentComplianceR
 // above (see each route file's own header).
 app.use("/api/admin/finance/gst", protect, adminGstPolicyRoutes);
 app.use("/api/admin/finance/platform-fee", protect, adminAreaPlatformFeeRoutes);
+// P0 Revenue Calculation Engine — Step 2. A NEW, standalone module
+// (modules/finance) — deliberately not an extension of the two routes
+// immediately above (those remain the untouched engine the current
+// booking lockSlot flow reads) or of /api/admin/revenue (FA-P3-A Field
+// Agent commercial-config, a different domain entirely). INDIA-only,
+// same rationale.
+app.use("/api/admin/finance/revenue-settings", protect, adminRevenueSettingsRoutes);
+app.use("/api/admin/finance/gst-report", protect, adminGSTReportRoutes);
+// STEP 7.1 — Finance Dashboard KPI Engine. Read-only aggregation over
+// SalonEarnings/Transaction/Refund/GSTLedger/PayoutRequest/
+// FieldAgentPayoutRequest/GenericPayoutRequest — never writes to any
+// of them. INDIA-only, same rationale as every route immediately above.
+app.use("/api/admin/finance/dashboard", protect, adminFinanceDashboardRoutes);
+// STEP 7.2 — Finance Analytics Engine. Read-only aggregation over
+// RevenueSplit/GSTLedger/PayoutRequest/GenericPayoutRequest/
+// FieldAgentEarningLedger/TerritoryRevenueLedger — never writes to any
+// of them. INDIA-only, same rationale as every route immediately above.
+app.use("/api/admin/finance/analytics", protect, adminFinanceAnalyticsRoutes);
+// STEP 7.4 — Finance Export Engine. Read-only over the same
+// collections STEP 7.1/7.2 already read (RevenueSplit/GSTLedger/
+// PayoutRequest/GenericPayoutRequest/FieldAgentPayoutRequest) — never
+// writes to any of them, and never imports FinanceAnalyticsService.js
+// for writing (only getFinanceDashboardKPIs is reused, read-only, for
+// the Summary report). INDIA-only, same rationale as every route
+// immediately above.
+app.use("/api/admin/finance/export", protect, adminFinanceExportRoutes);
+// STEP 5.1 — Territory Revenue Settings Engine. A NEW, standalone module
+// (modules/finance/TerritoryRevenueSettings) for Admin to configure
+// Territory Partner commission. Deliberately isolated from
+// RevenueSettings, RevenueSplit, GST Ledger/Reports, Razorpay, Refund,
+// the Field Agent Acquisition Engine, Wallet and Booking — and from
+// CommercialPolicyVersion/CommercialPolicyOverride (the pre-existing
+// territoryPartnerCommissionPercent field flagged in the STEP 5.1
+// read-only audit), which this module does not read, write or migrate.
+// INDIA-only, same rationale as every route immediately above.
+app.use("/api/admin/finance/territory-settings", protect, adminTerritoryRevenueRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////

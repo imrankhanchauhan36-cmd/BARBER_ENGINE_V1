@@ -11,6 +11,7 @@ import { successResponse } from "../../../utils/response.js";
 import {
   adminListClaims,
   adminGetClaimDetail,
+  adminApproveClaim,
   adminRejectClaim,
   adminReassignClaim,
 } from "../services/acquisitionClaim.service.js";
@@ -37,6 +38,16 @@ export const adminGetClaimDetailHandler = async (req, res, next) => {
   try {
     const claim = await adminGetClaimDetail({ admin: req.user, claimId: req.params.claimId });
     return successResponse(res, { message: "Acquisition claim detail fetched", data: { claim } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// FA-P3-B Step 1
+export const adminApproveClaimHandler = async (req, res, next) => {
+  try {
+    const claim = await adminApproveClaim({ adminId: req.user._id, claimId: req.params.claimId });
+    return successResponse(res, { message: "Acquisition claim approved — recovery is now active", data: { claim } });
   } catch (err) {
     return next(err);
   }

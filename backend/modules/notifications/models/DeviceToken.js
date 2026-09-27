@@ -25,7 +25,10 @@ const DeviceTokenSchema = new mongoose.Schema(
   {
     recipientType: {
       type:     String,
-      enum:     ["USER", "SALON"], // owner devices register under SALON, matching Notification.js's convention
+      // FA-P2-A — added FIELD_AGENT (keyed on User._id, see
+      // models/Notification.js's own comment for the full rationale).
+      // Additive only; USER/SALON semantics are untouched.
+      enum:     ["USER", "SALON", "FIELD_AGENT"], // owner devices register under SALON, matching Notification.js's convention
       required: true,
     },
 

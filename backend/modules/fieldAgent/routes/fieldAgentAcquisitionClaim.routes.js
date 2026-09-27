@@ -27,6 +27,11 @@ import {
   listMyClaimsHandler,
   withdrawMyClaimHandler,
 } from "../controllers/fieldAgentAcquisitionClaim.controller.js";
+import {
+  getMyAcquisitionDashboardHandler,
+  listMyAcquisitionRecoveryHandler,
+  getMyAcquisitionRecoveryDetailHandler,
+} from "../controllers/fieldAgentAcquisitionRecovery.controller.js";
 import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validator.js";
 
 const router = express.Router();
@@ -73,6 +78,21 @@ router.post(
   validate(acquisitionClaimSchemas.claimIdParam, "params"),
   idempotency,
   withdrawMyClaimHandler
+);
+
+// FA-P3-B Step 2 — Recovery Dashboard, read-only, no new mutation.
+router.get("/dashboard", getMyAcquisitionDashboardHandler);
+
+router.get(
+  "/recovery",
+  validate(acquisitionClaimSchemas.listRecoveryQuery, "query"),
+  listMyAcquisitionRecoveryHandler
+);
+
+router.get(
+  "/recovery/:claimId",
+  validate(acquisitionClaimSchemas.claimIdParam, "params"),
+  getMyAcquisitionRecoveryDetailHandler
 );
 
 export default router;

@@ -66,6 +66,11 @@ import mongoose from "mongoose";
 import Booking, { BOOKING_STATUS } from "../../../models/Booking.js";
 import FieldAgentEarningJobCheckpoint from "../models/FieldAgentEarningJobCheckpoint.js";
 import { processCompletedBooking, listOpenGaps, reprocessOneGap } from "../services/fieldAgentEarning.service.js";
+import { EARNING_ENTITLEMENT_TYPE } from "../constants/fieldAgentEarning.constants.js";
+import FieldAgent from "../models/FieldAgent.js";
+import NotificationService from "../../../services/NotificationService.js";
+import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
+import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 import {
   EARNING_JOB_INTERVAL_MS,
   EARNING_JOB_BATCH_SIZE,
@@ -75,6 +80,57 @@ import {
 } from "../constants/fieldAgentEarning.constants.js";
 import logger from "../../../utils/logger.js";
 import { recordStart, recordSuccess, recordFailure } from "../../../jobs/jobHeartbeat.js";
+
+const formatPaiseAsRupees = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// FA-P2-A — "Referral Reward Credited". Deliberately lives HERE, not
+// in fieldAgentEarning.service.js — that file's own header declares a
+// locked, non-negotiable boundary ("the only documents this file ever
+// writes are AcquisitionEarningProgress and FieldAgentEarningLedger");
+// adding a notification side-effect there, however harmless, would
+// still be a new responsibility inside a file explicitly scoped away
+// from having one. This job is processCompletedBooking's ONLY caller
+// (per that file's own header), so wiring the notification at the
+// call site achieves the same outcome with zero risk to the locked
+// financial engine. Fires at most once per booking — gated on
+// `!alreadyProcessed` (an idempotent-replay booking, e.g. after a
+// crash-restart, never re-notifies) and only for the ACQUISITION
+// entitlement (a Territory Partner's ongoing commission share is a
+// different, unnamed event — out of this phase's named 7). Never
+// awaited by the caller in a way that can fail the tick — errors are
+// caught and logged, exactly like every other per-booking failure
+// path in this job.
+const notifyReferralRewardCredited = async (result) => {
+  try {
+    if (!result || result.alreadyProcessed) return;
+    if (result.entitlementType !== EARNING_ENTITLEMENT_TYPE.ACQUISITION) return;
+    if (!(result.creditedAmountInPaise > 0)) return;
+
+    const fieldAgent = await FieldAgent.findById(result.fieldAgentRef).select("userRef").lean();
+    if (!fieldAgent) return;
+
+    await NotificationService.send(
+      {
+        recipientId:   fieldAgent.userRef,
+        recipientType: "FIELD_AGENT",
+        templateKey:   NOTIFICATION_EVENTS.REFERRAL_REWARD_CREDITED,
+        variables:     { amount: formatPaiseAsRupees(result.creditedAmountInPaise) },
+        title:         "Referral Reward Credited",
+        message:       `You've earned ${formatPaiseAsRupees(result.creditedAmountInPaise)} from a referred salon's booking.`,
+        type:          "SYSTEM",
+        priority:      "MEDIUM",
+        actionType:    "OPEN_WALLET",
+        actionUrl:     "/field-agent/earnings",
+        entityType:    "BOOKING",
+        entityId:      result.bookingId,
+        meta:          { creditedAmountInPaise: result.creditedAmountInPaise, bookingId: result.bookingId },
+      },
+      [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+    );
+  } catch (err) {
+    logger.warn(`${JOB_NAME} REFERRAL_REWARD_CREDITED notification failed (non-critical)`, { message: err.message });
+  }
+};
 
 const JOB_NAME = "[FieldAgentEarningJob]";
 const MIN_OBJECT_ID = new mongoose.Types.ObjectId("000000000000000000000000");
@@ -164,7 +220,8 @@ export const runEarningJobTick = async () => {
       const settled = await Promise.allSettled(
         groups.map(async (group) => {
           for (const booking of group) {
-            await processCompletedBooking(booking);
+            const result = await processCompletedBooking(booking);
+            await notifyReferralRewardCredited(result);
           }
         })
       );

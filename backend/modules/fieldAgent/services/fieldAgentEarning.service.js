@@ -107,6 +107,15 @@ export const PROCESSING_OUTCOME = Object.freeze({
   // policy existed at assignment.effectiveFrom). Distinct from
   // ZERO_TERM_EXPIRED: this is "unknown yet", not "definitively over."
   PENDING_TERM_SNAPSHOT_GAP: "PENDING_TERM_SNAPSHOT_GAP",
+  // STEP 6.1 — Territory Decision Gate. Returned in place of a
+  // Territory Partner credit attempt: the OLD Territory earning
+  // generation path (attemptTerritoryPartnerCredit, below) has been
+  // retired. modules/finance/models/TerritoryRevenueLedger.js (STEP
+  // 5.3) is now the only authoritative Territory Partner revenue
+  // source — see that engine's own header. Never written to
+  // FieldAgentEarningLedger; this is a PROCESSING_OUTCOME only, not a
+  // creditOutcome/ledger row.
+  TERRITORY_PATH_RETIRED: "TERRITORY_PATH_RETIRED",
 });
 
 const isTransientConflict = (err) =>
@@ -566,10 +575,20 @@ const attemptAcquisitionCredit = async ({ booking, claim, resolved }) => {
   const idempotencyKey = `earning:${booking._id}:${EARNING_ENTITLEMENT_TYPE.ACQUISITION}`;
   const existing = await findExistingLedgerRow(idempotencyKey);
   if (existing) {
+    // FA-P2-A — alreadyProcessed:true tells the caller (the earning
+    // job) this is a replay of a previously-applied booking, not a
+    // fresh credit — the job's own "Referral Reward Credited"
+    // notification must fire at most once per booking, on the first
+    // genuine credit only. Purely additive field; no existing
+    // destructuring of this return value breaks by gaining one.
     return {
       outcome: existing.creditOutcome,
       creditedAmountInPaise: existing.creditedAmountInPaise,
       fallThrough: existing.creditOutcome === EARNING_CREDIT_OUTCOME.ZERO_TARGET_REACHED,
+      entitlementType: EARNING_ENTITLEMENT_TYPE.ACQUISITION,
+      fieldAgentRef: claim.fieldAgentRef,
+      bookingId: booking._id,
+      alreadyProcessed: true,
     };
   }
 
@@ -615,7 +634,14 @@ const attemptAcquisitionCredit = async ({ booking, claim, resolved }) => {
     });
     // Deliberately fallThrough:false — see file header on why
     // suspension does not hand this booking to Territory Partner.
-    return { outcome: row.creditOutcome, creditedAmountInPaise: row.creditedAmountInPaise, fallThrough: false };
+    return {
+      outcome: row.creditOutcome,
+      creditedAmountInPaise: row.creditedAmountInPaise,
+      fallThrough: false,
+      entitlementType: EARNING_ENTITLEMENT_TYPE.ACQUISITION,
+      fieldAgentRef: claim.fieldAgentRef,
+      bookingId: booking._id,
+    };
   }
 
   const row = await creditAcquisitionProgressAndLedger({ booking, claim, resolved, ratePercent, rawEligibleAmountInPaise, idempotencyKey });
@@ -623,9 +649,22 @@ const attemptAcquisitionCredit = async ({ booking, claim, resolved }) => {
     outcome: row.creditOutcome,
     creditedAmountInPaise: row.creditedAmountInPaise,
     fallThrough: row.creditOutcome === EARNING_CREDIT_OUTCOME.ZERO_TARGET_REACHED,
+    // FA-P2-A — additive fields only, used by fieldAgentEarning.job.js
+    // to fire "Referral Reward Credited" without this "reads/writes
+    // only AcquisitionEarningProgress + FieldAgentEarningLedger" file
+    // ever importing NotificationService itself.
+    entitlementType: EARNING_ENTITLEMENT_TYPE.ACQUISITION,
+    fieldAgentRef: claim.fieldAgentRef,
+    bookingId: booking._id,
   };
 };
 
+// STEP 6.1 — Territory Decision Gate (IMPLEMENTED). RETIRED: no longer
+// called by processCompletedBooking (see that function's own header for
+// the full rationale) — kept in place, unmodified, only because
+// deleting it is out of scope for this migration. TerritoryRevenueLedger
+// (STEP 5.3) is the sole authoritative Territory Partner revenue source
+// going forward.
 const attemptTerritoryPartnerCredit = async ({ booking, salon, resolved }) => {
   const idempotencyKey = `earning:${booking._id}:${EARNING_ENTITLEMENT_TYPE.TERRITORY_PARTNER}`;
   const existing = await findExistingLedgerRow(idempotencyKey);
@@ -750,9 +789,14 @@ export const processCompletedBooking = async (booking) => {
   }
   await resolveGapIfOpen(`gap:booking:${booking._id}`);
 
+  // FA-P3-B Step 1 — this is the ENTIRE enforcement of "reward recovery
+  // must not start before approval": a PENDING_APPROVAL claim is never
+  // matched here, so it is structurally invisible to booking credit
+  // until adminApproveClaim moves it to ACTIVE_RECOVERY. No separate
+  // gating check was added anywhere else in this function.
   const activeClaim = await AcquisitionClaim.findOne({
     salonRef: booking.salonRef,
-    status: CLAIM_STATUS.ACTIVE,
+    status: CLAIM_STATUS.ACTIVE_RECOVERY,
   }).lean();
 
   if (activeClaim) {
@@ -763,10 +807,40 @@ export const processCompletedBooking = async (booking) => {
     if (!acquisitionResult.fallThrough) {
       return acquisitionResult; // ZERO_AGENT_INELIGIBLE — forfeited, no territory fallback
     }
-    // ZERO_TARGET_REACHED — this booking is "subsequent" to target completion
+    // ZERO_TARGET_REACHED — this booking is "subsequent" to target completion.
+    // Acquisition itself is completely unaffected by the retirement below —
+    // every line above this comment is untouched.
   }
 
-  return attemptTerritoryPartnerCredit({ booking, salon, resolved });
+  // STEP 6.1 — Territory Decision Gate (IMPLEMENTED). The OLD Territory
+  // earning generation path — attemptTerritoryPartnerCredit, and
+  // therefore also its own dependencies resolveTerritoryPartnerEligibility
+  // and (indirectly) createTerritoryPartnerTermSnapshot — is retired as
+  // of this change: this function no longer calls it, for ANY booking,
+  // regardless of completedAt. Those three functions are deliberately
+  // left in place, unmodified and unremoved:
+  //   - attemptTerritoryPartnerCredit / resolveTerritoryPartnerEligibility
+  //     simply become unreferenced (dead for this purpose only) — kept
+  //     so this diff stays a single-call-site change, not a rewrite.
+  //   - createTerritoryPartnerTermSnapshot MUST stay, because
+  //     commercialTerritory.service.js#assignPartner (FA-5.2, a
+  //     completely separate, unrelated live transaction) still calls it
+  //     directly on every territory-partner assignment. Removing it
+  //     would require editing FA-5.2, which is explicitly out of scope
+  //     here.
+  //
+  // modules/finance/models/TerritoryRevenueLedger.js (STEP 5.3) is now
+  // the ONLY authoritative source of Territory Partner revenue — it
+  // already runs entirely independently of this job (triggered by
+  // RevenueSplit creation / refund completion, not booking completion),
+  // so no new call is added here to replace this one; there is nothing
+  // to redirect to.
+  //
+  // Every pre-existing FieldAgentEarningLedger row with
+  // entitlementType TERRITORY_PARTNER (created before this change)
+  // is untouched — this migration stops future generation only, it is
+  // not a data migration or a deletion of history.
+  return { outcome: PROCESSING_OUTCOME.TERRITORY_PATH_RETIRED, creditedAmountInPaise: 0 };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -923,7 +997,12 @@ export const backfillHistoricalClaimProgressGaps = async ({ batchSize = 500 }) =
   let gapsRecorded = 0;
 
   for (;;) {
-    const batch = await AcquisitionClaim.find({ _id: { $gt: lastId } })
+    // FA-P3-B Step 1 — a PENDING_APPROVAL claim correctly has no
+    // progress document yet (it hasn't been approved); excluding it
+    // here prevents this scan from misreporting every pending claim as
+    // a gap. Only claims that HAVE passed approval (or later) are
+    // expected to have progress.
+    const batch = await AcquisitionClaim.find({ _id: { $gt: lastId }, status: { $ne: CLAIM_STATUS.PENDING_APPROVAL } })
       .select("_id salonRef createdAt")
       .sort({ _id: 1 })
       .limit(batchSize)

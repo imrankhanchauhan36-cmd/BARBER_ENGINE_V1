@@ -22,11 +22,15 @@ const router = express.Router();
 router.use(protect);
 
 //////////////////////////////////////////////////////
-// OWNER ACCESS
+// OWNER + FIELD AGENT ACCESS
+// FA-P2-A — widened from OWNER-only so a Field Agent can reuse this
+// exact inbox (see controllers/notification.controller.js's
+// resolveRecipient helper for the role-branch that keeps the OWNER
+// path byte-for-byte unchanged).
 //////////////////////////////////////////////////////
 
 router.use(
-  requireRole("OWNER")
+  requireRole("OWNER", "FIELD_AGENT")
 );
 
 //////////////////////////////////////////////////////

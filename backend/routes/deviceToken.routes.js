@@ -26,11 +26,13 @@ const router = express.Router();
 router.use(protect);
 
 //////////////////////////////////////////////////////
-// OWNER ACCESS
+// OWNER + FIELD AGENT ACCESS
+// FA-P2-A — widened from OWNER-only (see
+// controllers/deviceToken.controller.js's role branch).
 //////////////////////////////////////////////////////
 
 router.use(
-  requireRole("OWNER")
+  requireRole("OWNER", "FIELD_AGENT")
 );
 
 //////////////////////////////////////////////////////

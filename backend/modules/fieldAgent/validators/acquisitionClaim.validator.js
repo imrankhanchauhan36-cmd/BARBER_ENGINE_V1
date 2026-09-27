@@ -46,4 +46,11 @@ export const acquisitionClaimSchemas = {
     limit: Joi.number().integer().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT),
     status: Joi.string().valid(...Object.values(CLAIM_STATUS)).optional(),
   }).unknown(false),
+
+  // FA-P3-B Step 2 — Field-Agent-facing Recovery list query.
+  listRecoveryQuery: Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT),
+    status: Joi.string().valid(...Object.values(CLAIM_STATUS)).optional(),
+  }).unknown(false),
 };

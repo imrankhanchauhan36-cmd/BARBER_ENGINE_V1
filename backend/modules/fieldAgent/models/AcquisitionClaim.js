@@ -32,7 +32,7 @@
  */
 
 import mongoose from "mongoose";
-import { CLAIM_STATUS, CLAIM_END_REASON } from "../constants/acquisitionClaim.constants.js";
+import { CLAIM_STATUS, CLAIM_END_REASON, CLAIM_NON_TERMINAL_STATUSES } from "../constants/acquisitionClaim.constants.js";
 
 const AcquisitionClaimSchema = new mongoose.Schema(
   {
@@ -55,11 +55,14 @@ const AcquisitionClaimSchema = new mongoose.Schema(
       default: null,
     },
 
+    // FA-P3-B Step 1 — a claim now starts PENDING_APPROVAL, not ACTIVE
+    // (see acquisitionClaim.constants.js's own header for the full
+    // rationale on why this supersedes the prior locked decision).
     status: {
       type: String,
       enum: Object.values(CLAIM_STATUS),
       required: true,
-      default: CLAIM_STATUS.ACTIVE,
+      default: CLAIM_STATUS.PENDING_APPROVAL,
     },
 
     // Explicit `null` in the enum list — same reason as
@@ -80,15 +83,18 @@ const AcquisitionClaimSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// The sole correctness authority for "at most one ACTIVE claim per
-// salon" — a single-collection, single-key partial unique index. No
-// transaction is required for this invariant on its own (unlike
-// FA-5.2's cross-scope-type overlap problem) — a plain insert against
-// this index is already atomic and correct across any number of
-// backend instances.
+// The sole correctness authority for "at most one NON-TERMINAL claim
+// per salon" — a single-collection, single-key partial unique index.
+// FA-P3-B Step 1 — widened from {status:"ACTIVE"} to both non-terminal
+// statuses (PENDING_APPROVAL, ACTIVE_RECOVERY), since a salon must not
+// be claimable a second time while an existing claim is still awaiting
+// approval either. No transaction is required for this invariant on
+// its own (unlike FA-5.2's cross-scope-type overlap problem) — a plain
+// insert against this index is already atomic and correct across any
+// number of backend instances.
 AcquisitionClaimSchema.index(
   { salonRef: 1, status: 1 },
-  { unique: true, partialFilterExpression: { status: CLAIM_STATUS.ACTIVE } }
+  { unique: true, partialFilterExpression: { status: { $in: CLAIM_NON_TERMINAL_STATUSES } } }
 );
 
 // "My claims" listing — NOT unique: one FieldAgent legitimately holds

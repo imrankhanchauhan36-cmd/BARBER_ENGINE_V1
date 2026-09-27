@@ -19,6 +19,9 @@ import { startCrossAgentOverlapJob } from "./modules/fieldAgent/jobs/crossAgentO
 import { startTerritoryAssignmentOverlapJob } from "./modules/fieldAgent/jobs/territoryAssignmentOverlap.job.js"; // ← FA-7.4 — stateless, read-only TERRITORY_ASSIGNMENT_CYCLING detection over full TerritoryAssignment history, writing only advisory FraudSignal evidence
 import { startFieldAgentEarningJob } from "./modules/fieldAgent/jobs/fieldAgentEarning.job.js"; // ← FA-9 — durable-checkpoint, compound-cursor discovery of newly COMPLETED Bookings, crediting Acquisition/Territory Partner earning via the immutable FieldAgentEarningLedger
 import { startOtpAuditOutboxJob } from "./modules/otp/jobs/otpAuditOutbox.job.js"; // ← OTP-2 Part D — drains modules/otp/models/OtpAuditOutbox.js into OtpAuditLog asynchronously (claim/apply/reclaim, same shape as ratingOutbox.job.js)
+import { startNotificationRetryJob } from "./modules/notifications/jobs/notificationRetry.job.js"; // ← FA-P2-A — retries FAILED PUSH NotificationDeliveryLog rows (atomic claim via processingStartedAt, same shape as ratingOutbox.job.js)
+import { startCashfreePayoutReconcileJob } from "./modules/fieldAgent/jobs/cashfreePayoutReconcile.job.js"; // ← FA-P4-D Step 1 — polls in-flight Cashfree Field Agent payouts whose webhook never arrived; idempotent, multi-instance safe
+import { startGenericPayoutReconcileJob } from "./modules/payout/jobs/genericPayoutReconcile.job.js"; // ← STEP 6.4 — polls in-flight RAZORPAY_ROUTE GenericPayoutRequest payouts whose webhook never arrived; idempotent, multi-instance safe; safe no-op when Razorpay Route isn't configured
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -291,6 +294,26 @@ const fieldAgentEarningJob = startFieldAgentEarningJob();
 const otpAuditOutboxJob = startOtpAuditOutboxJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7q: START NOTIFICATION RETRY JOB (FA-P2-A)
+//
+// Runs every 30s. Retries FAILED PUSH NotificationDeliveryLog rows —
+// atomic claim via processingStartedAt (no schema/enum change needed;
+// this model has carried these fields, documented as unused, since
+// Phase 1). After 5 attempts a row moves to FAILED_PERMANENT and is
+// never retried again. See modules/notifications/jobs/notificationRetry.job.js.
+//////////////////////////////////////////////////////////////
+
+const notificationRetryJob = startNotificationRetryJob();
+
+// FA-P4-D Step 1 — Cashfree auto-payout reconciliation (no-op unless Cashfree is configured
+// and a CASHFREE payout is in flight).
+const cashfreePayoutReconcileJob = startCashfreePayoutReconcileJob();
+
+// STEP 6.4 — Razorpay Route (GenericPayoutRequest) reconciliation (no-op unless
+// Razorpay Route is configured and a RAZORPAY_ROUTE payout is in flight).
+const genericPayoutReconcileJob = startGenericPayoutReconcileJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
 
@@ -376,6 +399,11 @@ const shutdown = async (signal) => {
 
       otpAuditOutboxJob.stop();
       console.log("✅ OTP audit outbox job stopped");
+
+      notificationRetryJob.stop();
+      cashfreePayoutReconcileJob.stop();
+      genericPayoutReconcileJob.stop();
+      console.log("✅ Notification retry job stopped");
 
       // Drain all open sockets before closing the DB — ensures no
       // realtime emit fires against a closed MongoDB connection.

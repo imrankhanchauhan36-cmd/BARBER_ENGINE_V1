@@ -3,7 +3,10 @@ import Booking from "../models/Booking.js";
 import { BOOKING_STATUS } from "../utils/bookingState.machine.js";
 import {
   createRazorpayOrder,
+  fetchRazorpayOrder,
   fetchRazorpayPayment,
+  getRazorpayKeyId,
+  isRazorpayNotFound,
   verifyRazorpaySignature,
 } from "../services/Razorpay.service.js";
 
@@ -45,6 +48,8 @@ export const createOrder = async (req, res) => {
       totalAmountInPaise: 1,
       userRef: 1,
       status: 1,
+      lockUntil: 1,
+      razorpayOrderId: 1,
     }).lean();
 
     if (!booking) {
@@ -63,17 +68,19 @@ export const createOrder = async (req, res) => {
     }
 
     // U1 PAYMENT SAFETY — only a booking still awaiting payment (HOLD)
-    // may have a new Razorpay order created for it. Closes the
-    // dominant real-world double-charge path: a client retry after
-    // this booking has already been confirmed (or moved to any other
-    // status) must never be allowed to mint a second payable order.
-    // This does not by itself prevent two truly simultaneous
-    // createOrder calls while the booking is still genuinely HOLD —
-    // that residual race is documented, not silently claimed fixed.
+    // may have an order created for it.
     if (booking.status !== BOOKING_STATUS.HOLD) {
       return res.status(409).json({
         success: false,
         message: "Booking is not awaiting payment",
+      });
+    }
+
+    // P0-A — an order must not be minted for a hold that has already lapsed.
+    if (!booking.lockUntil || booking.lockUntil < new Date()) {
+      return res.status(409).json({
+        success: false,
+        message: "Booking hold has expired",
       });
     }
 
@@ -84,18 +91,71 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    const respond = (order, reused) =>
+      res.json({
+        success:  true,
+        orderId:  order.id,
+        amount:   order.amount,
+        currency: order.currency,
+        keyId:    getRazorpayKeyId(), // P0-A — publishable key id only (never the secret)
+        reused,
+      });
+
+    // ── P0-A IDEMPOTENCY — reuse this booking's existing order ─────────
+    // A retry / double-tap / reopened app returns the SAME order instead
+    // of minting another payable order for the same booking.
+    if (booking.razorpayOrderId) {
+      let existing = null;
+      try {
+        existing = await fetchRazorpayOrder(booking.razorpayOrderId);
+      } catch (err) {
+        if (!isRazorpayNotFound(err)) throw err; // gateway trouble: fail, never guess
+      }
+      if (existing) {
+        if (existing.status === "paid") {
+          return res.status(409).json({
+            success: false,
+            message: "This booking's order has already been paid — confirm the booking instead",
+            orderId: existing.id,
+          });
+        }
+        if (existing.amount === booking.totalAmountInPaise && existing.currency === "INR") {
+          return respond(existing, true);
+        }
+      }
+      // The stored order is unusable (unknown to Razorpay or wrong amount): replace it below.
+    }
+
     const order = await createRazorpayOrder({
       amountInPaise: booking.totalAmountInPaise,
       receipt: `booking_${bookingId}`,
       notes: { bookingId },
     });
 
-    return res.json({
-      success: true,
-      orderId:  order.id,
-      amount:   order.amount,
-      currency: order.currency,
-    });
+    // Persist it — conditional on nobody having set/changed the order id in
+    // the meantime, so two simultaneous calls converge on ONE order.
+    const claimed = await Booking.findOneAndUpdate(
+      { _id: bookingId, status: BOOKING_STATUS.HOLD, razorpayOrderId: booking.razorpayOrderId ?? null },
+      { $set: { razorpayOrderId: order.id } },
+      { new: true, projection: { razorpayOrderId: 1 } }
+    ).lean();
+
+    if (!claimed) {
+      // Lost the race (or the booking moved on): hand back the winner's
+      // order. The order we just minted was never handed to anyone and
+      // stays unpaid.
+      const fresh = await Booking.findById(bookingId, { razorpayOrderId: 1, status: 1 }).lean();
+      if (fresh?.status === BOOKING_STATUS.HOLD && fresh.razorpayOrderId) {
+        const winner = await fetchRazorpayOrder(fresh.razorpayOrderId);
+        return respond(winner, true);
+      }
+      return res.status(409).json({
+        success: false,
+        message: "Booking is not awaiting payment",
+      });
+    }
+
+    return respond(order, false);
   } catch (error) {
     console.error("CREATE ORDER ERROR:", error);
     return res.status(500).json({

@@ -11,6 +11,7 @@
 import Salon from "../../../models/Salon.js";
 import User from "../../../models/User.js";
 import NotificationService from "../../../services/NotificationService.js";
+import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
 import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../../../utils/response.js";
 import { APPLICANT_TYPE, KYC_STATUS } from "../constants/kyc.constants.js";
@@ -38,13 +39,25 @@ const assertAdminLevel = (admin, allowedLevels, message = "Insufficient privileg
 };
 
 // ─── Scope Helper ─────────────────────────────────────────
+// P0 scalability fix — was `Salon.find(salonFilter).select("ownerId")`
+// followed by a JS-side `.map()` + `new Set()` dedup: at PAN-India scale
+// (5M+ salons) this pulled every matching salon DOCUMENT into Node
+// memory (many salons sharing one owner), then deduped in the
+// application process before the real KYC query even ran. Replaced
+// with `Salon.distinct("ownerId", salonFilter)`, which pushes both the
+// filter AND the deduplication down into MongoDB itself — the database
+// returns only the unique ownerId values, never the intervening salon
+// documents, and never materializes duplicates in this process at all.
+// Same filter, same admin-level branching, same return shape
+// (Array<string> | null) — every caller (assertKYCInScope,
+// getKYCSummary, listKYCForAdmin) is unaffected.
 const getScopedOwnerIds = async (admin) => {
   if (admin.adminLevel === "INDIA") return null;
   const salonFilter = { isDeleted: { $ne: true } };
   if (admin.adminLevel === "STATE")    salonFilter["location.territory.stateRef"]    = admin.stateRef;
   if (admin.adminLevel === "DISTRICT") salonFilter["location.territory.districtRef"] = admin.districtRef;
-  const salons = await Salon.find(salonFilter).select("ownerId").lean();
-  return [...new Set(salons.map(s => s.ownerId?.toString()).filter(Boolean))];
+  const ownerIds = await Salon.distinct("ownerId", salonFilter);
+  return ownerIds.filter(Boolean).map((id) => id.toString());
 };
 
 // ✅ Fix 2 — Reusable scope guard for write operations
@@ -299,6 +312,36 @@ export const approveKYCHandler = async (req, res, next) => {
     }
 
     //////////////////////////////////////////////////////
+    // 📬 FA-P2-A — FIELD AGENT NOTIFICATION (non-blocking, after write)
+    // The OWNER-only gating above is untouched; this is a separate,
+    // additive branch. recipientId is kyc.ownerId directly (the
+    // applicant's own User._id — same field OWNER KYC already uses to
+    // resolve a Salon above) since no FieldAgent document exists yet
+    // at this stage of the applicant journey — see PushProvider/
+    // Notification model comments for the full rationale.
+    //////////////////////////////////////////////////////
+    if (updated.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
+      await NotificationService.send(
+        {
+          recipientId:   kyc.ownerId,
+          recipientType: "FIELD_AGENT",
+          templateKey:   NOTIFICATION_EVENTS.KYC_APPROVED,
+          variables:     {},
+          title:         "KYC Approved ✅",
+          message:       "Your KYC verification has been approved.",
+          type:          "SYSTEM",
+          priority:      "HIGH",
+          actionType:    "OPEN_PROFILE",
+          actionUrl:     "/field-agent/application-status",
+          entityType:    "SYSTEM",
+          entityId:      updated._id,
+          meta:          { kycId: updated._id },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
+    }
+
+    //////////////////////////////////////////////////////
     // 🔗 FA-3.2 — FIELD AGENT APPLICATION LIFECYCLE SYNC (durable event,
     // not a direct mutation — the actual FieldAgentApplication
     // transition happens later in modules/kyc/jobs/fieldAgentKycSync
@@ -371,6 +414,32 @@ export const rejectKYCHandler = async (req, res, next) => {
         actionUrl:     "/kyc",
         meta:          { kycId: updated._id },
       });
+    }
+
+    //////////////////////////////////////////////////////
+    // 📬 FA-P2-A — FIELD AGENT NOTIFICATION (non-blocking, after write)
+    // See approveKYCHandler's identical block above for the full
+    // rationale on recipientId/recipientType.
+    //////////////////////////////////////////////////////
+    if (updated.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
+      await NotificationService.send(
+        {
+          recipientId:   kyc.ownerId,
+          recipientType: "FIELD_AGENT",
+          templateKey:   NOTIFICATION_EVENTS.KYC_REJECTED,
+          variables:     { reason: req.body.reason.trim() },
+          title:         "KYC Rejected",
+          message:       `Your KYC verification was rejected. Reason: ${req.body.reason.trim()}`,
+          type:          "SYSTEM",
+          priority:      "HIGH",
+          actionType:    "OPEN_PROFILE",
+          actionUrl:     "/field-agent/application-status",
+          entityType:    "SYSTEM",
+          entityId:      updated._id,
+          meta:          { kycId: updated._id },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
     }
 
     //////////////////////////////////////////////////////

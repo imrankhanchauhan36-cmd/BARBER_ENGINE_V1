@@ -190,6 +190,8 @@ export const AUDIT_ACTION = Object.freeze({
   ACQUISITION_REFERRAL_CANCELLED: "ACQUISITION_REFERRAL_CANCELLED",
   ACQUISITION_CLAIM_CREATED: "ACQUISITION_CLAIM_CREATED",
   ACQUISITION_CLAIM_ENDED: "ACQUISITION_CLAIM_ENDED",
+  // FA-P3-B Step 1 — Acquisition Approval Lifecycle.
+  ACQUISITION_CLAIM_APPROVED: "ACQUISITION_CLAIM_APPROVED",
   // FA-11.1 — additive only. Written by
   // modules/fieldAgent/services/performancePolicy.service.js, entityType
   // PERFORMANCE_POLICY_VERSION, actorType ADMIN — mirrors

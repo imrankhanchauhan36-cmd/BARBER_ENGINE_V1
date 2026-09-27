@@ -29,6 +29,7 @@ import {
   revalidateProfessionalForBooking,
 } from "../services/professionalAvailability.service.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
+import { fetchAndEvaluateCapturedPayment, fetchRazorpayOrder, isRazorpayNotFound } from "../services/Razorpay.service.js";
 import {
   BOOKING_STATUS,
   transitionBookingStatus,
@@ -49,6 +50,7 @@ import { toFriendlyId } from "../utils/friendlyId.js";
 import { generateOtp, dispatchOtpSms } from "../modules/otp/services/otp.service.js";
 import { OTP_PURPOSE } from "../modules/otp/constants/otpPurpose.constants.js";
 import { isSalonReadyForBooking } from "../utils/salonReady.guard.js";
+import { createRevenueSplitForBooking } from "../modules/finance/services/RevenueSplitIntegrationService.js"; // P0 Revenue Calculation Engine — Step 3
 
 //////////////////////////////////////////////////////////////
 // 🔥 CONFIG
@@ -339,7 +341,7 @@ const verifyRazorpaySignature = ({ orderId, paymentId, signature, paymentMethod 
       "[Razorpay] Signature verification SKIPPED — explicit MOCK_RAZORPAY test bypass active. " +
       "Never set RAZORPAY_ALLOW_TEST_BYPASS in production."
     );
-    return; // bypass — no further checks
+    return { bypassed: true }; // bypass — no further checks (P0-A: also skips the gateway fetch, since no real payment exists)
   }
 
   // ── FULL VERIFICATION (unchanged) ───────────────────────────────────────────
@@ -381,6 +383,67 @@ const verifyRazorpaySignature = ({ orderId, paymentId, signature, paymentMethod 
       new Error("Payment verification failed — invalid signature"),
       { status: 403 }
     );
+  }
+
+  return { bypassed: false };
+};
+
+/**
+ * P0-A — GATEWAY VERIFICATION of a Razorpay booking payment.
+ *
+ * The HMAC (verifyRazorpaySignature) only proves Razorpay signed
+ * "order|payment". This additionally proves — against Razorpay's own
+ * record — that the payment was made for THIS booking's order, for THIS
+ * booking's amount, in INR, and is actually captured; and that neither the
+ * order nor the payment has been used before.
+ *
+ * Throws Error with { status } like the rest of confirmBooking.
+ */
+const assertGatewayPaymentForBooking = async ({ booking, orderId, paymentId, session }) => {
+  const expectedAmount = booking.totalAmountInPaise;
+
+  // 1. Order must belong to this booking.
+  if (booking.razorpayOrderId) {
+    if (booking.razorpayOrderId !== orderId) {
+      throw Object.assign(new Error("This payment was not made for this booking"), { status: 400 });
+    }
+  } else {
+    // Booking predates order persistence: accept only an order Razorpay itself
+    // says was created for this booking, for this amount; then record it.
+    let order;
+    try {
+      order = await fetchRazorpayOrder(orderId);
+    } catch (err) {
+      if (isRazorpayNotFound(err)) {
+        throw Object.assign(new Error("Payment order not found"), { status: 400 });
+      }
+      throw Object.assign(new Error("Could not verify the payment order with the payment gateway. Please retry."), { status: 502 });
+    }
+    if (String(order?.notes?.bookingId || "") !== String(booking._id) || order.amount !== expectedAmount) {
+      throw Object.assign(new Error("This payment was not made for this booking"), { status: 400 });
+    }
+    booking.razorpayOrderId = orderId; // persisted by the booking.save() in the same transaction
+  }
+
+  // 2. Order / payment must not have been used before (payment id is also
+  // covered by the unique index on Transaction.paymentId).
+  const orderUsed = await Transaction.findOne({ orderId }).session(session).lean();
+  if (orderUsed) {
+    throw Object.assign(new Error("Duplicate payment detected"), { status: 409 });
+  }
+
+  // 3. Fetch the payment from Razorpay and check captured / order / amount / currency.
+  let result;
+  try {
+    result = await fetchAndEvaluateCapturedPayment({ orderId, paymentId, amountInPaise: expectedAmount });
+  } catch (err) {
+    if (isRazorpayNotFound(err)) {
+      throw Object.assign(new Error("Payment not found at the payment gateway"), { status: 400 });
+    }
+    throw Object.assign(new Error("Could not verify the payment with the payment gateway. Please retry."), { status: 502 });
+  }
+  if (!result.verdict.ok) {
+    throw Object.assign(new Error(`Payment verification failed — ${result.verdict.message}`), { status: 400, code: result.verdict.code });
   }
 };
 
@@ -838,78 +901,21 @@ export const lockSlot = async (req, res) => {
 // 🚀 2. CONFIRM BOOKING — FULLY ATOMIC + RAZORPAY VERIFIED
 //////////////////////////////////////////////////////////////
 
-export const confirmBooking = async (req, res) => {
-  // U1 PAYMENT SAFETY — bounded retry, same pattern as cancelBooking
-  // (see that function's own comment for the full rationale). A
-  // genuine concurrent-write collision on this booking (two /confirm
-  // calls racing) is correctly aborted by MongoDB's own transaction
-  // conflict detection, not corrupted. Retrying lets the loser
-  // re-read the now-updated document fresh and land on the existing
-  // deterministic rejection paths below instead of a raw 500.
-  //
-  // IMPORTANT: this retry does NOT and cannot undo an external
-  // Razorpay charge that already succeeded before the losing
-  // transaction was aborted — if the loser's payment was a genuine,
-  // distinct Razorpay payment, that charge already happened at the
-  // gateway. This only makes our own backend's response deterministic,
-  // not a guarantee against an external double charge.
-  const MAX_ATTEMPTS = 3;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-    const {
-      bookingId,
-      paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET" | "MOCK_RAZORPAY" (test bypass only — see verifyRazorpaySignature)
-      paymentId,         // razorpay_payment_id — required only for RAZORPAY
-      orderId,           // razorpay_order_id — required only for RAZORPAY
-      razorpaySignature, // razorpay_signature — required only for RAZORPAY
-    } = req.body;
-
-    const isWalletPayment = paymentMethod === "WALLET";
-
-    //////////////////////////////////////////////////////////
-    // 💳 PAYMENT ID FORMAT GUARD (RAZORPAY only — wallet payments
-    // have no Razorpay payment ID at all)
-    //////////////////////////////////////////////////////////
-  
-    if (!isWalletPayment) {
-      if (!paymentId || paymentId.length < MIN_PAYMENT_ID_LENGTH) {
-        throw Object.assign(
-          new Error("Invalid payment ID — must be at least 10 characters"),
-          { status: 400 }
-        );
-      }
-
-      //////////////////////////////////////////////////////////
-      // 🔐 RAZORPAY SIGNATURE VERIFICATION (server-side)
-      //////////////////////////////////////////////////////////
-
-      try {
-        verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature, paymentMethod });
-      } catch (verifyErr) {
-        // 📬 NOTIFICATION (non-blocking) — real gateway-level payment
-        // failure, distinct from the booking-validation errors below
-        // (hold expired, slot conflict, etc.) which are not payment
-        // failures and intentionally do not send this notification.
-        await NotificationService.send({
-          recipientId:   req.user._id,
-          recipientType: "USER",
-          templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
-          variables:     {},
-          title:         "Payment Failed",
-          message:       "Your payment could not be verified. Please try again.",
-          type:          "PAYMENT",
-          priority:      "HIGH",
-          actionType:    null,
-          actionUrl:     null,
-          meta:          { bookingId },
-        });
-        throw verifyErr;
-      }
-    }
+/**
+ * The transactional heart of a booking confirmation (HOLD → CONFIRMED with
+ * payment): validates the booking, verifies the payment (Razorpay: P0-A gateway
+ * check), records the Transaction, credits the salon's PENDING wallet, moves
+ * the booking to CONFIRMED and saves — all inside the caller's transaction.
+ *
+ * P0-B — extracted UNCHANGED from confirmBooking so the Razorpay webhook can
+ * confirm a paid booking through the exact same code path as the client's
+ * /confirm call (no duplicated money logic). The caller owns the session,
+ * commit/abort and retry.
+ *
+ * @returns {Promise<{booking: object, otp: number, amount: number}>}
+ */
+export const runBookingConfirmationCore = async ({ session, bookingId, actorUserId, paymentMethod, paymentId, orderId, gatewayCheckBypassed = false }) => {
+  const isWalletPayment = paymentMethod === "WALLET";
 
       //////////////////////////////////////////////////////////
     // 🔍 FETCH BOOKING (inside session)
@@ -925,7 +931,7 @@ export const confirmBooking = async (req, res) => {
     // 🔐 USER OWNERSHIP CHECK
     //////////////////////////////////////////////////////////
 
-    if (booking.userRef.toString() !== req.user._id.toString()) {
+    if (booking.userRef.toString() !== String(actorUserId)) {
       throw Object.assign(new Error("Unauthorized"), { status: 403 });
     }
 
@@ -991,6 +997,15 @@ export const confirmBooking = async (req, res) => {
     if (existingTxn) {
       throw Object.assign(new Error("Duplicate payment detected"), { status: 409 });
     }
+
+    //////////////////////////////////////////////////////////
+    // 🔐 P0-A GATEWAY VERIFICATION — order↔booking, captured,
+    // amount, currency, no reuse (RAZORPAY only; the dev
+    // MOCK_RAZORPAY bypass has no real payment to fetch).
+    //////////////////////////////////////////////////////////
+    if (!isWalletPayment && !gatewayCheckBypassed) {
+      await assertGatewayPaymentForBooking({ booking, orderId, paymentId, session });
+    }
   
     //////////////////////////////////////////////////////////
     // 💰 FINANCE SPLIT — commission was already calculated and
@@ -1025,7 +1040,7 @@ export const confirmBooking = async (req, res) => {
         // WALLET-method attempt (insufficient funds), same class of
         // event as the Razorpay signature-failure notification above.
         await NotificationService.send({
-          recipientId:   req.user._id,
+          recipientId:   actorUserId,
           recipientType: "USER",
           templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
           variables:     {},
@@ -1059,7 +1074,7 @@ export const confirmBooking = async (req, res) => {
         // 📬 NOTIFICATION (non-blocking) — same real payment-failure
         // class as the pre-check above.
         await NotificationService.send({
-          recipientId:   req.user._id,
+          recipientId:   actorUserId,
           recipientType: "USER",
           templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
           variables:     {},
@@ -1127,8 +1142,8 @@ export const confirmBooking = async (req, res) => {
       salonId:       booking.salonRef,
       amountInPaise: payoutAmount,
       action:        "BOOKING_SETTLEMENT",
-      entityType:    "BOOKING",
-      entityId:      booking._id,
+      refType:       "BOOKING",
+      refId:         booking._id,
       idempotencyKey: `booking:credit:${booking._id}`,
       session,
       triggeredBy:   "SYSTEM",
@@ -1159,13 +1174,15 @@ export const confirmBooking = async (req, res) => {
 
     await booking.save({ session });
 
-    //////////////////////////////////////////////////////////
-    // ✅ COMMIT
-    //////////////////////////////////////////////////////////
+  return { booking, otp, amount };
+};
 
-    await session.commitTransaction();
-    session.endSession();
-
+/**
+ * Post-commit side effects of a confirmation: slot cache, realtime events,
+ * notifications. `req` only needs `.app` (the webhook passes `{ app }`).
+ * P0-B — extracted unchanged from confirmBooking.
+ */
+export const runBookingConfirmedEffects = async ({ req, booking, amount }) => {
     //////////////////////////////////////////////////////////
     // 🗑️ CACHE INVALIDATION
     //////////////////////////////////////////////////////////
@@ -1228,6 +1245,132 @@ export const confirmBooking = async (req, res) => {
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, amountInPaise: amount },
     });
+
+    //////////////////////////////////////////////////////////
+    // 💰 P0 REVENUE CALCULATION ENGINE — STEP 3 (non-blocking, after
+    // commit; Razorpay-paid bookings only; never throws — see that
+    // file's own header for the full safety rationale)
+    //////////////////////////////////////////////////////////
+    await createRevenueSplitForBooking({ booking });
+};
+
+export const confirmBooking = async (req, res) => {
+  // U1 PAYMENT SAFETY — bounded retry, same pattern as cancelBooking
+  // (see that function's own comment for the full rationale). A
+  // genuine concurrent-write collision on this booking (two /confirm
+  // calls racing) is correctly aborted by MongoDB's own transaction
+  // conflict detection, not corrupted. Retrying lets the loser
+  // re-read the now-updated document fresh and land on the existing
+  // deterministic rejection paths below instead of a raw 500.
+  //
+  // IMPORTANT: this retry does NOT and cannot undo an external
+  // Razorpay charge that already succeeded before the losing
+  // transaction was aborted — if the loser's payment was a genuine,
+  // distinct Razorpay payment, that charge already happened at the
+  // gateway. This only makes our own backend's response deterministic,
+  // not a guarantee against an external double charge.
+  const MAX_ATTEMPTS = 3;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+    const {
+      bookingId,
+      paymentMethod = "RAZORPAY", // "RAZORPAY" | "WALLET" | "MOCK_RAZORPAY" (test bypass only — see verifyRazorpaySignature)
+      paymentId,         // razorpay_payment_id — required only for RAZORPAY
+      orderId,           // razorpay_order_id — required only for RAZORPAY
+      razorpaySignature, // razorpay_signature — required only for RAZORPAY
+    } = req.body;
+
+    const isWalletPayment = paymentMethod === "WALLET";
+    let gatewayCheckBypassed = false; // true only for the explicit dev MOCK_RAZORPAY bypass
+
+    //////////////////////////////////////////////////////////
+    // 💳 PAYMENT ID FORMAT GUARD (RAZORPAY only — wallet payments
+    // have no Razorpay payment ID at all)
+    //////////////////////////////////////////////////////////
+  
+    if (!isWalletPayment) {
+      if (!paymentId || paymentId.length < MIN_PAYMENT_ID_LENGTH) {
+        throw Object.assign(
+          new Error("Invalid payment ID — must be at least 10 characters"),
+          { status: 400 }
+        );
+      }
+
+      //////////////////////////////////////////////////////////
+      // 🔐 RAZORPAY SIGNATURE VERIFICATION (server-side)
+      //////////////////////////////////////////////////////////
+
+      try {
+        gatewayCheckBypassed = verifyRazorpaySignature({ orderId, paymentId, signature: razorpaySignature, paymentMethod }).bypassed;
+      } catch (verifyErr) {
+        // 📬 NOTIFICATION (non-blocking) — real gateway-level payment
+        // failure, distinct from the booking-validation errors below
+        // (hold expired, slot conflict, etc.) which are not payment
+        // failures and intentionally do not send this notification.
+        await NotificationService.send({
+          recipientId:   req.user._id,
+          recipientType: "USER",
+          templateKey:   NOTIFICATION_EVENTS.PAYMENT_FAILED,
+          variables:     {},
+          title:         "Payment Failed",
+          message:       "Your payment could not be verified. Please try again.",
+          type:          "PAYMENT",
+          priority:      "HIGH",
+          actionType:    null,
+          actionUrl:     null,
+          meta:          { bookingId },
+        });
+        throw verifyErr;
+      }
+    }
+
+    // P0-B — the Razorpay webhook may already have confirmed this booking with
+    // THIS payment (payment.captured usually lands within a second of checkout).
+    // Answer the client's own /confirm call idempotently with success instead of
+    // an "invalid state" error for a booking that is in fact confirmed and paid.
+    if (!isWalletPayment) {
+      const already = await Booking.findById(bookingId).session(session);
+      if (already && already.status === BOOKING_STATUS.CONFIRMED && String(already.userRef) === String(req.user._id)) {
+        const paidTxn = await Transaction.findOne({ bookingId: already._id, paymentId }).session(session).lean();
+        if (paidTxn) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({
+            success:    true,
+            bookingId:  already._id,
+            checkInOtp: safeDecryptOtp(already.checkInOtpEncrypted),
+            message:    "Booking already confirmed for this payment",
+            alreadyConfirmed: true,
+            serviceAmountInPaise:    already.serviceAmountInPaise,
+            commissionAmountInPaise: already.commissionAmountInPaise,
+            totalAmountInPaise:      already.totalAmountInPaise,
+          });
+        }
+      }
+    }
+
+    const { booking, otp, amount } = await runBookingConfirmationCore({
+      session,
+      bookingId,
+      actorUserId: req.user._id,
+      paymentMethod,
+      paymentId,
+      orderId,
+      gatewayCheckBypassed,
+    });
+
+    //////////////////////////////////////////////////////////
+    // ✅ COMMIT
+    //////////////////////////////////////////////////////////
+
+    await session.commitTransaction();
+    session.endSession();
+
+    await runBookingConfirmedEffects({ req, booking, amount });
 
     return res.status(200).json({
       success:    true,
@@ -1711,8 +1854,8 @@ export const completeService = async (req, res) => {
     await WalletBalanceService.releasePendingToAvailable({
       salonId:        booking.salonRef,
       amountInPaise:  paymentTxn.payoutAmount,
-      entityType:     "BOOKING",   // ← "Transaction" se badla
-      entityId:       paymentTxn._id,
+      refType:        "BOOKING",   // ← "Transaction" se badla
+      refId:          paymentTxn._id,
       idempotencyKey: `booking:release:${booking._id}`,
       session,
       triggeredBy:    "SYSTEM",
@@ -1926,8 +2069,8 @@ export const cancelBooking = async (req, res) => {
           salonId:        booking.salonRef,
           amountInPaise:  serviceRefundPaise,
           action:         "REFUND",
-          entityType:     "BOOKING",
-          entityId:       booking._id,
+          refType:        "BOOKING",
+          refId:          booking._id,
           idempotencyKey: `booking:refund:${booking._id}`,
           session,
           triggeredBy:    "SYSTEM",
@@ -2193,8 +2336,8 @@ export const ownerCancelBooking = async (req, res) => {
           salonId:        booking.salonRef,
           amountInPaise:  serviceRefundPaise,
           action:         "REFUND",
-          entityType:     "BOOKING",
-          entityId:       booking._id,
+          refType:        "BOOKING",
+          refId:          booking._id,
           idempotencyKey: `booking:refund:${booking._id}`,
           session,
           triggeredBy:    "SYSTEM",
@@ -2721,8 +2864,8 @@ export const forceComplete = async (req, res) => {
     await WalletBalanceService.releasePendingToAvailable({
       salonId:        booking.salonRef,
       amountInPaise:  paymentTxn.payoutAmount,
-      entityType:     "BOOKING",   // ← "Transaction" se badla
-      entityId:       paymentTxn._id,
+      refType:        "BOOKING",   // ← "Transaction" se badla
+      refId:          paymentTxn._id,
       idempotencyKey: `booking:release:${booking._id}`,
       session,
       triggeredBy:    "SYSTEM",
@@ -3112,8 +3255,8 @@ export const confirmNoShowCancellation = async (req, res) => {
       await WalletBalanceService.releasePendingToAvailable({
         salonId:        booking.salonRef,
         amountInPaise:  paymentTxn.payoutAmount,
-        entityType:     "BOOKING",
-        entityId:       paymentTxn._id,
+        refType:        "BOOKING",
+        refId:          paymentTxn._id,
         idempotencyKey: `booking:release:${booking._id}`,
         session,
         triggeredBy:    "SYSTEM",

@@ -223,6 +223,15 @@ const BookingSchema = new mongoose.Schema(
       index:   true,
     },
 
+    // P0-A — the Razorpay order minted for THIS booking (set by
+    // POST /payments/create-order, reused on retries). confirmBooking only
+    // accepts a payment made against this order; unique so one order can
+    // never be attached to two bookings. Null until an order exists.
+    razorpayOrderId: {
+      type:    String,
+      default: null,
+    },
+
     // 🔥 FINANCE FIELD — used by confirmBooking + completeService
     // Stored in paise (₹1 = 100 paise) to avoid floating-point errors.
     // Controller reads booking.totalAmountInPaise for all calculations.
@@ -892,6 +901,12 @@ BookingSchema.index(
 
 // ── Payment queries ────────────────────────────────────────
 BookingSchema.index({ paymentStatus: 1, createdAt: -1 });
+
+// P0-A — an order belongs to at most one booking (partial: only string ids).
+BookingSchema.index(
+  { razorpayOrderId: 1 },
+  { unique: true, partialFilterExpression: { razorpayOrderId: { $type: "string" } } }
+);
 
 // ── Soft delete queries ────────────────────────────────────
 BookingSchema.index({ isDeleted: 1, createdAt: -1 });

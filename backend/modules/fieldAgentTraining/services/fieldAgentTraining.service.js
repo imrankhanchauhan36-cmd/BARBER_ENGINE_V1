@@ -303,8 +303,13 @@ export const getModuleContent = async (userId, moduleKey, languageCode) => {
   }).lean();
   if (!trainingModule) throw Errors.notFound("Module not found in your training version");
 
-  // `grading` is select:false by default — never fetched here.
-  const items = await TrainingContent.find({ trainingModule: trainingModule._id }).sort({ order: 1 });
+  // Hotfix (Training Question #5) — `grading` is select:false by
+  // default; now explicitly selected so the shaped item below can
+  // expose `gradingType` (the type discriminator ONLY — never
+  // correctOptionIndex/correctKeys, which stay server-side-only) so the
+  // client can render the correct input UI (single-select vs
+  // multi-select) instead of assuming single-choice for every item.
+  const items = await TrainingContent.find({ trainingModule: trainingModule._id }).select("+grading").sort({ order: 1 });
 
   const progressByContentId = new Map(
     enrollment.contentProgress.map((p) => [String(p.trainingContent), p])
@@ -326,6 +331,10 @@ export const getModuleContent = async (userId, moduleKey, languageCode) => {
       title: translation?.title ?? null,
       body: translation?.body ?? null,
       options: translation?.options ?? null,
+      // Hotfix (Training Question #5) — type discriminator only
+      // ("SINGLE_CHOICE" | "CHECKLIST"); correctOptionIndex/correctKeys
+      // are never included, exactly as before.
+      gradingType: item.grading?.type ?? null,
       hasMedia: Boolean(item.media?.publicId),
       watchThresholdSeconds: item.watchThresholdSeconds,
       passingScore: item.passingScore,

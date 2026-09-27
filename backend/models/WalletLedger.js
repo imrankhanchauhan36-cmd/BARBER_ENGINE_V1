@@ -43,6 +43,9 @@ export const LEDGER_ACTION = {
   BONUS:                 "BONUS",
   PENALTY:               "PENALTY",
   COMMISSION_REVERSAL:   "COMMISSION_REVERSAL",
+  // FA-P4-C Step 1 — a credited Field Agent earning (FieldAgentEarningLedger
+  // row) mirrored into that agent's wallet AVAILABLE bucket. Additive only.
+  EARNING_CREDIT:        "EARNING_CREDIT",
 };
 
 // What kind of record this ledger entry is about — deliberately
@@ -57,6 +60,29 @@ export const LEDGER_ENTITY_TYPE = {
   ADJUSTMENT: "ADJUSTMENT",
   BONUS:      "BONUS",
   PENALTY:    "PENALTY",
+  EARNING:    "EARNING",   // FA-P4-C Step 1 — refId = the FieldAgentEarningLedger row
+};
+
+// FA-P3-C Step 1 — WHO this ledger entry's wallet belongs to. This is
+// deliberately a SEPARATE field pair from entityType/entityId above —
+// that pair already means "what this entry is ABOUT" (a booking, a
+// withdrawal, ...) and is unchanged. ownerType/ownerId means "WHOSE
+// wallet moved" — SALON (existing behavior) or FIELD_AGENT (new,
+// FA-P3-C). Naming them differently avoids silently reinterpreting
+// every pre-existing entityType:"BOOKING"/"WITHDRAWAL" value as an
+// (invalid) owner type.
+//
+// STEP 6.2 — Unified Wallet Engine. ACQUISITION_AGENT and
+// TERRITORY_PARTNER added, additive only, mirroring SalonEarnings'
+// own WALLET_ENTITY_TYPE extension exactly — every WalletLedger row
+// this service ever writes sets ownerType = the wallet's own
+// entityType (see WalletBalanceService.js#applyLedgerEntry), so this
+// enum must accept the same set of owner kinds SalonEarnings does.
+export const LEDGER_OWNER_TYPE = {
+  SALON:              "SALON",
+  FIELD_AGENT:        "FIELD_AGENT",
+  ACQUISITION_AGENT:  "ACQUISITION_AGENT",
+  TERRITORY_PARTNER:  "TERRITORY_PARTNER",
 };
 
 const integerValidator = {
@@ -66,9 +92,29 @@ const integerValidator = {
 
 const WalletLedgerSchema = new mongoose.Schema(
   {
+    // Legacy identity — kept for 100% backward-compatible reads (every
+    // pre-existing "show this salon's ledger" query filters
+    // {salonId}). No longer required — a FIELD_AGENT-owned entry has
+    // no salonId — but WalletBalanceService always populates it
+    // (mirroring ownerId) for ownerType SALON.
     salonId: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "Salon",
+      default: null,
+      index:   true,
+    },
+
+    // FA-P3-C Step 1 — the generic wallet-owner identity (see
+    // LEDGER_OWNER_TYPE above for why this is a distinct field pair
+    // from entityType/entityId, not a reuse of it).
+    ownerType: {
+      type:     String,
+      enum:     Object.values(LEDGER_OWNER_TYPE),
+      required: true,
+      default:  LEDGER_OWNER_TYPE.SALON,
+    },
+    ownerId: {
       type:     mongoose.Schema.Types.ObjectId,
-      ref:      "Salon",
       required: true,
       index:    true,
     },
@@ -142,7 +188,11 @@ const WalletLedgerSchema = new mongoose.Schema(
     // ── Who triggered this ────────────────────────────────────
     triggeredBy: {
       type:    String,
-      enum:    ["SYSTEM", "ADMIN", "OWNER"],
+      // FA-P4-B Step 2 — FIELD_AGENT added so a Field Agent's own
+      // self-service actions (e.g. requesting/cancelling a withdrawal
+      // against their own wallet) can be attributed truthfully instead
+      // of being mislabeled OWNER/SYSTEM. Additive only.
+      enum:    ["SYSTEM", "ADMIN", "OWNER", "FIELD_AGENT"],
       default: "SYSTEM",
     },
     triggeredById: {
@@ -171,6 +221,11 @@ WalletLedgerSchema.index({ salonId: 1, createdAt: -1 });
 
 // "Show all ledger entries for this booking/withdrawal/payout"
 WalletLedgerSchema.index({ entityType: 1, entityId: 1 });
+
+// FA-P3-C Step 1 — the generic "show this wallet's history" query,
+// covering FIELD_AGENT owners (which have no salonId) and equally
+// usable for SALON owners going forward.
+WalletLedgerSchema.index({ ownerType: 1, ownerId: 1, createdAt: -1 });
 
 //////////////////////////////////////////////////////////////
 // 🔒 ENFORCE APPEND-ONLY AT THE SCHEMA LEVEL

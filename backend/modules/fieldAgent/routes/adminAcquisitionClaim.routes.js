@@ -5,10 +5,14 @@
  * FA-5.3 — admin review surface for AcquisitionClaim, mounted under
  * /api/admin/acquisition-claims with `protect` applied at the app.js
  * mount level, exact same convention as adminCommercialTerritory.routes.js.
- * Reject/reassign are INDIA-only (ending an attribution record is at
- * least as sensitive as CommercialTerritory's own admin actions);
- * reads are INDIA/STATE/DISTRICT, scoped to the admin's own geography
- * in the service layer via the claim's own denormalized stateRef/districtRef.
+ * Approve/reject/reassign are all INDIA-only (starting or ending an
+ * attribution record is at least as sensitive as CommercialTerritory's
+ * own admin actions); reads are INDIA/STATE/DISTRICT, scoped to the
+ * admin's own geography in the service layer via the claim's own
+ * denormalized stateRef/districtRef.
+ *
+ * FA-P3-B Step 1 — added /:claimId/approve (PENDING_APPROVAL ->
+ * ACTIVE_RECOVERY, the only path into recovery).
  */
 
 import express from "express";
@@ -17,6 +21,7 @@ import { validate } from "../../../middlewares/validate.middleware.js";
 import {
   adminListClaimsHandler,
   adminGetClaimDetailHandler,
+  adminApproveClaimHandler,
   adminRejectClaimHandler,
   adminReassignClaimHandler,
 } from "../controllers/adminAcquisitionClaim.controller.js";
@@ -39,6 +44,15 @@ router.get(
   requireAdminLevel(...READ_LEVELS),
   validate(acquisitionClaimSchemas.claimIdParam, "params"),
   adminGetClaimDetailHandler
+);
+
+// FA-P3-B Step 1 — INDIA-only, same sensitivity rationale as
+// reject/reassign (this is what STARTS financial entitlement).
+router.post(
+  "/:claimId/approve",
+  requireAdminLevel(...INDIA_ONLY),
+  validate(acquisitionClaimSchemas.claimIdParam, "params"),
+  adminApproveClaimHandler
 );
 
 router.post(

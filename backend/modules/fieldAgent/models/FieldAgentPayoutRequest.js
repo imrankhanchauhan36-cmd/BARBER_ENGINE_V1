@@ -101,6 +101,8 @@ export const FIELD_AGENT_PAYOUT_OPEN_STATUSES = Object.freeze([
 // but MANUAL.
 export const FIELD_AGENT_PAYOUT_PROVIDER = Object.freeze({
   MANUAL: "MANUAL",
+  // FA-P4-D Step 1 — automatic Cashfree transfer (AutoPayoutProvider).
+  CASHFREE: "CASHFREE",
 });
 
 const bankSnapshotSchema = new mongoose.Schema(
@@ -157,6 +159,27 @@ const fieldAgentPayoutRequestSchema = new mongoose.Schema(
     providerPayoutId: {
       type:    String,
       default: null,
+    },
+    // FA-P4-D Step 1 — Cashfree beneficiary this payout was sent to (created
+    // once per agent+account, then reused by later payouts).
+    providerBeneficiaryId: {
+      type:    String,
+      default: null,
+    },
+    // FA-P4-D Step 1 — last transfer state reported by the provider
+    // (Cashfree: RECEIVED / PENDING / SUCCESS / FAILED / REVERSED ...).
+    providerStatus: {
+      type:    String,
+      default: null,
+    },
+    // FA-P4-D Step 1 — true once a FAILED payout's funds were returned to
+    // the agent's AVAILABLE bucket (an automatic Cashfree failure). Such a
+    // payout no longer reserves balance and is not retryable. A MANUAL
+    // FAILED payout keeps this false: its funds stay in PROCESSING until
+    // an admin retries (unchanged FA-14 behaviour).
+    fundsReleased: {
+      type:    Boolean,
+      default: false,
     },
     utr: {
       type:    String,
@@ -256,6 +279,9 @@ fieldAgentPayoutRequestSchema.index({ status: 1, createdAt: -1 });
 // one. This single-field index is the minimum fix for exactly that one
 // query shape; no other index or model was touched.
 fieldAgentPayoutRequestSchema.index({ createdAt: -1 });
+
+// FA-P4-D Step 1 — reconciliation job: in-flight Cashfree payouts by age.
+fieldAgentPayoutRequestSchema.index({ payoutProvider: 1, status: 1, updatedAt: 1 });
 
 // Agent's own "my withdrawals" history query.
 fieldAgentPayoutRequestSchema.index({ fieldAgentRef: 1, status: 1, createdAt: -1 });

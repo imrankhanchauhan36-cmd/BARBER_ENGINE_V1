@@ -22,6 +22,7 @@ import {
   POLICY_ITEM_KEY_MAX_LENGTH,
   POLICY_ITEM_DESCRIPTION_MAX_LENGTH,
   MAX_POLICY_ITEMS_PER_LIST,
+  MINIMUM_PAYOUT_MIN_PAISE,
 } from "../constants/commercialPolicy.constants.js";
 
 const objectId = Joi.string().hex().length(24);
@@ -63,6 +64,9 @@ const policyBusinessFields = {
   obligations: policyItemListSchema,
   performanceFactors: policyItemListSchema,
   coverageRules: policyItemListSchema,
+  // FA-P3-A
+  minimumPayoutInPaise: Joi.number().integer().min(MINIMUM_PAYOUT_MIN_PAISE),
+  autoPayoutEnabled: Joi.boolean(),
 };
 
 export const adminCommercialPolicySchemas = {
@@ -78,6 +82,8 @@ export const adminCommercialPolicySchemas = {
     obligations: policyBusinessFields.obligations.optional(),
     performanceFactors: policyBusinessFields.performanceFactors.optional(),
     coverageRules: policyBusinessFields.coverageRules.optional(),
+    minimumPayoutInPaise: policyBusinessFields.minimumPayoutInPaise.optional(),
+    autoPayoutEnabled: policyBusinessFields.autoPayoutEnabled.optional(),
     ...forbiddenServerControlledFields,
   }).unknown(false),
 
@@ -91,6 +97,8 @@ export const adminCommercialPolicySchemas = {
     obligations: policyBusinessFields.obligations.optional(),
     performanceFactors: policyBusinessFields.performanceFactors.optional(),
     coverageRules: policyBusinessFields.coverageRules.optional(),
+    minimumPayoutInPaise: policyBusinessFields.minimumPayoutInPaise.optional(),
+    autoPayoutEnabled: policyBusinessFields.autoPayoutEnabled.optional(),
     ...forbiddenServerControlledFields,
   }).unknown(false),
 

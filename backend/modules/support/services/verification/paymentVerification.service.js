@@ -43,6 +43,7 @@ import WalletTransaction, {
   WALLET_TXN_STATUS,
 } from "../../../../models/WalletTransaction.js";
 import { TRANSACTION_STATUS } from "../../../../models/Transaction.js";
+import Refund, { REFUND_STATUS } from "../../../../models/Refund.js";
 import { BOOKING_STATUS } from "../../../../models/Booking.js";
 import { resolveBookingContext } from "./bookingVerification.service.js";
 
@@ -96,6 +97,25 @@ export async function resolvePaymentVerification({ ticket, actor }) {
 
   if (transaction.status === TRANSACTION_STATUS.FAILED) {
     return { state: "VERIFIED_NO_ACTION_ALLOWED", domain: "PAYMENT", reason: "PAYMENT_FAILED", entity, facts: baseFacts, allowedActions: [] };
+  }
+
+  // P0-C — a refund sent to the original Razorpay payment is recorded in the Refund
+  // collection (and marks Transaction.status REFUNDED once fully refunded). Both mean
+  // "already refunded": offering ISSUE_REFUND again would refund the customer twice.
+  if (transaction.status === TRANSACTION_STATUS.REFUNDED || (transaction.paymentId && !String(transaction.paymentId).startsWith("wallet_"))) {
+    const gatewayRefunds = transaction.paymentId
+      ? await Refund.find({ paymentId: transaction.paymentId, refundStatus: { $in: [REFUND_STATUS.PENDING, REFUND_STATUS.PROCESSED] } }).lean()
+      : [];
+    if (transaction.status === TRANSACTION_STATUS.REFUNDED || gatewayRefunds.length > 0) {
+      return {
+        state: "VERIFIED_NO_ACTION_ALLOWED",
+        domain: "PAYMENT",
+        reason: "PAYMENT_ALREADY_REFUNDED",
+        entity,
+        facts: { ...baseFacts, refundedAmountPaise: gatewayRefunds.reduce((sum, r) => sum + r.amountInPaise, 0), refundedTo: "SOURCE" },
+        allowedActions: [],
+      };
+    }
   }
 
   if (transaction.status === TRANSACTION_STATUS.PAID) {

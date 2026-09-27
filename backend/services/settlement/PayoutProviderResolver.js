@@ -12,15 +12,26 @@
 
 import { PAYOUT_PROVIDER } from "../../models/PayoutRequest.js";
 import ManualProvider from "./providers/ManualProvider.js";
+import CashfreePayoutProvider, { CASHFREE_PROVIDER_NAME } from "./providers/CashfreePayoutProvider.js";
+import RazorpayXPayoutProvider, { RAZORPAY_ROUTE_PROVIDER_NAME } from "./providers/RazorpayXPayoutProvider.js";
 import { AppError } from "../../utils/response.js";
 
 const PROVIDERS = Object.freeze({
   [PAYOUT_PROVIDER.MANUAL]: ManualProvider,
-  // PAYOUT_PROVIDER.RAZORPAYX intentionally NOT registered yet —
-  // Phase 4A is architecture only (see PayoutProvider.js header).
-  // Resolving it today throws loudly below rather than silently
-  // falling back to ManualProvider, so an unimplemented provider can
-  // never be mistaken for a working one.
+  // FA-P4-D Step 1 — CashfreePayoutProvider (Field Agent payouts).
+  [CASHFREE_PROVIDER_NAME]: CashfreePayoutProvider,
+  // STEP 6.4 — RazorpayXPayoutProvider (Generic PayoutRequest — SALON /
+  // ACQUISITION_AGENT / TERRITORY_PARTNER). This is a DIFFERENT string
+  // ("RAZORPAY_ROUTE") from models/PayoutRequest.js's own aspirational
+  // PAYOUT_PROVIDER.RAZORPAYX value below — that SALON-specific enum
+  // value is intentionally still NOT registered (SALON's own payout
+  // flow, controllers/payout.controller.js, is untouched by this step;
+  // see PayoutProvider.js header). Resolving PAYOUT_PROVIDER.RAZORPAYX
+  // today still throws loudly rather than silently falling back to
+  // ManualProvider — only GenericPayoutRequest's own
+  // GENERIC_PAYOUT_PROVIDER.RAZORPAY_ROUTE value resolves to a real
+  // provider now.
+  [RAZORPAY_ROUTE_PROVIDER_NAME]: RazorpayXPayoutProvider,
 });
 
 const PayoutProviderResolver = Object.freeze({

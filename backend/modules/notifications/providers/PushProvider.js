@@ -2,7 +2,8 @@
  * BARBER_ENGINE_V1
  * backend/modules/notifications/providers/PushProvider.js
  *
- * Notification Engine — Phase 5 (real Firebase Cloud Messaging)
+ * Notification Engine — Phase 5 (Firebase Cloud Messaging) +
+ * FA-P2-A (real Expo push, deep-link data payload)
  *
  * Mirrors services/sms.service.js's exact shape and provider-switch
  * idiom: an env-driven `PUSH_PROVIDER` selects the branch, every
@@ -10,24 +11,50 @@
  * an honest, structured outcome — never a fake success and never a
  * thrown error.
  *
- * PUSH_PROVIDER="fcm" now sends real pushes via the official Firebase
+ * PUSH_PROVIDER="fcm" sends real pushes via the official Firebase
  * Admin SDK (firebase-admin/messaging, modular API — no deprecated
- * admin.messaging() namespaced calls). PUSH_PROVIDER="none" (the
- * default) and "expo" remain exactly as Phase 4 left them — a
- * structurally-honest no-op and an intentionally-unimplemented stub,
- * respectively. No multicast/batch API is used — each active device
- * token is sent to individually, in a simple loop, so a single bad
- * token's error (invalid/unregistered) never blocks delivery to the
- * recipient's other devices and is soft-deactivated on its own (see
- * DEAD_TOKEN_ERRORS below).
+ * admin.messaging() namespaced calls); one individual send() per
+ * active device token, so a single bad token's error never blocks
+ * delivery to the recipient's other devices (soft-deactivated on its
+ * own — see DEAD_TOKEN_ERRORS below). PUSH_PROVIDER="expo" (FA-P2-A —
+ * the Field Agent app's push token architecture) sends via the
+ * official expo-server-sdk's batch API, which gives the same
+ * per-token-independent-outcome guarantee without a manual loop.
+ * PUSH_PROVIDER="none" (the default) remains the Phase 4
+ * structurally-honest no-op.
  */
 
+import { Expo } from "expo-server-sdk";
 import logger from "../../../utils/logger.js";
 import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
 import { getActiveDeviceTokens, deactivateDeviceToken } from "../services/deviceToken.service.js";
 import { getFirebaseMessaging } from "./firebaseAdmin.js";
 
 const PUSH_PROVIDER = process.env.PUSH_PROVIDER || "none";
+
+// FA-P2-A — accessToken is optional (Expo's "Enhanced Security" push
+// token, unrelated to the per-device push tokens this file sends to);
+// undefined is a valid, fully-supported constructor arg when it isn't
+// configured — never a placeholder or a reason to fail.
+const expo = new Expo(
+  process.env.EXPO_ACCESS_TOKEN ? { accessToken: process.env.EXPO_ACCESS_TOKEN } : undefined
+);
+
+// FA-P2-A — the ONE deep-link data shape attached to every outbound
+// push, for both providers below. Fixes a real gap the FA-P0-A audit
+// found: actionType/actionUrl already exist on the in-app Notification
+// document but were never attached to the actual push payload sent to
+// a device — so a tapped push had nothing to navigate with. Additive
+// only: adds a `data` object to the message; does not change
+// `notification.title`/`body`, so what a recipient SEES is unchanged
+// for every existing Owner/Salon push — only what a tap can now DO is
+// new.
+const buildDeepLinkData = (payload) => ({
+  actionType: payload.actionType ?? null,
+  deepLink:   payload.actionUrl ?? null,
+  entityType: payload.entityType ?? null,
+  entityId:   payload.entityId ? String(payload.entityId) : null,
+});
 
 // Network-level error codes (Node/undici), distinct from Firebase's
 // own messaging/* codes — both map to the same normalized outcome.
@@ -133,16 +160,93 @@ const PushProvider = Object.freeze({
       }
 
       case "expo": {
-        // TODO: wire up a real Expo push client once needed — out of
-        // scope for Phase 5 (Firebase Cloud Messaging only).
-        logger.warn(`PUSH_PROVIDER="${PUSH_PROVIDER}" configured but not implemented yet`);
+        // FA-P2-A — real implementation via the official expo-server-sdk,
+        // replacing the Phase 5 stub. Same per-token-independent-outcome
+        // guarantee as the "fcm" branch below, achieved through Expo's
+        // own batch API (chunkPushNotifications/sendPushNotificationsAsync)
+        // rather than a manual loop — each message in a chunk still gets
+        // its own independent ticket result, so one bad token can never
+        // block delivery to the same recipient's other devices.
+        const validTokens = tokens.filter((t) => Expo.isExpoPushToken(t.token));
+        const skippedCount = tokens.length - validTokens.length;
+        if (skippedCount > 0) {
+          logger.warn(`[PushProvider] ${skippedCount} device token(s) are not valid Expo push tokens — skipped`, {
+            recipientType, recipientId,
+          });
+        }
+        if (!validTokens.length) {
+          return {
+            success:   false,
+            provider:  "expo",
+            channel:   NOTIFICATION_CHANNEL.PUSH,
+            messageId: null,
+            latencyMs: Date.now() - startedAt,
+            error:     "NO_VALID_EXPO_TOKEN",
+          };
+        }
+
+        const deepLinkData = buildDeepLinkData(payload);
+        const messages = validTokens.map((t) => ({
+          to:    t.token,
+          sound: "default",
+          title: payload.title,
+          body:  payload.message,
+          data:  deepLinkData,
+        }));
+
+        let firstTicketId = null;
+        let anySuccess     = false;
+        let lastErrorCode  = null;
+
+        try {
+          const chunks = expo.chunkPushNotifications(messages);
+          for (const chunk of chunks) {
+            const tickets = await expo.sendPushNotificationsAsync(chunk);
+            tickets.forEach((ticket, i) => {
+              if (ticket.status === "ok") {
+                anySuccess = true;
+                firstTicketId = firstTicketId ?? ticket.id;
+                return;
+              }
+              // ticket.status === "error"
+              const errorCode = ticket.details?.error || "PUSH_SEND_FAILED";
+              lastErrorCode = errorCode;
+              logger.warn("[PushProvider] Expo send failed for one device token", {
+                error: errorCode, message: ticket.message, recipientType, recipientId,
+              });
+              if (errorCode === "DeviceNotRegistered") {
+                deactivateDeviceToken({
+                  recipientType,
+                  recipientId,
+                  token: chunk[i].to,
+                }).catch((deactivateErr) => {
+                  logger.warn("[PushProvider] failed to deactivate dead Expo token", { error: deactivateErr.message });
+                });
+              }
+            });
+          }
+        } catch (expoErr) {
+          // A thrown error here means the whole chunk request failed
+          // (network/Expo-service-level), not an individual token —
+          // distinct from a per-ticket "error" status handled above.
+          logger.warn("[PushProvider] Expo push request failed", { error: expoErr.message, recipientType, recipientId });
+          return {
+            success:   false,
+            provider:  "expo",
+            channel:   NOTIFICATION_CHANNEL.PUSH,
+            messageId: null,
+            latencyMs: Date.now() - startedAt,
+            error:     "PUSH_NETWORK_ERROR",
+          };
+        }
+
         return {
-          success:   false,
-          provider:  PUSH_PROVIDER,
+          success:   anySuccess,
+          provider:  "expo",
           channel:   NOTIFICATION_CHANNEL.PUSH,
-          messageId: null,
+          messageId: firstTicketId,
           latencyMs: Date.now() - startedAt,
-          error:     "PUSH_PROVIDER_NOT_IMPLEMENTED",
+          error:     anySuccess ? null : (lastErrorCode || "PUSH_SEND_FAILED"),
         };
       }
 
@@ -165,6 +269,7 @@ const PushProvider = Object.freeze({
         // No multicast/batch API — one individual send() per active
         // device token, so each token's outcome (including a dead
         // token needing deactivation) is handled independently.
+        const deepLinkData = buildDeepLinkData(payload);
         let firstMessageId = null;
         let anySuccess      = false;
         let lastErrorCode    = null;
@@ -176,6 +281,14 @@ const PushProvider = Object.freeze({
               notification: {
                 title: payload.title,
                 body:  payload.message,
+              },
+              // FA-P2-A — see buildDeepLinkData's header comment.
+              // FCM requires every `data` value to be a string.
+              data: {
+                actionType: deepLinkData.actionType ? String(deepLinkData.actionType) : "",
+                deepLink:   deepLinkData.deepLink ? String(deepLinkData.deepLink) : "",
+                entityType: deepLinkData.entityType ? String(deepLinkData.entityType) : "",
+                entityId:   deepLinkData.entityId || "",
               },
             });
             anySuccess = true;

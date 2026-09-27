@@ -2,6 +2,10 @@ import Salon from "../models/Salon.js";
 import geoService from "../services/geo.service.js";
 import { assignAdminByDistrict } from "../services/adminAssign.service.js";
 import { validateGeoHierarchy } from "../utils/validateGeoHierarchy.js";
+// STEP 5.2 — Territory Auto Assignment Engine. Additive-only import; see
+// approveSalon below for the single call site and TerritoryAutoAssignmentService.js's
+// own header for why this never blocks or fails salon approval itself.
+import { autoAssignTerritoryPartnerForSalon } from "../modules/territoryAutoAssignment/services/TerritoryAutoAssignmentService.js";
 
 ///////////////////////////////////////////////////////////
 // PARTNER REGISTRATION — v2 FINAL LOCK ✅
@@ -232,6 +236,19 @@ export const approveSalon = async (req, res) => {
     salon.onboarding.step     = 8;
 
     await salon.save();
+
+    // STEP 5.2 — Territory Auto Assignment Engine. Resolves the ACTIVE
+    // Territory Partner (existing, unmodified FA-5.2 CommercialTerritory
+    // + TerritoryAssignment machinery — read-only here) covering this
+    // salon's own geography and links it via a NEW, separate collection
+    // (SalonTerritoryAssignment) — Salon's own schema is never touched.
+    // Fail-safe by design: a resolution error must never block or fail
+    // an already-successful salon approval.
+    try {
+      await autoAssignTerritoryPartnerForSalon({ salonId: salon._id });
+    } catch (autoAssignErr) {
+      console.error("[TerritoryAutoAssignment] auto-assign after approval failed:", autoAssignErr);
+    }
 
     return res.json({
       success: true,

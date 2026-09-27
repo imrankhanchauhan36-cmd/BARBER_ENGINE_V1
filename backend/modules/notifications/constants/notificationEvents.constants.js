@@ -57,6 +57,14 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   SALON_APPROVED: "SALON_APPROVED", // reserved — no caller yet
   SALON_REJECTED: "SALON_REJECTED", // reserved — no caller yet
 
+  // Field Agent (FA-P2-A) — KYC_APPROVED/KYC_REJECTED above are reused
+  // as-is for the Field Agent applicant path too (same template key,
+  // different recipientType/recipientId at the call site); these three
+  // are Field-Agent-only events with no Owner/Salon equivalent.
+  NEW_SALON_ASSIGNED:       "NEW_SALON_ASSIGNED",
+  REFERRAL_REWARD_CREDITED: "REFERRAL_REWARD_CREDITED",
+  TERRITORY_REASSIGNED:     "TERRITORY_REASSIGNED",
+
   // Support (Phase D — Ticket + Conversation + Message Engine).
   // Only SUPPORT_TICKET_STATUS_CHANGED has a caller — ticket-created
   // and message-received are deliberately not wired as notifications

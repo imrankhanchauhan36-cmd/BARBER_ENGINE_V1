@@ -281,6 +281,7 @@ export const issueRefundHandler = async (req, res, next) => {
         bookingId: ticket.relatedBookingRef,
         triggeredBy: "ADMIN",
         triggeredById: req.user._id,
+        refundTo: req.body.refundTo || "WALLET",
       });
     } catch (execErr) {
       await recordSupportAuditEvent({
@@ -302,7 +303,7 @@ export const issueRefundHandler = async (req, res, next) => {
       action: AUDIT_ACTION.REFUND_ISSUED,
       entityType: "Booking",
       entityId: ticket.relatedBookingRef,
-      newValue: { refundPaise: result.refundPaise, alreadyIssued: result.alreadyIssued, walletTransactionId: result.walletTransactionId },
+      newValue: { refundPaise: result.refundPaise, alreadyIssued: result.alreadyIssued, walletTransactionId: result.walletTransactionId, refundTo: req.body.refundTo || "WALLET", refundId: result.refundId || null, refundStatus: result.refundStatus || null },
       reason: req.body.reason || null,
     });
 

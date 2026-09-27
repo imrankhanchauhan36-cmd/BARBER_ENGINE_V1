@@ -220,7 +220,10 @@ userRouter.post(
   confirmRateLimiter,
   idempotency,
   validate(bookingSchemas.confirm),
-  checkBookingState(["HOLD"]),
+  // P0-B — CONFIRMED is let through only so confirmBooking can answer an
+  // already-confirmed-by-webhook booking idempotently; any other CONFIRMED
+  // request is still rejected inside confirmBooking ("Invalid booking state").
+  checkBookingState(["HOLD", "CONFIRMED"]),
   confirmBooking
 );
 

@@ -22,6 +22,12 @@ import {
   assignPartner,
   vacatePartner,
 } from "../services/commercialTerritory.service.js";
+// FA-P2-A — notification only; read-only FieldAgent lookup, never
+// mutates it.
+import FieldAgent from "../models/FieldAgent.js";
+import NotificationService from "../../../services/NotificationService.js";
+import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
+import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 
 export const createDraftTerritoryHandler = async (req, res, next) => {
   try {
@@ -102,6 +108,39 @@ export const assignPartnerHandler = async (req, res, next) => {
       fieldAgentId: req.body.fieldAgentId,
       adminId: req.user._id,
     });
+
+    // FA-P2-A — "Territory Reassigned" (non-blocking, after write).
+    // Fires only on assignment (the moment a partner is actually
+    // assigned/reassigned to a territory) — vacatePartnerHandler is
+    // deliberately not wired, since the named event is singular and
+    // this is the moment relevant to the field agent gaining the
+    // territory, not the one losing it.
+    try {
+      const fieldAgent = await FieldAgent.findById(req.body.fieldAgentId).select("userRef").lean();
+      if (fieldAgent) {
+        await NotificationService.send(
+          {
+            recipientId:   fieldAgent.userRef,
+            recipientType: "FIELD_AGENT",
+            templateKey:   NOTIFICATION_EVENTS.TERRITORY_REASSIGNED,
+            variables:     {},
+            title:         "Territory Assigned",
+            message:       "You've been assigned a new Commercial Territory.",
+            type:          "SYSTEM",
+            priority:      "HIGH",
+            actionType:    "OPEN_PROFILE",
+            actionUrl:     "/field-agent/territory",
+            entityType:    "SYSTEM",
+            entityId:      result.territory._id,
+            meta:          { territoryId: result.territory._id, assignmentId: result.assignment._id },
+          },
+          [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+        );
+      }
+    } catch (notifyErr) {
+      console.warn("[adminCommercialTerritory] TERRITORY_REASSIGNED notification failed (non-critical):", notifyErr.message);
+    }
+
     return successResponse(res, { message: "Territory Partner assigned", data: result });
   } catch (err) {
     return next(err);

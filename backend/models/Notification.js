@@ -15,6 +15,13 @@ const NotificationSchema =
           "SALON",
           "ADMIN",
           "STAFF",
+          // FA-P2-A — Field Agent notification recipients (both
+          // applicant and operational stages; keyed on the Field
+          // Agent's own User._id, not the FieldAgent document, since
+          // the latter doesn't exist until final approval — see
+          // FA-P2-A integration notes). Additive only; the 4 existing
+          // values above are untouched.
+          "FIELD_AGENT",
         ],
 
         required: true,

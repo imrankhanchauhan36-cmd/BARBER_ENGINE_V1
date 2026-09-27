@@ -33,6 +33,17 @@ export const PAYOUT_STATUS = {
   CANCELLED:  "CANCELLED",   // owner cancelled before admin approval
 };
 
+// FA-P4-B Step 2 — statuses in which a payout still holds funds / is
+// in flight, i.e. "the owner already has an open withdrawal". Used by
+// both the DB-level unique index below and the controller's own
+// pre-check so the two can never drift. FAILED is deliberately NOT
+// open: WalletBalanceService.failPayout returns the money to AVAILABLE,
+// so a failed payout no longer blocks a new request.
+export const OPEN_PAYOUT_STATUSES = [
+  PAYOUT_STATUS.REQUESTED,
+  PAYOUT_STATUS.PROCESSING,
+];
+
 export const PAYOUT_PROVIDER = {
   MANUAL:    "MANUAL",     // admin transfers by hand, enters UTR themselves
   RAZORPAYX: "RAZORPAYX",  // automatic — Razorpay Payouts API
@@ -127,14 +138,29 @@ const PayoutRequestSchema = new mongoose.Schema(
 // Most common admin query — list by status, newest first
 PayoutRequestSchema.index({ status: 1, createdAt: -1 });
 
-// ✅ DB-LEVEL SAFETY NET: a salon cannot have two REQUESTED
-// withdrawals open at the same time. This is enforced in the
-// controller too, but a partial unique index means even a race
-// condition or a bypassed controller path cannot create a
-// duplicate open request.
+// Plain lookup index — history/list queries filter by salonId alone.
+PayoutRequestSchema.index({ salonId: 1 });
+
+// ✅ DB-LEVEL SAFETY NET: a salon cannot have two OPEN withdrawals
+// at the same time. This is enforced in the controller too, but a
+// partial unique index means even a race condition or a bypassed
+// controller path cannot create a duplicate open request.
+//
+// FA-P4-B Step 2 — two fixes to the previous definition:
+//  1. It covered only REQUESTED, so a PROCESSING payout (an async
+//     provider leaves one in flight) no longer blocked a second
+//     request. It now covers every OPEN_PAYOUT_STATUSES value.
+//  2. It was declared as an unnamed { salonId: 1 } unique index, which
+//     Mongo names "salonId_1" — the same name as the plain lookup
+//     index, so the two collided and the unique one was never actually
+//     built in the database. It now has its own explicit name.
 PayoutRequestSchema.index(
   { salonId: 1 },
-  { unique: true, partialFilterExpression: { status: PAYOUT_STATUS.REQUESTED } }
+  {
+    name: "salonId_open_unique",
+    unique: true,
+    partialFilterExpression: { status: { $in: OPEN_PAYOUT_STATUSES } },
+  }
 );
 
 //////////////////////////////////////////////////////////////

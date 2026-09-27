@@ -69,6 +69,9 @@ export const supportInternalSchemas = {
   // free-text reason for the audit trail, same shape as resolve/close.
   issueRefund: Joi.object({
     reason: Joi.string().trim().max(500).allow(null).optional(),
+    // P0-C — where the refund goes; never an amount. WALLET (default) = the
+    // customer's in-app wallet (unchanged); SOURCE = the original Razorpay payment.
+    refundTo: Joi.string().valid("WALLET", "SOURCE").default("WALLET"),
   }).unknown(false),
 
   // POST /admin/tickets/:id/reopen — Phase S.4, same shape as

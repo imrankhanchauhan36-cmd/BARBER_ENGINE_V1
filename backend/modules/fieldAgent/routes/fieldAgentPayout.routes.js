@@ -21,6 +21,7 @@ import { createRedisRateLimiter, RATE_LIMIT_ACTIONS, RATE_LIMIT_CONFIG } from ".
 import { validate } from "../../../middlewares/validate.middleware.js";
 import {
   getMyBalanceHandler,
+  getMyWalletHandler,
   createWithdrawalHandler,
   listMyPayoutsHandler,
   getMyPayoutDetailHandler,
@@ -44,6 +45,13 @@ router.use(requireActiveFieldAgent);
 router.get(
   "/balance",
   getMyBalanceHandler
+);
+
+// FA-P4-C Step 1 — wallet summary (available balance, minimum payout,
+// verified bank snapshot, open-request flag). Read-only.
+router.get(
+  "/wallet",
+  getMyWalletHandler
 );
 
 // FA-15 Phase C1 — defense-in-depth abuse/cost containment only. Does

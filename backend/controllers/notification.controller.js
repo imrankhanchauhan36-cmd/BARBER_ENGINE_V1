@@ -13,6 +13,28 @@ const getSalonByOwner = async (ownerId) => {
 };
 
 //////////////////////////////////////////////////////
+// HELPER — RESOLVE RECIPIENT (FA-P2-A)
+//
+// Every handler below used to be OWNER-only (always calling
+// getSalonByOwner). This is now the single place that branches by
+// req.user.role — the OWNER branch is byte-for-byte the original
+// behavior (same query, same "SALON_NOT_FOUND" error), so an OWNER
+// request is completely unaffected. FIELD_AGENT is a new, additive
+// branch: recipientId is the Field Agent's own User._id (not a
+// FieldAgent document — see models/Notification.js's own comment for
+// why), which exists from first OTP verification onward, so this
+// works identically at every stage (applicant or operational).
+//////////////////////////////////////////////////////
+
+const resolveRecipient = async (user) => {
+  if (user?.role === "FIELD_AGENT") {
+    return { recipientType: "FIELD_AGENT", recipientId: user._id };
+  }
+  const salon = await getSalonByOwner(user?._id);
+  return { recipientType: "SALON", recipientId: salon._id };
+};
+
+//////////////////////////////////////////////////////
 // HELPER — VALIDATE OBJECT ID
 //////////////////////////////////////////////////////
 
@@ -24,16 +46,15 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getNotifications = async (req, res) => {
   try {
-    const ownerId = req.user?._id;
-    const salon   = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     const page  = parseInt(req.query.page)  || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip  = (page - 1) * limit;
 
     const filter = {
-      recipientId:   salon._id,
-      recipientType: "SALON",
+      recipientId,
+      recipientType,
       isArchived:    false,
     };
 
@@ -45,8 +66,8 @@ export const getNotifications = async (req, res) => {
         .lean(),
 
       Notification.countDocuments({
-        recipientId:   salon._id,
-        recipientType: "SALON",
+        recipientId,
+        recipientType,
         isRead:        false,
         isArchived:    false,
       }),
@@ -82,13 +103,12 @@ export const getNotifications = async (req, res) => {
 
 export const markAllRead = async (req, res) => {
   try {
-    const ownerId = req.user?._id;
-    const salon   = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     await Notification.updateMany(
       {
-        recipientId:   salon._id,
-        recipientType: "SALON",
+        recipientId,
+        recipientType,
         isRead:        false,
         isArchived:    false,
       },
@@ -110,20 +130,19 @@ export const markAllRead = async (req, res) => {
 
 export const markOneRead = async (req, res) => {
   try {
-    const { id }  = req.params;
-    const ownerId = req.user?._id;
+    const { id } = req.params;
 
     if (!isValidId(id)) {
       return res.status(400).json({ success: false, message: "Invalid notification ID" });
     }
 
-    const salon = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     const updated = await Notification.findOneAndUpdate(
       {
         _id:           id,
-        recipientId:   salon._id,
-        recipientType: "SALON",
+        recipientId,
+        recipientType,
       },
       { $set: { isRead: true } },
       { new: true }
@@ -148,13 +167,12 @@ export const markOneRead = async (req, res) => {
 
 export const clearAllNotifications = async (req, res) => {
   try {
-    const ownerId = req.user?._id;
-    const salon   = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     await Notification.updateMany(
       {
-        recipientId:   salon._id,
-        recipientType: "SALON",
+        recipientId,
+        recipientType,
         isArchived:    false,
       },
       { $set: { isArchived: true } }
@@ -184,6 +202,14 @@ export const createNotification = async ({
   meta      = {},
   actionType = null,
   actionUrl  = null,
+  // FA-P2-A — the Notification model has carried entityType/entityId
+  // since it was created, but no caller ever threaded them through
+  // this function, so they were silently dropped on every existing
+  // notification. Purely additive: both default to null (Mongoose's
+  // own schema default), so any existing caller that never passes
+  // them sees byte-identical behavior.
+  entityType = null,
+  entityId   = null,
 }) => {
   try {
     const notification = await Notification.create({
@@ -196,6 +222,8 @@ export const createNotification = async ({
       meta,
       actionType,
       actionUrl,
+      entityType,
+      entityId,
     });
     return notification;
   } catch (err) {

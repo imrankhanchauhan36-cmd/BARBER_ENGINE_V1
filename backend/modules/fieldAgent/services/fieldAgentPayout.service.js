@@ -5,10 +5,23 @@
  * FA-14 — Field Agent Payout / Withdrawal / Disbursement (V1, MANUAL
  * only, no automatic/RazorpayX provider).
  *
- * FINANCIAL ARCHITECTURE (locked Option A): there is no continuously
- * credited Field Agent wallet. Available balance is always computed
- * fresh, inside the same transaction that creates a withdrawal
- * request, as:
+ * FA-P4-C Step 1 — WALLET-BACKED. Money now moves through the same
+ * WalletBalanceService / WalletLedger wallet a salon uses (entityType
+ * FIELD_AGENT), with the same lifecycle:
+ *   request  → hold      AVAILABLE → LOCKED
+ *   cancel / reject → release  LOCKED → AVAILABLE
+ *   approve  → moveToProcessing  LOCKED → PROCESSING
+ *   paid     → completePayout    PROCESSING debited
+ *   failed / retry → no wallet move (funds stay PROCESSING until an
+ *                     admin retries, matching FAILED-is-still-reserving)
+ * Earnings are mirrored into the wallet by fieldAgentWalletBridge.service.js
+ * inside the withdrawal transaction. The minimum is ₹500.
+ *
+ * The on-demand computation below (FA-14 Option A) is kept, unchanged,
+ * for read-only surfaces such as the dashboard's availablePayout; while
+ * every earning is mirrored it equals the wallet's AVAILABLE bucket.
+ *
+ * Original FA-14 note — available balance computed fresh as:
  *
  *   SUM(FieldAgentEarningLedger.creditedAmountInPaise WHERE
  *       creditOutcome = CREDITED)                          [FA-9, read-only]
@@ -53,8 +66,15 @@ import { AUDIT_ACTOR_TYPE, AUDIT_ACTION, AUDIT_ENTITY_TYPE } from "../constants/
 import { EARNING_CREDIT_OUTCOME } from "../constants/fieldAgentEarning.constants.js";
 import KYC from "../../kyc/models/KYC.js";
 import { APPLICANT_TYPE } from "../../kyc/constants/kyc.constants.js";
+import WalletBalanceService from "../../../services/WalletBalanceService.js";
+import {
+  FIELD_AGENT_WALLET_ENTITY_TYPE,
+  findUnbridgedEarnings,
+  syncEarningsIntoWallet,
+} from "./fieldAgentWalletBridge.service.js";
+import { selectPayoutProvider } from "./fieldAgentAutoPayout.service.js";
 
-const MIN_WITHDRAWAL_PAISE = 10000; // ₹100 — locked V1 rule
+export const MIN_WITHDRAWAL_PAISE = 50000; // ₹500 — FA-P4-C Step 1 (was ₹100 in FA-14)
 const MAX_ATTEMPTS = 3;
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
@@ -121,7 +141,7 @@ const resolveVerifiedBankSnapshot = async (fieldAgent, session) => {
     isDeleted: { $ne: true },
   })
     .select("bank")
-    .session(session)
+    .session(session || null)
     .lean();
 
   if (!kyc || !kyc.bank) {
@@ -160,7 +180,9 @@ export const computeAvailableBalance = async (fieldAgentRef, session = null) => 
     { $group: { _id: null, total: { $sum: "$creditedAmountInPaise" } } },
   ]);
   const reservedAggQuery = FieldAgentPayoutRequest.aggregate([
-    { $match: { fieldAgentRef: agentObjectId, status: { $in: FIELD_AGENT_PAYOUT_RESERVING_STATUSES } } },
+    // fundsReleased (FA-P4-D): an automatic Cashfree failure returned its funds to
+    // AVAILABLE, so it no longer reserves anything.
+    { $match: { fieldAgentRef: agentObjectId, status: { $in: FIELD_AGENT_PAYOUT_RESERVING_STATUSES }, fundsReleased: { $ne: true } } },
     { $group: { _id: null, total: { $sum: "$amountInPaise" } } },
   ]);
   if (session) {
@@ -184,6 +206,49 @@ export const getMyBalanceSummary = async (userId) => {
   const fieldAgent = await FieldAgent.findOne({ userRef: userId }).select("_id").lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent profile not found");
   return computeAvailableBalance(fieldAgent._id);
+};
+
+// ─────────────────────────────────────────────────────────────────
+// WALLET (FA-P4-C Step 1) — same engine as Salon, entityType FIELD_AGENT
+// ─────────────────────────────────────────────────────────────────
+
+const walletOwner = (fieldAgentRef) => ({
+  entityType: FIELD_AGENT_WALLET_ENTITY_TYPE,
+  entityId:   fieldAgentRef,
+});
+
+const walletMove = (payout, extra) => ({
+  ...walletOwner(payout.fieldAgentRef),
+  amountInPaise: payout.amountInPaise,
+  refType:       "WITHDRAWAL",
+  refId:         payout._id,
+  ...extra,
+});
+
+/**
+ * Read-only wallet summary for the withdraw screen. Never writes: the
+ * spendable amount is the wallet's AVAILABLE bucket plus any credited
+ * earning not yet mirrored into it (which the next withdrawal mirrors).
+ */
+export const getMyWalletSummary = async (userId) => {
+  const fieldAgent = await FieldAgent.findOne({ userRef: userId }).select("_id").lean();
+  if (!fieldAgent) throw Errors.notFound("Field Agent profile not found");
+
+  const [wallet, unbridged, openPayout, bankAccountSnapshot] = await Promise.all([
+    WalletBalanceService.getWallet(walletOwner(fieldAgent._id)),
+    findUnbridgedEarnings(fieldAgent._id),
+    FieldAgentPayoutRequest.exists({ fieldAgentRef: fieldAgent._id, isOpen: true }),
+    resolveVerifiedBankSnapshot({ userRef: userId }, null).catch(() => null),
+  ]);
+
+  const unbridgedInPaise = unbridged.reduce((sum, r) => sum + r.creditedAmountInPaise, 0);
+
+  return {
+    availableBalance:    (wallet?.availableBalanceInPaise || 0) + unbridgedInPaise,
+    minimumPayout:       MIN_WITHDRAWAL_PAISE,
+    bankAccountSnapshot, // null until KYC bank details are penny-drop verified
+    hasPendingRequest:   !!openPayout,
+  };
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -227,14 +292,23 @@ export const createWithdrawalRequest = async ({ userId, amountInPaise, idempoten
       // 8. Read verified bank details (server-derived only).
       const bankSnapshot = await resolveVerifiedBankSnapshot(fieldAgent, session);
 
-      // 4-7. Compute available balance and validate the requested amount
-      // — inside the SAME transaction/session as the create below, so
-      // a concurrent second request cannot both read the same
-      // available balance before either commits.
-      const { availableInPaise } = await computeAvailableBalance(fieldAgent._id, session);
+      // One open request only — explicit pre-check for a clean 409; the
+      // isOpen partial unique index below remains the real backstop.
+      const openExisting = await FieldAgentPayoutRequest.exists({ fieldAgentRef: fieldAgent._id, isOpen: true }).session(session);
+      if (openExisting) {
+        throw Errors.conflict("You already have an active withdrawal request. Please wait for it to be resolved before creating a new one.");
+      }
+
+      // 4-7. Mirror any not-yet-credited earnings into the wallet, then
+      // validate against the wallet's AVAILABLE bucket — all inside the
+      // SAME transaction as the hold below, so a concurrent second
+      // request cannot spend the same balance.
+      await syncEarningsIntoWallet({ fieldAgentRef: fieldAgent._id, session });
+      const wallet = await WalletBalanceService.getWallet({ ...walletOwner(fieldAgent._id), session });
+      const availableInPaise = wallet?.availableBalanceInPaise || 0;
       if (amountInPaise > availableInPaise) {
         throw Errors.badRequest(
-          `Requested amount exceeds available balance (₹${Math.round(availableInPaise / 100)} available)`
+          `Requested amount exceeds available balance (₹${Math.floor(availableInPaise / 100)} available)`
         );
       }
 
@@ -250,6 +324,15 @@ export const createWithdrawalRequest = async ({ userId, amountInPaise, idempoten
         }],
         { session }
       );
+
+      // AVAILABLE → LOCKED (two immutable WalletLedger rows).
+      await WalletBalanceService.hold(walletMove(payout, {
+        idempotencyKey: `payout:hold:${payout._id}`,
+        session,
+        triggeredBy:    "FIELD_AGENT",
+        triggeredById:  userId,
+        remarks:        "Withdrawal requested",
+      }));
 
       await FieldAgentAuditEvent.create(
         [{
@@ -364,6 +447,15 @@ export const cancelMyPayout = async ({ userId, payoutId }) => {
     payout.isOpen       = false;
     await payout.save({ session });
 
+    // LOCKED → AVAILABLE
+    await WalletBalanceService.release(walletMove(payout, {
+      idempotencyKey: `payout:cancel:${payout._id}`,
+      session,
+      triggeredBy:    "FIELD_AGENT",
+      triggeredById:  userId,
+      remarks:        "Withdrawal cancelled by Field Agent",
+    }));
+
     await FieldAgentAuditEvent.create(
       [{
         entityType: AUDIT_ENTITY_TYPE.FIELD_AGENT_PAYOUT_REQUEST,
@@ -451,8 +543,11 @@ export const listPayoutsForAdmin = async ({ admin, query }) => {
 
   const pagination = buildPagination(query);
   const filter = {};
-  if (query?.status && Object.values(FIELD_AGENT_PAYOUT_STATUS).includes(query.status)) {
-    filter.status = query.status;
+  if (typeof query?.status === "string") {
+    // FA-P4-C Step 2 — accepts one status or a comma-separated list.
+    const wanted = query.status.split(",").filter((st) => Object.values(FIELD_AGENT_PAYOUT_STATUS).includes(st));
+    if (wanted.length === 1) filter.status = wanted[0];
+    else if (wanted.length > 1) filter.status = { $in: wanted };
   }
 
   return paginatedQuery(FieldAgentPayoutRequest, filter, pagination, {
@@ -472,6 +567,16 @@ export const getPayoutDetailForAdmin = async ({ admin, payoutId }) => {
 };
 
 export const approvePayout = async ({ admin, payoutId }) => {
+  // FA-P4-D Step 1 — provider is chosen at approval from Revenue Settings ->
+  // Auto Payout Enabled: OFF -> MANUAL (this function's original behaviour,
+  // untouched), ON -> CASHFREE (only if configured and the bank destination is
+  // still provably the requested one; otherwise falls back to MANUAL).
+  let provider = FIELD_AGENT_PAYOUT_PROVIDER.MANUAL;
+  if (mongoose.isValidObjectId(payoutId) && isFieldAgentWithinPayoutScope(admin)) {
+    const pre = await FieldAgentPayoutRequest.findById(payoutId).lean();
+    if (pre && pre.status === FIELD_AGENT_PAYOUT_STATUS.REQUESTED) provider = await selectPayoutProvider(pre);
+  }
+
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
@@ -492,9 +597,22 @@ export const approvePayout = async ({ admin, payoutId }) => {
 
     const fromStatus = payout.status;
     payout.status     = FIELD_AGENT_PAYOUT_STATUS.PROCESSING;
+    if (provider === FIELD_AGENT_PAYOUT_PROVIDER.CASHFREE) {
+      payout.payoutProvider = FIELD_AGENT_PAYOUT_PROVIDER.CASHFREE;
+      payout.providerStatus = "INITIATED";
+    }
     payout.approvedBy = admin._id;
     payout.approvedAt = new Date();
     await payout.save({ session });
+
+    // LOCKED → PROCESSING
+    await WalletBalanceService.moveToProcessing(walletMove(payout, {
+      idempotencyKey: `payout:processing:${payout._id}`,
+      session,
+      triggeredBy:    "ADMIN",
+      triggeredById:  admin._id,
+      remarks:        "Admin approved — moved to processing",
+    }));
 
     await FieldAgentAuditEvent.create(
       [{
@@ -538,6 +656,15 @@ export const rejectPayout = async ({ admin, payoutId, reason }) => {
     payout.adminNote = reason.trim();
     payout.isOpen     = false;
     await payout.save({ session });
+
+    // LOCKED → AVAILABLE (only REQUESTED is rejectable, so funds are LOCKED)
+    await WalletBalanceService.release(walletMove(payout, {
+      idempotencyKey: `payout:reject:${payout._id}`,
+      session,
+      triggeredBy:    "ADMIN",
+      triggeredById:  admin._id,
+      remarks:        `Admin rejected — ${reason.trim()}`.slice(0, 500),
+    }));
 
     await FieldAgentAuditEvent.create(
       [{
@@ -583,6 +710,9 @@ export const recordManualPayoutResult = async ({ admin, payoutId, success, utr, 
     session.startTransaction();
 
     const payout = await resolvePayoutWithScope({ admin, payoutId, session });
+    if (payout.payoutProvider === FIELD_AGENT_PAYOUT_PROVIDER.CASHFREE) {
+      throw Errors.conflict("This payout is being paid automatically through Cashfree — its result cannot be recorded manually");
+    }
     const targetStatus = success ? FIELD_AGENT_PAYOUT_STATUS.PAID : FIELD_AGENT_PAYOUT_STATUS.FAILED;
     if (!FIELD_AGENT_PAYOUT_TRANSITIONS[payout.status]?.includes(targetStatus)) {
       throw Errors.conflict(`Cannot record ${targetStatus} — current status is ${payout.status}`);
@@ -594,6 +724,14 @@ export const recordManualPayoutResult = async ({ admin, payoutId, success, utr, 
     if (success) {
       payout.utr = utr.trim();
       payout.isOpen = false; // PAID is genuinely resolved — releases the "open" slot
+      // PROCESSING debited for good — the money has left the platform.
+      await WalletBalanceService.completePayout(walletMove(payout, {
+        idempotencyKey: `payout:complete:${payout._id}`,
+        session,
+        triggeredBy:    "ADMIN",
+        triggeredById:  admin._id,
+        remarks:        `UTR: ${utr.trim()}`,
+      }));
     } else {
       payout.failureReason = failureReason.trim();
       // Deliberately NOT setting isOpen=false here — a FAILED manual
@@ -641,6 +779,9 @@ export const retryFailedPayout = async ({ admin, payoutId }) => {
     const payout = await resolvePayoutWithScope({ admin, payoutId, session });
     if (payout.status !== FIELD_AGENT_PAYOUT_STATUS.FAILED) {
       throw Errors.conflict(`Cannot retry — current status is ${payout.status}, not FAILED`);
+    }
+    if (payout.payoutProvider === FIELD_AGENT_PAYOUT_PROVIDER.CASHFREE || payout.fundsReleased) {
+      throw Errors.conflict("This payout failed automatically and its funds were returned to the agent — it cannot be retried; the agent can request a new withdrawal");
     }
 
     payout.status        = FIELD_AGENT_PAYOUT_STATUS.PROCESSING;

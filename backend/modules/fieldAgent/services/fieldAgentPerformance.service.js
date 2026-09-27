@@ -83,7 +83,10 @@ const computeAcquisitionMetrics = async ({ fieldAgentRef, windowStart, now }) =>
   const claimIds = claims.map((c) => c._id);
 
   const claimsIssuedCount = claims.filter((c) => c.createdAt >= windowStart && c.createdAt <= now).length;
-  const claimsActiveCount = claims.filter((c) => c.status === CLAIM_STATUS.ACTIVE).length;
+  // FA-P3-B Step 1 — ACTIVE renamed to ACTIVE_RECOVERY; this metric's
+  // intent (genuinely active, earning relationships) is preserved by
+  // pointing it at the new name, not by including PENDING_APPROVAL.
+  const claimsActiveCount = claims.filter((c) => c.status === CLAIM_STATUS.ACTIVE_RECOVERY).length;
 
   // distinct() over an already fieldAgentRef-scoped set — de-duplicates
   // naturally, so a salon re-claimed by the same agent after an earlier

@@ -1,4 +1,4 @@
-import SalonEarnings from "../models/SalonEarnings.js";
+import SalonEarnings, { WALLET_ENTITY_TYPE } from "../models/SalonEarnings.js";
 import WalletLedger, {
   LEDGER_BUCKET,
   LEDGER_DIRECTION,
@@ -26,6 +26,27 @@ import { Errors } from "../utils/response.js";
 //   4. Is idempotent when called with the same idempotencyKey —
 //      a retried webhook or a retried request is a safe no-op,
 //      not a double-credit.
+//
+// FA-P3-C Step 1 — PARAMETERIZED BY WALLET OWNER (SALON |
+// FIELD_AGENT). This is the SAME collection (SalonEarnings), the
+// SAME ledger (WalletLedger), and the SAME methods — no second
+// wallet engine was created. Two distinct parameter pairs matter here
+// and must never be confused:
+//   - entityType / entityId — WHO owns this wallet (SALON or
+//     FIELD_AGENT + their id). New in this phase.
+//   - refType / refId — WHAT this specific transaction is ABOUT
+//     (a Booking, a Withdrawal, ...). This is what every pre-existing
+//     caller in this codebase used to pass as "entityType"/"entityId"
+//     before this phase — renamed here ONLY at the JS parameter level
+//     to avoid colliding with the new owner-identity meaning of that
+//     name. The underlying WalletLedger DB fields are UNCHANGED
+//     (still literally named entityType/entityId there); only this
+//     service's own parameter names shifted.
+//   - Legacy `salonId` is still accepted everywhere and is 100%
+//     backward compatible: every pre-existing SALON call site in this
+//     codebase needs zero changes to keep working exactly as before —
+//     omitting entityType/entityId defaults to
+//     { entityType: "SALON", entityId: salonId }.
 //////////////////////////////////////////////////////////////
 
 // Generous ceiling — ₹1000 crore in paise. Verified against the real
@@ -45,10 +66,32 @@ const integerOrThrow = (amountInPaise) => {
   }
 };
 
-const salonIdOrThrow = (salonId) => {
-  if (!salonId) {
-    throw Errors.badRequest("salonId is required");
+/**
+ * FA-P3-C Step 1 — the single place that resolves "which wallet is
+ * this call about", accepting either the new explicit
+ * { entityType, entityId } or the legacy { salonId } shorthand (never
+ * both required — salonId alone still fully identifies a SALON
+ * wallet, exactly as before this phase). Returns the normalized
+ * identity PLUS a backward-compatible `salonId` (populated only for
+ * entityType SALON, null otherwise) so every pre-existing salonId-based
+ * read elsewhere in the codebase keeps working unchanged.
+ */
+const resolveOwner = ({ salonId, entityType, entityId }) => {
+  const resolvedType = entityType || WALLET_ENTITY_TYPE.SALON;
+  const resolvedId = entityId || salonId;
+
+  if (!Object.values(WALLET_ENTITY_TYPE).includes(resolvedType)) {
+    throw Errors.badRequest(`Unknown wallet entityType: ${resolvedType}`);
   }
+  if (!resolvedId) {
+    throw Errors.badRequest("entityId (or legacy salonId) is required");
+  }
+
+  return {
+    entityType: resolvedType,
+    entityId: resolvedId,
+    salonId: resolvedType === WALLET_ENTITY_TYPE.SALON ? resolvedId : null,
+  };
 };
 
 /**
@@ -87,12 +130,14 @@ const findExistingByIdempotencyKey = async (idempotencyKey, session) => {
  */
 const applyLedgerEntry = async ({
   salonId,
+  entityType,
+  entityId,
   direction,
   bucket,
   amountInPaise,
   action,
-  entityType,
-  entityId,
+  refType,
+  refId,
   idempotencyKey,
   triggeredBy = "SYSTEM",
   triggeredById = null,
@@ -100,7 +145,7 @@ const applyLedgerEntry = async ({
   session,
 }) => {
   integerOrThrow(amountInPaise);
-  salonIdOrThrow(salonId);
+  const owner = resolveOwner({ salonId, entityType, entityId });
   sessionOrThrow(session);
 
   // ── Idempotency short-circuit ──────────────────────────────
@@ -129,7 +174,7 @@ const applyLedgerEntry = async ({
   // For DEBIT, the filter requires the bucket to already have
   // enough balance — if not, findOneAndUpdate matches nothing and
   // returns null, so two concurrent debits can never both pass.
-  const filter = { salonId };
+  const filter = { entityType: owner.entityType, entityId: owner.entityId };
   if (direction === LEDGER_DIRECTION.DEBIT) {
     filter[bucketField] = { $gte: amountInPaise };
   }
@@ -139,7 +184,11 @@ const applyLedgerEntry = async ({
     $set: { lastTransactionAt: new Date() },
   };
   if (direction === LEDGER_DIRECTION.CREDIT) {
-    update.$setOnInsert = { salonId };
+    update.$setOnInsert = {
+      entityType: owner.entityType,
+      entityId: owner.entityId,
+      salonId: owner.salonId,
+    };
   }
 
   const wallet = await SalonEarnings.findOneAndUpdate(
@@ -166,8 +215,12 @@ const applyLedgerEntry = async ({
   try {
     const [ledgerEntry] = await WalletLedger.create(
       [{
-        salonId, direction, bucket, action, amountInPaise,
-        entityType, entityId, idempotencyKey,
+        salonId: owner.salonId,
+        ownerType: owner.entityType,
+        ownerId: owner.entityId,
+        direction, bucket, action, amountInPaise,
+        entityType: refType, entityId: refId, // transaction-subject — unchanged DB field names
+        idempotencyKey,
         triggeredBy, triggeredById, remarks, balanceAfter,
       }],
       { session }
@@ -177,12 +230,12 @@ const applyLedgerEntry = async ({
     // Duplicate idempotencyKey raced in between our check and
     // insert (rare, but requires two overlapping transactions whose
     // wallet writes don't conflict with each other — e.g. the same
-    // idempotencyKey mistakenly reused across two different
-    // salonIds. Same-salon races are additionally caught by
-    // MongoDB's own transaction conflict detection on the $inc
-    // above, since both would target the same document — but that
-    // protection doesn't apply here, so this path must be self-
-    // sufficient rather than assume it never survives to this point.
+    // idempotencyKey mistakenly reused across two different wallets.
+    // Same-wallet races are additionally caught by MongoDB's own
+    // transaction conflict detection on the $inc above, since both
+    // would target the same document — but that protection doesn't
+    // apply here, so this path must be self-sufficient rather than
+    // assume it never survives to this point.
     if (err?.code === 11000 && idempotencyKey) {
       const existing = await findExistingByIdempotencyKey(idempotencyKey, session);
       if (existing) {
@@ -196,7 +249,7 @@ const applyLedgerEntry = async ({
         // transaction, nothing else can have touched this field
         // between our forward $inc and this compensating one.
         await SalonEarnings.findOneAndUpdate(
-          { salonId },
+          { entityType: owner.entityType, entityId: owner.entityId },
           { $inc: { [bucketField]: -delta } },
           { session }
         );
@@ -218,9 +271,9 @@ const WalletBalanceService = {
    * immediately withdrawable with no delivery condition attached.
    * NOT used for booking settlement anymore — see creditPending.
    */
-  credit: async ({ salonId, amountInPaise, action, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  credit: async ({ salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     return applyLedgerEntry({
-      salonId, amountInPaise, action, entityType, entityId, idempotencyKey,
+      salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey,
       triggeredBy, triggeredById, remarks, session,
       direction: LEDGER_DIRECTION.CREDIT,
       bucket:    LEDGER_BUCKET.AVAILABLE,
@@ -234,13 +287,13 @@ const WalletBalanceService = {
    * Mirrors `credit` exactly except the bucket.
    *
    * NOTE: caller must pass action: "BOOKING_SETTLEMENT" and
-   * entityType: "BOOKING" — these are the only values in the
+   * refType: "BOOKING" — these are the only values in the
    * WalletLedger enum for this scenario (verified against
    * models/WalletLedger.js — LEDGER_ACTION / LEDGER_ENTITY_TYPE).
    */
-  creditPending: async ({ salonId, amountInPaise, action, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  creditPending: async ({ salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     return applyLedgerEntry({
-      salonId, amountInPaise, action, entityType, entityId, idempotencyKey,
+      salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey,
       triggeredBy, triggeredById, remarks, session,
       direction: LEDGER_DIRECTION.CREDIT,
       bucket:    LEDGER_BUCKET.PENDING,
@@ -254,22 +307,15 @@ const WalletBalanceService = {
    * earns the right to withdraw the money that's been sitting in
    * PENDING since payment. Two ledger rows (one per bucket), same
    * pattern as hold/release/moveToProcessing below.
-   *
-   * ✅ FIX — action was "SERVICE_SETTLEMENT", which does not exist
-   * in LEDGER_ACTION (verified against models/WalletLedger.js).
-   * This threw a Mongoose enum validation error on every call.
-   * The only valid booking-related action in the enum is
-   * "BOOKING_SETTLEMENT" — used here for both the debit and
-   * credit leg, same as creditPending uses for its credit leg.
    */
-  releasePendingToAvailable: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  releasePendingToAvailable: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "BOOKING_SETTLEMENT", direction: LEDGER_DIRECTION.DEBIT,  bucket: LEDGER_BUCKET.PENDING,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:pending` : null,
     });
     return applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "BOOKING_SETTLEMENT", direction: LEDGER_DIRECTION.CREDIT, bucket: LEDGER_BUCKET.AVAILABLE,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:available` : null,
     });
@@ -280,9 +326,9 @@ const WalletBalanceService = {
    * adjustment (negative correction), commission reversal.
    * NOT used for withdrawal flow — that's hold/release/etc below.
    */
-  debit: async ({ salonId, amountInPaise, action, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  debit: async ({ salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     return applyLedgerEntry({
-      salonId, amountInPaise, action, entityType, entityId, idempotencyKey,
+      salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey,
       triggeredBy, triggeredById, remarks, session,
       direction: LEDGER_DIRECTION.DEBIT,
       bucket:    LEDGER_BUCKET.AVAILABLE,
@@ -300,9 +346,9 @@ const WalletBalanceService = {
    * this throws rather than silently under/over-drawing if PENDING
    * doesn't have enough balance for the requested amount.
    */
-  debitPending: async ({ salonId, amountInPaise, action, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  debitPending: async ({ salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     return applyLedgerEntry({
-      salonId, amountInPaise, action, entityType, entityId, idempotencyKey,
+      salonId, entityType, entityId, amountInPaise, action, refType, refId, idempotencyKey,
       triggeredBy, triggeredById, remarks, session,
       direction: LEDGER_DIRECTION.DEBIT,
       bucket:    LEDGER_BUCKET.PENDING,
@@ -314,14 +360,14 @@ const WalletBalanceService = {
    * (one per bucket) so each bucket's change is independently
    * auditable, both inside the same caller session.
    */
-  hold: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  hold: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_HOLD", direction: LEDGER_DIRECTION.DEBIT,  bucket: LEDGER_BUCKET.AVAILABLE,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:available` : null,
     });
     return applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_HOLD", direction: LEDGER_DIRECTION.CREDIT, bucket: LEDGER_BUCKET.LOCKED,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:locked` : null,
     });
@@ -331,14 +377,14 @@ const WalletBalanceService = {
    * Withdrawal rejected or cancelled before processing:
    * LOCKED → AVAILABLE (money goes back where it came from).
    */
-  release: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  release: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_RELEASE", direction: LEDGER_DIRECTION.DEBIT,  bucket: LEDGER_BUCKET.LOCKED,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:locked` : null,
     });
     return applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_RELEASE", direction: LEDGER_DIRECTION.CREDIT, bucket: LEDGER_BUCKET.AVAILABLE,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:available` : null,
     });
@@ -348,14 +394,14 @@ const WalletBalanceService = {
    * Admin approved the withdrawal: LOCKED → PROCESSING
    * (payout now in flight — manual transfer or gateway call).
    */
-  moveToProcessing: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  moveToProcessing: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_PROCESSING", direction: LEDGER_DIRECTION.DEBIT,  bucket: LEDGER_BUCKET.LOCKED,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:locked` : null,
     });
     return applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "WITHDRAWAL_PROCESSING", direction: LEDGER_DIRECTION.CREDIT, bucket: LEDGER_BUCKET.PROCESSING,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:processing` : null,
     });
@@ -366,14 +412,15 @@ const WalletBalanceService = {
    * webhook confirms): PROCESSING bucket debited for good, money
    * has left the platform. lifetimeWithdrawals increments.
    */
-  completePayout: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  completePayout: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+    const owner = resolveOwner({ salonId, entityType, entityId });
     const result = await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks,
       action: "PAYOUT_SUCCESS", direction: LEDGER_DIRECTION.DEBIT, bucket: LEDGER_BUCKET.PROCESSING,
     });
     if (!result.idempotent) {
       await SalonEarnings.findOneAndUpdate(
-        { salonId },
+        { entityType: owner.entityType, entityId: owner.entityId },
         {
           $inc: { lifetimeWithdrawalsInPaise: amountInPaise },
           $set: { lastPayoutAt: new Date(), lastPayoutAmountInPaise: amountInPaise },
@@ -388,14 +435,14 @@ const WalletBalanceService = {
    * Payout failed at the gateway (or manual transfer failed):
    * PROCESSING → AVAILABLE (money goes back, owner can retry).
    */
-  failPayout: async ({ salonId, amountInPaise, entityType, entityId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
+  failPayout: async ({ salonId, entityType, entityId, amountInPaise, refType, refId, idempotencyKey, session, triggeredBy, triggeredById, remarks }) => {
     await applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "PAYOUT_FAILED_REVERSAL", direction: LEDGER_DIRECTION.DEBIT,  bucket: LEDGER_BUCKET.PROCESSING,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:processing` : null,
     });
     return applyLedgerEntry({
-      salonId, amountInPaise, entityType, entityId, session, triggeredBy, triggeredById, remarks,
+      salonId, entityType, entityId, amountInPaise, refType, refId, session, triggeredBy, triggeredById, remarks,
       action: "PAYOUT_FAILED_REVERSAL", direction: LEDGER_DIRECTION.CREDIT, bucket: LEDGER_BUCKET.AVAILABLE,
       idempotencyKey: idempotencyKey ? `${idempotencyKey}:available` : null,
     });
@@ -405,9 +452,23 @@ const WalletBalanceService = {
    * Convenience read — always go through this rather than
    * inlining `SalonEarnings.findOne()` everywhere, so any future
    * derived/computed field stays in one place.
+   *
+   * FA-P3-C Step 1 — accepts either the legacy positional form
+   * `getWallet(salonId, session)` (every pre-existing call site,
+   * unchanged) or the new object form
+   * `getWallet({ entityType, entityId, session })` for a
+   * FIELD_AGENT (or explicitly-typed SALON) wallet.
    */
-  getWallet: async (salonId, session = null) => {
-    const query = SalonEarnings.findOne({ salonId });
+  getWallet: async (arg1, arg2 = null) => {
+    const isParamsObject = !!arg1 && typeof arg1 === "object" &&
+      ("entityType" in arg1 || "entityId" in arg1 || "salonId" in arg1);
+
+    const owner = isParamsObject
+      ? resolveOwner({ salonId: arg1.salonId, entityType: arg1.entityType, entityId: arg1.entityId })
+      : resolveOwner({ salonId: arg1 });
+    const session = isParamsObject ? (arg1.session || null) : arg2;
+
+    const query = SalonEarnings.findOne({ entityType: owner.entityType, entityId: owner.entityId });
     if (session) query.session(session);
     return query.lean();
   },

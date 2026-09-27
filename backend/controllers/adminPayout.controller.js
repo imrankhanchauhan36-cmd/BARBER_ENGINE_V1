@@ -209,8 +209,8 @@ export const rejectPayout = async (req, res, next) => {
     await WalletBalanceService.release({
       salonId:       payout.salonId,
       amountInPaise: payout.amountInPaise,
-      entityType:    "WITHDRAWAL",
-      entityId:      payout._id,
+      refType:       "WITHDRAWAL",
+      refId:         payout._id,
       idempotencyKey:`payout:reject:${payout._id}`,
       session,
       triggeredBy:   "ADMIN",

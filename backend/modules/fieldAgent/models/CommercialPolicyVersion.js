@@ -33,6 +33,8 @@ import {
   CLAIM_EXPIRY_DAYS_MIN,
   POLICY_ITEM_KEY_MAX_LENGTH,
   POLICY_ITEM_DESCRIPTION_MAX_LENGTH,
+  MINIMUM_PAYOUT_MIN_PAISE,
+  DEFAULT_MINIMUM_PAYOUT_PAISE,
 } from "../constants/commercialPolicy.constants.js";
 
 // Explicit, structured, validated shape — never an unrestricted
@@ -148,6 +150,34 @@ const commercialPolicyVersionSchema = new mongoose.Schema(
     obligations: { type: [policyItemSchema], default: () => [] },
     performanceFactors: { type: [policyItemSchema], default: () => [] },
     coverageRules: { type: [policyItemSchema], default: () => [] },
+
+    // FA-P3-A — Revenue Configuration Engine, Phase 1. Additive to the
+    // FA-8 fields above; same versioned/immutable-once-published
+    // discipline. `minimumPayoutInPaise` replaces the previous
+    // hardcoded `MIN_WITHDRAWAL_PAISE` constant in
+    // fieldAgentPayout.service.js as the source of truth going forward
+    // (that constant itself is untouched by this phase — Field Agent
+    // App/payout code is explicitly out of scope here; wiring the
+    // payout service to read this field is a separate future step).
+    // Defaults preserve the current live behavior (₹100 min, auto
+    // payout off) for any code path that reads a version created before
+    // this field existed.
+    minimumPayoutInPaise: {
+      type: Number,
+      required: true,
+      default: DEFAULT_MINIMUM_PAYOUT_PAISE,
+      min: MINIMUM_PAYOUT_MIN_PAISE,
+      validate: {
+        validator: Number.isInteger,
+        message: "minimumPayoutInPaise must be a whole number (paise, not rupees)",
+      },
+    },
+
+    autoPayoutEnabled: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

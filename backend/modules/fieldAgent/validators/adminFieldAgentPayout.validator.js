@@ -17,7 +17,12 @@ export const adminFieldAgentPayoutSchemas = {
   listPayoutsQuery: Joi.object({
     page:   Joi.number().integer().min(1).default(1),
     limit:  Joi.number().integer().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT),
-    status: Joi.string().valid(...Object.values(FIELD_AGENT_PAYOUT_STATUS)).optional(),
+    // FA-P4-C Step 2 — a single status (unchanged) OR a comma-separated
+    // list, so the admin queue's "Processing" tab can load REQUESTED and
+    // PROCESSING together. Additive: single-value callers are unaffected.
+    status: Joi.string()
+      .pattern(new RegExp(`^(${Object.values(FIELD_AGENT_PAYOUT_STATUS).join("|")})(,(${Object.values(FIELD_AGENT_PAYOUT_STATUS).join("|")}))*$`))
+      .optional(),
   }).unknown(false),
 
   payoutIdParam: Joi.object({

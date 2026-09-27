@@ -5,7 +5,7 @@
  */
 
 import mongoose from "mongoose";
-import PayoutRequest, { PAYOUT_STATUS } from "../models/PayoutRequest.js";
+import PayoutRequest, { PAYOUT_STATUS, OPEN_PAYOUT_STATUSES } from "../models/PayoutRequest.js";
 import Salon from "../models/Salon.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import WalletLedger from "../models/WalletLedger.js";
@@ -33,7 +33,7 @@ export const getWallet = async (req, res, next) => {
     const wallet = await WalletBalanceService.getWallet(salon._id);
     const openPayout = await PayoutRequest.findOne({
       salonId: salon._id,
-      status:  PAYOUT_STATUS.REQUESTED,
+      status:  { $in: OPEN_PAYOUT_STATUSES },
     }).lean();
 
     return successResponse(res, {
@@ -127,7 +127,7 @@ export const requestWithdrawal = async (req, res, next) => {
     // Check no open payout
     const existing = await PayoutRequest.findOne({
       salonId: salon._id,
-      status:  PAYOUT_STATUS.REQUESTED,
+      status:  { $in: OPEN_PAYOUT_STATUSES },
     }).session(session).lean();
 
     if (existing) {
@@ -148,8 +148,8 @@ export const requestWithdrawal = async (req, res, next) => {
     await WalletBalanceService.hold({
       salonId:       salon._id,
       amountInPaise,
-      entityType:    "WITHDRAWAL",
-      entityId:      payout._id,           // ← real reference, not null
+      refType:       "WITHDRAWAL",
+      refId:         payout._id,           // ← real reference, not null
       idempotencyKey:`payout:hold:${payout._id}`, // ← stable, retry-safe
       session,
       triggeredBy:   "OWNER",
@@ -188,6 +188,13 @@ export const requestWithdrawal = async (req, res, next) => {
     });
   } catch (err) {
     await session.abortTransaction();
+    // FA-P4-B Step 2 — two concurrent requests can both pass the
+    // pre-check above; the salonId_open_unique partial index is what
+    // actually stops the second. Report that as the same 409 the
+    // pre-check gives, not a 500.
+    if (err?.code === 11000) {
+      return next(Errors.conflict("A withdrawal request is already pending. Cancel it first."));
+    }
     next(err);
   } finally {
     session.endSession();
@@ -237,8 +244,8 @@ export const cancelWithdrawal = async (req, res, next) => {
     await WalletBalanceService.release({
       salonId:       salon._id,
       amountInPaise: payout.amountInPaise,
-      entityType:    "WITHDRAWAL",
-      entityId:      payout._id,
+      refType:       "WITHDRAWAL",
+      refId:         payout._id,
       idempotencyKey:`payout:cancel:${payout._id}`,
       session,
       triggeredBy:   "OWNER",

@@ -58,6 +58,7 @@ import WalletTransaction, {
 } from "../models/WalletTransaction.js";
 import WalletBalanceService from "./WalletBalanceService.js";
 import { splitRefundComponents, REFUND_FRACTION_BY_POLICY } from "./refundComponentSplitter.js";
+import { issueSourceRefundForCancelledBooking, findSourceRefundForBooking, withRefundLock } from "./RazorpayRefundService.js";
 
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
@@ -74,7 +75,26 @@ const DUPLICATE_KEY_ERROR_CODE = 11000;
  *   cancellationPolicy recorded, computed amount disagreeing with
  *   booking.refundAmountInPaise
  */
-export async function issueRefundForCancelledBooking({ bookingId, triggeredBy, triggeredById }) {
+export async function issueRefundForCancelledBooking({ bookingId, triggeredBy, triggeredById, refundTo = "WALLET" }) {
+  // P0-C — Support chooses where the refund goes. WALLET (default) is the unchanged
+  // in-app wallet refund below; SOURCE sends the same policy amount back to the
+  // ORIGINAL Razorpay payment (RazorpayRefundService). One refund per booking at a
+  // time, whichever destination is chosen.
+  return withRefundLock(`booking-refund-lock:${bookingId}`, () =>
+    refundTo === "SOURCE"
+      ? issueSourceRefundForCancelledBooking({ bookingId, triggeredBy, triggeredById })
+      : issueWalletRefundForCancelledBooking({ bookingId, triggeredBy, triggeredById })
+  );
+}
+
+async function issueWalletRefundForCancelledBooking({ bookingId, triggeredBy, triggeredById }) {
+  // A refund to the ORIGINAL payment source already exists for this booking → never
+  // refund it again to the wallet.
+  const sourceRefund = await findSourceRefundForBooking(bookingId);
+  if (sourceRefund) {
+    return { alreadyIssued: true, refundPaise: sourceRefund.amountInPaise, walletTransactionId: null, refundId: sourceRefund.razorpayRefundId, refundStatus: sourceRefund.refundStatus, refundedTo: "SOURCE" };
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -156,8 +176,8 @@ export async function issueRefundForCancelledBooking({ bookingId, triggeredBy, t
         salonId: booking.salonRef,
         amountInPaise: serviceRefundPaise,
         action: "REFUND",
-        entityType: "BOOKING",
-        entityId: booking._id,
+        refType: "BOOKING",
+        refId: booking._id,
         idempotencyKey: `booking:refund:${booking._id}`,
         session,
         triggeredBy,

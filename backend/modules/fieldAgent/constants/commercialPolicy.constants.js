@@ -33,6 +33,14 @@ export const TERRITORY_COMMISSION_PERCENT_MAX = 100;
 export const LICENSE_TERM_MONTHS_MIN = 1;
 export const CLAIM_EXPIRY_DAYS_MIN = 1;
 
+// FA-P3-A — Revenue Configuration Engine, Phase 1. Default mirrors the
+// current live hardcoded constant (fieldAgentPayout.service.js's
+// MIN_WITHDRAWAL_PAISE = 10000, i.e. ₹100) so a version created before
+// this field existed, or the very first version ever, behaves exactly
+// as production does today until an admin explicitly changes it.
+export const MINIMUM_PAYOUT_MIN_PAISE = 100; // ₹1 floor — a zero minimum would defeat the setting's purpose
+export const DEFAULT_MINIMUM_PAYOUT_PAISE = 10000; // ₹100
+
 // obligations/performanceFactors/coverageRules are each a bounded
 // array of {key, description} — explicit, validated, structured data,
 // never an unrestricted arbitrary Mongo object (FA-5 Architecture

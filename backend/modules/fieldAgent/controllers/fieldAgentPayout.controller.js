@@ -11,6 +11,7 @@
 import { successResponse } from "../../../utils/response.js";
 import {
   getMyBalanceSummary,
+  getMyWalletSummary,
   createWithdrawalRequest,
   listMyPayouts,
   getMyPayoutDetail,
@@ -21,6 +22,16 @@ export const getMyBalanceHandler = async (req, res, next) => {
   try {
     const summary = await getMyBalanceSummary(req.user._id);
     return successResponse(res, { message: "Balance fetched", data: summary });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// FA-P4-C Step 1 — wallet view for the withdraw screen.
+export const getMyWalletHandler = async (req, res, next) => {
+  try {
+    const wallet = await getMyWalletSummary(req.user._id);
+    return successResponse(res, { message: "Wallet fetched", data: wallet });
   } catch (err) {
     return next(err);
   }

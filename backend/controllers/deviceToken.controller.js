@@ -17,23 +17,37 @@ const getSalonByOwner = async (ownerId) => {
 };
 
 //////////////////////////////////////////////////////
+// HELPER — RESOLVE RECIPIENT (FA-P2-A)
+// Same role-branch as notification.controller.js's resolveRecipient —
+// OWNER path is byte-for-byte the original behavior; FIELD_AGENT is
+// new and additive, keyed on the caller's own User._id.
+//////////////////////////////////////////////////////
+
+const resolveRecipient = async (user) => {
+  if (user?.role === "FIELD_AGENT") {
+    return { recipientType: "FIELD_AGENT", recipientId: user._id };
+  }
+  const salon = await getSalonByOwner(user?._id);
+  return { recipientType: "SALON", recipientId: salon._id };
+};
+
+//////////////////////////////////////////////////////
 // REGISTER DEVICE TOKEN
 // recipientType/recipientId are always derived from the
-// authenticated owner's own salon — never accepted from
+// authenticated caller's own session — never accepted from
 // the client — so a token can never be registered under a
 // different recipient than the caller.
 //////////////////////////////////////////////////////
 
 export const registerDeviceTokenHandler = async (req, res) => {
   try {
-    const ownerId = req.user?._id;
-    const salon    = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     const { token, platform, provider, appVersion, deviceId } = req.body;
 
     const deviceToken = await registerDeviceToken({
-      recipientType: "SALON",
-      recipientId:   salon._id,
+      recipientType,
+      recipientId,
       token,
       platform,
       provider,
@@ -66,14 +80,13 @@ export const registerDeviceTokenHandler = async (req, res) => {
 
 export const deactivateDeviceTokenHandler = async (req, res) => {
   try {
-    const ownerId = req.user?._id;
-    const salon    = await getSalonByOwner(ownerId);
+    const { recipientType, recipientId } = await resolveRecipient(req.user);
 
     const { token } = req.body;
 
     const updated = await deactivateDeviceToken({
-      recipientType: "SALON",
-      recipientId:   salon._id,
+      recipientType,
+      recipientId,
       token,
     });
 

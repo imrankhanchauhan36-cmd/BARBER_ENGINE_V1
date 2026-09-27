@@ -39,7 +39,9 @@ const NotificationDeliveryLogSchema = new mongoose.Schema(
 
     recipientType: {
       type:     String,
-      enum:     ["USER", "SALON", "ADMIN", "STAFF"], // matches Notification.js recipientType exactly
+      // FA-P2-A — added FIELD_AGENT, matching models/Notification.js's
+      // own enum exactly (see that file's comment for the rationale).
+      enum:     ["USER", "SALON", "ADMIN", "STAFF", "FIELD_AGENT"],
       required: true,
     },
 

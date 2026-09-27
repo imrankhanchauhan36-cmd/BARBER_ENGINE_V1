@@ -32,15 +32,36 @@ export const REFERRAL_CODE_PREFIX = "AQ";
 // FA-5.3 never touches CommercialPolicyVersion.
 export const REFERRAL_EXPIRY_DAYS = 30;
 
-// AcquisitionClaim is created only once a real Salon exists (at
-// redemption), always ACTIVE from birth — there is no PENDING state,
-// because "authoritative attribution" is a DERIVED fact
-// (claim.status === ACTIVE && salon.approval.status === APPROVED),
-// never persisted onto this model (locked decision).
+// FA-P3-B Step 1 — SUPERSEDES the prior locked decision documented here
+// until this phase ("always ACTIVE from birth, no PENDING state").
+// AcquisitionClaim is now created PENDING_APPROVAL at redemption; an
+// admin action (adminApproveClaim) is the only path to ACTIVE_RECOVERY.
+// Reward recovery (AcquisitionEarningProgress creation, and every
+// booking-credit lookup in fieldAgentEarning.service.js) is gated
+// purely by this rename — a PENDING_APPROVAL claim is never matched by
+// any `status: ACTIVE_RECOVERY` query, so no separate approval flag or
+// gating check was introduced anywhere else. COMPLETED is added to the
+// enum now for lifecycle forward-compatibility (per this phase's own
+// instruction); no code in this phase transitions a claim into it —
+// AcquisitionEarningProgress reaching TARGET_REACHED still does NOT
+// affect AcquisitionClaim.status, exactly as the frozen FA-9 Business
+// Decision Lock (§F/§9) requires (preserves the agent's recognized
+// salon relationship after financial entitlement ends) — wiring
+// ACTIVE_RECOVERY -> COMPLETED is explicitly a later step, not this one.
 export const CLAIM_STATUS = Object.freeze({
-  ACTIVE: "ACTIVE",
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  ACTIVE_RECOVERY: "ACTIVE_RECOVERY",
+  COMPLETED: "COMPLETED",
   ENDED: "ENDED",
 });
+
+// Both non-terminal states — used wherever "not yet ended" needs to be
+// checked as a set (the salon-level uniqueness index, withdraw/reject/
+// reassign preconditions).
+export const CLAIM_NON_TERMINAL_STATUSES = Object.freeze([
+  CLAIM_STATUS.PENDING_APPROVAL,
+  CLAIM_STATUS.ACTIVE_RECOVERY,
+]);
 
 export const CLAIM_END_REASON = Object.freeze({
   ADMIN_REJECTED: "ADMIN_REJECTED",

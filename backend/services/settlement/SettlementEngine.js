@@ -81,8 +81,8 @@ const SettlementEngine = Object.freeze({
     await WalletBalanceService.moveToProcessing({
       salonId:        payout.salonId,
       amountInPaise:  payout.amountInPaise,
-      entityType:     "WITHDRAWAL",
-      entityId:       payout._id,
+      refType:        "WITHDRAWAL",
+      refId:          payout._id,
       idempotencyKey: `payout:processing:${payout._id}`,
       session,
       triggeredBy:    "ADMIN",
@@ -106,8 +106,8 @@ const SettlementEngine = Object.freeze({
     await WalletBalanceService.completePayout({
       salonId:        payout.salonId,
       amountInPaise:  payout.amountInPaise,
-      entityType:     "WITHDRAWAL",
-      entityId:       payout._id,
+      refType:        "WITHDRAWAL",
+      refId:          payout._id,
       idempotencyKey: `payout:complete:${payout._id}`,
       session,
       triggeredBy:    "ADMIN",

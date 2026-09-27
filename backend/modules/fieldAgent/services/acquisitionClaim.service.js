@@ -60,6 +60,12 @@ import AcquisitionClaim from "../models/AcquisitionClaim.js";
 import FieldAgent from "../models/FieldAgent.js";
 import FieldAgentAuditEvent from "../models/FieldAgentAuditEvent.js";
 import { getFieldAgentByUserId } from "./fieldAgentProfile.service.js";
+// FA-P2-A — notification is fire-and-forget, after commit, alongside
+// the existing safeAuditEvent calls below; never inside the
+// transaction, never able to affect the claim-creation outcome.
+import NotificationService from "../../../services/NotificationService.js";
+import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
+import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 // FA-9 CORRECTIVE (target snapshot architecture, Finding B-2) —
 // additive integration point only. This import creates a new,
 // additive AcquisitionEarningProgress document immediately after
@@ -84,6 +90,7 @@ import {
   REFERRAL_EXPIRY_DAYS,
   MIN_ONBOARDING_STEP_FOR_REDEMPTION,
   CLAIM_STATUS,
+  CLAIM_NON_TERMINAL_STATUSES,
   CLAIM_END_REASON,
   MAX_LIST_LIMIT,
   DEFAULT_LIST_LIMIT,
@@ -277,8 +284,10 @@ export const withdrawMyClaim = async ({ userId, claimId }) => {
   const fieldAgent = await getFieldAgentByUserId(userId);
   if (!fieldAgent) throw Errors.notFound("Field Agent profile not found");
 
+  // FA-P3-B Step 1 — an agent can withdraw from either non-terminal
+  // state (still awaiting approval, or already recovering).
   const claim = await AcquisitionClaim.findOneAndUpdate(
-    { _id: claimId, fieldAgentRef: fieldAgent._id, status: CLAIM_STATUS.ACTIVE },
+    { _id: claimId, fieldAgentRef: fieldAgent._id, status: { $in: CLAIM_NON_TERMINAL_STATUSES } },
     {
       $set: {
         status: CLAIM_STATUS.ENDED,
@@ -369,16 +378,26 @@ export const redeemReferral = async ({ ownerId, referralCode }) => {
         throw Errors.conflict("Referral was already redeemed, cancelled, or expired");
       }
 
-      // Partial unique index on {salonRef,status:"ACTIVE"} is the sole
-      // correctness authority for "at most one ACTIVE claim per
-      // salon" — this insert either succeeds once or throws 11000.
+      // Partial unique index on {salonRef,status:{$in:[non-terminal]}}
+      // is the sole correctness authority for "at most one non-terminal
+      // claim per salon" — this insert either succeeds once or throws
+      // 11000.
+      //
+      // FA-P3-B Step 1 — created PENDING_APPROVAL, not ACTIVE.
+      // AcquisitionEarningProgress is deliberately NOT created here
+      // anymore (moved to adminApproveClaim, below) — "reward recovery
+      // must not start before approval" is enforced purely by this
+      // absence: fieldAgentEarning.service.js#processCompletedBooking
+      // only ever looks up a claim with status ACTIVE_RECOVERY, so a
+      // PENDING_APPROVAL claim is structurally invisible to booking
+      // credit until an admin approves it.
       const [claim] = await AcquisitionClaim.create(
         [
           {
             salonRef: salon._id,
             fieldAgentRef: fieldAgent._id,
             referralRef: referral._id,
-            status: CLAIM_STATUS.ACTIVE,
+            status: CLAIM_STATUS.PENDING_APPROVAL,
             stateRef: salon.location?.territory?.stateRef ?? null,
             districtRef: salon.location?.territory?.districtRef ?? null,
           },
@@ -386,30 +405,7 @@ export const redeemReferral = async ({ ownerId, referralCode }) => {
         { session }
       );
 
-      // FA-9 CORRECTIVE (Finding B-2) — additive only, does not modify
-      // AcquisitionClaim's own fields/lifecycle. Attempts to snapshot
-      // the acquisition target from whichever commercial policy is
-      // applicable AT this exact claim-creation instant, inside the
-      // SAME transaction (so claim + progress are atomically coupled
-      // when a policy exists). If no policy exists yet, this
-      // deliberately does NOT fail the redemption — the referral
-      // redemption / claim-creation flow is unchanged, frozen, and
-      // fully independent of commercial-policy state (exactly as its
-      // own file header has always documented). The absence is instead
-      // durably recorded as an auditable CLAIM_PROGRESS_GAP (outside
-      // this transaction, fire-and-forget, mirroring safeAuditEvent's
-      // own non-blocking pattern) for later reconciliation once a
-      // policy is published — never inventing a target, never using a
-      // future policy, never silently defaulting to zero.
-      const progress = await createAcquisitionEarningProgressForClaim({ claim, salon, session });
-
       await session.commitTransaction();
-
-      if (!progress) {
-        console.warn(
-          `⚠️ FA-9 CLAIM_PROGRESS_GAP: AcquisitionClaim ${claim._id} created with no applicable commercial policy at ${claim.createdAt.toISOString()} — acquisition target not yet snapshotted. Durably tracked in FieldAgentEarningPolicyGap; will resolve automatically once a CommercialPolicyVersion or CommercialPolicyOverride applicable at claim-creation time is published.`
-        );
-      }
 
       // See file header — redemption is owner-initiated, actorType
       // SYSTEM with the owner's own User._id for traceability.
@@ -429,6 +425,30 @@ export const redeemReferral = async ({ ownerId, referralCode }) => {
         action: AUDIT_ACTION.ACQUISITION_CLAIM_CREATED,
         newValue: { salonId: String(salon._id), fieldAgentId: String(fieldAgent._id), referralId: String(referral._id) },
       });
+
+      // FA-P2-A — "New Salon Assigned" (non-blocking, after commit —
+      // NotificationService.send() never throws, matching every other
+      // notification call site in this codebase, e.g.
+      // adminKyc.controller.js). fieldAgent was fetched .lean() above
+      // so fieldAgent.userRef is already in hand — no extra query.
+      await NotificationService.send(
+        {
+          recipientId:   fieldAgent.userRef,
+          recipientType: "FIELD_AGENT",
+          templateKey:   NOTIFICATION_EVENTS.NEW_SALON_ASSIGNED,
+          variables:     {},
+          title:         "New Salon Assigned",
+          message:       "A salon owner just redeemed your referral — you've been credited with a new acquisition.",
+          type:          "SYSTEM",
+          priority:      "HIGH",
+          actionType:    "OPEN_SALON",
+          actionUrl:     "/field-agent/acquired-salons",
+          entityType:    "SALON",
+          entityId:      salon._id,
+          meta:          { claimId: claim._id, salonId: salon._id },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
 
       return { claim, salon };
     } catch (err) {
@@ -461,14 +481,31 @@ export const adminListClaims = async ({ admin, page, limit, status }) => {
   applyAdminScope(filter, admin);
 
   const [items, total] = await Promise.all([
-    AcquisitionClaim.find(filter).sort({ createdAt: -1 }).skip((safePage - 1) * safeLimit).limit(safeLimit).lean(),
+    AcquisitionClaim.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * safeLimit)
+      .limit(safeLimit)
+      .populate("salonRef", "basicInfo.shopName location.address")
+      .populate({
+        path: "fieldAgentRef",
+        select: "agentCode userRef",
+        populate: { path: "userRef", select: "name phone" },
+      })
+      .lean(),
     AcquisitionClaim.countDocuments(filter),
   ]);
   return { items, total, page: safePage, limit: safeLimit };
 };
 
 export const adminGetClaimDetail = async ({ admin, claimId }) => {
-  const claim = await AcquisitionClaim.findById(claimId).lean();
+  const claim = await AcquisitionClaim.findById(claimId)
+    .populate("salonRef", "basicInfo.shopName location.address")
+    .populate({
+      path: "fieldAgentRef",
+      select: "agentCode userRef",
+      populate: { path: "userRef", select: "name phone" },
+    })
+    .lean();
   if (!claim) throw Errors.notFound("Claim not found");
 
   if (admin.adminLevel === "STATE" && String(claim.stateRef) !== String(admin.stateRef)) {
@@ -482,8 +519,12 @@ export const adminGetClaimDetail = async ({ admin, claimId }) => {
 };
 
 const adminEndClaim = async ({ adminId, claimId, reason }) => {
+  // FA-P3-B Step 1 — reject/reassign remain available from EITHER
+  // non-terminal state ("Reject keeps existing rejection architecture"
+  // — unchanged mechanism, just widened to also cover a still-pending
+  // claim, since admin review can end a claim before it's ever approved).
   const claim = await AcquisitionClaim.findOneAndUpdate(
-    { _id: claimId, status: CLAIM_STATUS.ACTIVE },
+    { _id: claimId, status: { $in: CLAIM_NON_TERMINAL_STATUSES } },
     { $set: { status: CLAIM_STATUS.ENDED, endedReason: reason, endedBy: adminId, endedAt: new Date() } },
     { new: true }
   );
@@ -510,3 +551,72 @@ export const adminRejectClaim = ({ adminId, claimId }) =>
 
 export const adminReassignClaim = ({ adminId, claimId }) =>
   adminEndClaim({ adminId, claimId, reason: CLAIM_END_REASON.ADMIN_REASSIGNED });
+
+// ─── ADMIN APPROVE (FA-P3-B Step 1 — the only path to ACTIVE_RECOVERY) ──
+// PENDING_APPROVAL -> ACTIVE_RECOVERY, atomically coupled with creating
+// this claim's AcquisitionEarningProgress in the SAME transaction —
+// mirrors redeemReferral's own claim+progress atomicity precedent
+// exactly, just moved to this later trigger point. Reuses
+// createAcquisitionEarningProgressForClaim completely unchanged: the
+// target is still snapshotted from whichever commercial policy was
+// applicable at claim.createdAt (the original redemption instant, not
+// the approval instant) — an agent's terms are fixed at the moment
+// they actually acquired the salon, never affected by how long admin
+// review takes. If no policy was applicable at that instant, this
+// function does not fail — the existing CLAIM_PROGRESS_GAP mechanism
+// (unchanged) durably tracks it for later reconciliation, exactly as
+// redeemReferral's own prior call site already relied on.
+export const adminApproveClaim = async ({ adminId, claimId }) => {
+  let lastErr = null;
+  for (let attempt = 0; attempt < MAX_REDEEM_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      const claim = await AcquisitionClaim.findOneAndUpdate(
+        { _id: claimId, status: CLAIM_STATUS.PENDING_APPROVAL },
+        { $set: { status: CLAIM_STATUS.ACTIVE_RECOVERY } },
+        { new: true, session }
+      );
+      if (!claim) {
+        const existing = await AcquisitionClaim.findById(claimId).session(session).lean();
+        if (!existing) throw Errors.notFound("Claim not found");
+        throw Errors.conflict(`Claim is ${existing.status} — cannot approve`);
+      }
+
+      const salon = await Salon.findById(claim.salonRef).session(session).lean();
+      if (!salon) throw Errors.notFound("Salon not found for this claim");
+
+      const progress = await createAcquisitionEarningProgressForClaim({ claim, salon, session });
+
+      await session.commitTransaction();
+
+      if (!progress) {
+        console.warn(
+          `⚠️ FA-9 CLAIM_PROGRESS_GAP: AcquisitionClaim ${claim._id} approved with no applicable commercial policy at ${claim.createdAt.toISOString()} — acquisition target not yet snapshotted. Durably tracked in FieldAgentEarningPolicyGap; will resolve automatically once a CommercialPolicyVersion or CommercialPolicyOverride applicable at that instant is published.`
+        );
+      }
+
+      safeAuditEvent({
+        entityType: AUDIT_ENTITY_TYPE.ACQUISITION_CLAIM,
+        entityId: claim._id,
+        actorRef: adminId,
+        actorType: AUDIT_ACTOR_TYPE.ADMIN,
+        action: AUDIT_ACTION.ACQUISITION_CLAIM_APPROVED,
+        newValue: { status: CLAIM_STATUS.ACTIVE_RECOVERY },
+      });
+
+      return claim;
+    } catch (err) {
+      await session.abortTransaction();
+      lastErr = err;
+      if (isTransientConflict(err) && attempt < MAX_REDEEM_ATTEMPTS - 1) {
+        continue;
+      }
+      throw err;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastErr;
+};

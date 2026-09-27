@@ -63,6 +63,8 @@ const CONFIGURABLE_FIELDS = [
   "obligations",
   "performanceFactors",
   "coverageRules",
+  "minimumPayoutInPaise", // FA-P3-A
+  "autoPayoutEnabled", // FA-P3-A
 ];
 
 // ─── CREATE (bounded retry on versionNumber collision) ──────────────
@@ -86,6 +88,8 @@ export const createDraftPolicyVersion = async ({ adminId, ...fields }) => {
         obligations: fields.obligations ?? [],
         performanceFactors: fields.performanceFactors ?? [],
         coverageRules: fields.coverageRules ?? [],
+        minimumPayoutInPaise: fields.minimumPayoutInPaise, // FA-P3-A — schema default applies if omitted
+        autoPayoutEnabled: fields.autoPayoutEnabled, // FA-P3-A — schema default applies if omitted
       });
 
       await FieldAgentAuditEvent.create([

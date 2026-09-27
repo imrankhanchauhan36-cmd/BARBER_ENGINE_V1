@@ -317,8 +317,8 @@ const autoCompleteOneBooking = async (candidateId, now) => {
     await WalletBalanceService.releasePendingToAvailable({
       salonId:        booking.salonRef,
       amountInPaise:  paymentTxn.payoutAmount,
-      entityType:     "BOOKING",
-      entityId:       paymentTxn._id,
+      refType:        "BOOKING",
+      refId:          paymentTxn._id,
       idempotencyKey: `booking:release:${booking._id}`,
       session,
       triggeredBy:    "SYSTEM",
