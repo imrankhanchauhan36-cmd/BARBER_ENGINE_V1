@@ -317,6 +317,33 @@ const BookingSchema = new mongoose.Schema(
       },
     },
 
+    // STEP 8.2 (policy version follow-up) — audit-trail ONLY, never used
+    // for any dollar calculation (that stays totalAmountInPaise/
+    // serviceAmountInPaise/commissionAmountInPaise/gstAmountInPaise
+    // above, all unchanged by this addition). Records exactly which
+    // AreaPlatformFeePolicy/GstPolicyVersion document (if any) was
+    // PUBLISHED and resolved at this booking's own lockSlot time — null
+    // when no policy applied (no area assigned / no GST ever published),
+    // same null-vs-zero convention as gstRatePercent/gstAmountInPaise
+    // above. Resolved once, never re-read for an existing booking —
+    // immutable, exactly like every other pricing-snapshot field on this
+    // document. Exists so RevenueSplitIntegrationService.js can copy
+    // real traceability onto the RevenueSplit it creates instead of a
+    // second, independent config lookup (RevenueSettings) that could
+    // silently disagree with what this booking was actually priced at.
+    platformFeePolicyRef: {
+      type:      mongoose.Schema.Types.ObjectId,
+      ref:       "AreaPlatformFeePolicy",
+      default:   null,
+      immutable: true,
+    },
+    gstPolicyVersionRef: {
+      type:      mongoose.Schema.Types.ObjectId,
+      ref:       "GstPolicyVersion",
+      default:   null,
+      immutable: true,
+    },
+
     // ⚠️  DISPLAY ONLY — NEVER use this for finance logic.
     // All authoritative calculations (commission, payout, wallet)
     // MUST use totalAmountInPaise above.

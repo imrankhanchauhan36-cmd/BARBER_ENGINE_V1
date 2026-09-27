@@ -172,10 +172,19 @@ export const retireGstPolicy = async ({ versionId, adminId, req }) => {
 
 /**
  * Hot-path resolver — called once per booking at lockSlot. Returns
- * { ratePercent } for the currently PUBLISHED policy, or null if none
- * has ever been published (never invents a rate — booking.controller.js
- * treats a null return as "no GST applies", storing null snapshot
- * fields, exactly like a legacy pre-feature booking).
+ * { ratePercent, versionId } for the currently PUBLISHED policy, or
+ * null if none has ever been published (never invents a rate —
+ * booking.controller.js treats a null return as "no GST applies",
+ * storing null snapshot fields, exactly like a legacy pre-feature
+ * booking).
+ *
+ * STEP 8.2 (policy version follow-up) — versionId (the resolved
+ * GstPolicyVersion document's own _id) is new; ratePercent's own
+ * meaning/value is unchanged. `_id` is projected implicitly (Mongoose
+ * includes it by default unless explicitly excluded) — no query shape
+ * change. Cached alongside ratePercent under the same existing TTL, so
+ * a booking created from a cached read still snapshots the correct,
+ * consistent versionId for that same cached rate.
  */
 export const getPublishedGstPolicy = async () => {
   const now = Date.now();
@@ -188,7 +197,7 @@ export const getPublishedGstPolicy = async () => {
     .lean();
 
   cache.cached = true;
-  cache.policy = published ? { ratePercent: published.ratePercent } : null;
+  cache.policy = published ? { ratePercent: published.ratePercent, versionId: published._id } : null;
   cache.expiresAt = now + CACHE_TTL_MS;
   return cache.policy;
 };

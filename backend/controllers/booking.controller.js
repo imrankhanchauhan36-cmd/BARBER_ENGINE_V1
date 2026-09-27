@@ -775,7 +775,7 @@ export const lockSlot = async (req, res) => {
         .session(lockSession)
         .lean();
 
-      const { feeInPaise: commissionInPaise } = await resolvePlatformFeeForArea(
+      const { feeInPaise: commissionInPaise, policyId: platformFeePolicyRef } = await resolvePlatformFeeForArea(
         salonForPricing?.location?.territory?.areaRef
       );
 
@@ -793,6 +793,7 @@ export const lockSlot = async (req, res) => {
       const gstAmountInPaise = gstPolicy
         ? Math.round((serviceAmountInPaise + commissionInPaise) * gstPolicy.ratePercent / 100)
         : null;
+      const gstPolicyVersionRef = gstPolicy ? gstPolicy.versionId : null;
 
       const totalAmountInPaise = serviceAmountInPaise + commissionInPaise + (gstAmountInPaise || 0);
 
@@ -816,6 +817,18 @@ export const lockSlot = async (req, res) => {
             commissionAmountInPaise: commissionInPaise,
             gstRatePercent,
             gstAmountInPaise,
+            // STEP 8.2 (policy version follow-up) — audit-trail only,
+            // never read for any dollar calculation (that's still
+            // totalAmountInPaise/serviceAmountInPaise/
+            // commissionAmountInPaise/gstAmountInPaise above, all
+            // unchanged by this addition). Records exactly which
+            // AreaPlatformFeePolicy/GstPolicyVersion document (if any)
+            // was live when this booking was priced, so
+            // RevenueSplitIntegrationService.js can copy real
+            // traceability onto the RevenueSplit it creates instead of
+            // a second, independent RevenueSettings lookup.
+            platformFeePolicyRef,
+            gstPolicyVersionRef,
             status:             BOOKING_STATUS.HOLD,
           },
         ],

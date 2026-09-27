@@ -170,12 +170,20 @@ export const retireAreaPlatformFee = async ({ policyId, adminId, req }) => {
 /**
  * Hot-path resolver — called once per booking at lockSlot, keyed by
  * the salon's own authoritative areaRef (never client-supplied).
- * PAN-INDIA FALLBACK: returns { feeInPaise: 0 } when areaRef is
- * missing/null OR no PUBLISHED policy exists for it — the booking is
- * never blocked for a missing configuration.
+ * PAN-INDIA FALLBACK: returns { feeInPaise: 0, policyId: null } when
+ * areaRef is missing/null OR no PUBLISHED policy exists for it — the
+ * booking is never blocked for a missing configuration.
+ *
+ * STEP 8.2 (policy version follow-up) — also returns the resolved
+ * policy's own _id (policyId), so the caller (booking.controller.js)
+ * can snapshot it onto the booking for audit traceability. `_id` is
+ * projected implicitly (Mongoose includes it by default unless
+ * explicitly excluded) — no query shape change, no extra DB round
+ * trip. feeInPaise's own meaning/value is completely unchanged; this
+ * is purely an additive field on the returned object.
  */
 export const resolvePlatformFeeForArea = async (areaRef) => {
-  if (!areaRef) return { feeInPaise: 0 };
+  if (!areaRef) return { feeInPaise: 0, policyId: null };
 
   const published = await AreaPlatformFeePolicy.findOne({
     areaRef,
@@ -184,5 +192,8 @@ export const resolvePlatformFeeForArea = async (areaRef) => {
     .select("feeInPaise")
     .lean();
 
-  return { feeInPaise: published ? published.feeInPaise : 0 };
+  return {
+    feeInPaise: published ? published.feeInPaise : 0,
+    policyId: published ? published._id : null,
+  };
 };

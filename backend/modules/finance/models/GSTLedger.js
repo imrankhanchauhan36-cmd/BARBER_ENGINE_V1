@@ -111,6 +111,15 @@ const gstLedgerSchema = new mongoose.Schema(
     // Snapshotted verbatim from RevenueSplit.policyVersion — never
     // re-resolved, per the same "Booking A stays Version 7 forever"
     // guarantee RevenueSplit itself carries.
+    //
+    // STEP 8.2 (reviewed) — Pricing Engine Unification.
+    // RevenueSplit.policyVersion is kept required and is now a fixed
+    // engine-generation marker rather than a RevenueSettings version
+    // (see RevenueSplit.js's own comment) — always a real number, never
+    // null. Reverted back to required here for exactly that reason:
+    // GSTLedgerService.js is unchanged, still copies this field
+    // verbatim, unmodified, per its own "never recalculate" rule, and
+    // it will always receive a valid number to copy.
     policyVersion: {
       type: Number,
       required: true,

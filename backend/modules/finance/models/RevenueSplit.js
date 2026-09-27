@@ -112,12 +112,43 @@ const revenueSplitSchema = new mongoose.Schema(
       immutable: true,
     },
 
-    // The RevenueSettings.version this split was calculated against —
-    // the LOCKED "policy versioning" guarantee. Never re-resolved; this
-    // is what makes the split immutable in spirit, not just in schema.
+    // STEP 8.2 (reviewed) — Pricing Engine Unification. Previously the
+    // RevenueSettings.version this split was calculated against.
+    // RevenueSettings is no longer read here at all (Booking is now the
+    // sole pricing source of truth — see
+    // RevenueSplitIntegrationService.js), and neither
+    // AreaPlatformFeePolicy nor GstPolicyVersion carries a numeric
+    // "version" to put here instead — so this field is kept required,
+    // but repurposed as a fixed engine-generation marker (see
+    // RevenueSplitIntegrationService.js's own
+    // REVENUE_SPLIT_ENGINE_GENERATION constant), not a real version
+    // count. Real policy traceability now lives in the two fields below
+    // instead. A historical row created under the old RevenueSettings-
+    // driven engine (if any exist outside this Dev environment) keeps
+    // its own original integer untouched — this schema change does not
+    // touch existing documents, only what a NEW one may contain.
     policyVersion: {
       type: Number,
       required: true,
+      immutable: true,
+    },
+
+    // STEP 8.2 (reviewed) — real audit-trail traceability, copied
+    // VERBATIM from Booking.platformFeePolicyRef/gstPolicyVersionRef
+    // (never independently resolved here, never from a RevenueSettings
+    // lookup). null exactly when the booking itself has null there (no
+    // area assigned / no GST ever published at lockSlot time) — same
+    // null-vs-"never applied" convention Booking already uses.
+    platformFeePolicyRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AreaPlatformFeePolicy",
+      default: null,
+      immutable: true,
+    },
+    gstPolicyVersionRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GstPolicyVersion",
+      default: null,
       immutable: true,
     },
   },
