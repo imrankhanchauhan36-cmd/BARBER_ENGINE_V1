@@ -39,12 +39,15 @@ const isValidId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
  * Build scope filter — returns salonRef filter for STATE/DISTRICT
  * Single Salon.find() query — avoids N+1 on every request
  */
+// STEP 4.7B — DISTRICT standardized on location.territory.districtRef
+// (matches every sibling Salon CRM endpoint's own DISTRICT rule per the
+// STEP 4.7A audit), replacing the previous assignedAdmin-based filter.
 const buildSalonScope = async (admin) => {
   if (admin.adminLevel === "INDIA") return {};
 
   const salonFilter = { isDeleted: { $ne: true } };
-  if (admin.adminLevel === "STATE")    salonFilter["location.territory.stateRef"] = admin.stateRef;
-  if (admin.adminLevel === "DISTRICT") salonFilter["assignedAdmin"] = admin._id;
+  if (admin.adminLevel === "STATE")    salonFilter["location.territory.stateRef"]    = admin.stateRef;
+  if (admin.adminLevel === "DISTRICT") salonFilter["location.territory.districtRef"] = admin.districtRef;
 
   const salons = await Salon.find(salonFilter).select("_id").lean();
   return { salonRef: { $in: salons.map(s => s._id) } };

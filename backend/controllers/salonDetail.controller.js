@@ -40,8 +40,14 @@ export const getSalonDetail = async (req, res, next) => {
       }
     }
 
+    // STEP 4.7B — standardized on districtRef (matches every sibling
+    // Salon CRM endpoint's own DISTRICT rule per the STEP 4.7A audit),
+    // replacing the previous assignedAdmin-based check. location.territory.
+    // districtRef is populated above (same idiom as stateRef immediately
+    // above), so compared via its own _id like stateRef is.
     if (admin.adminLevel === "DISTRICT") {
-      if (salon.assignedAdmin?._id?.toString() !== admin._id?.toString()) {
+      const salonDistrict = salon.location?.territory?.districtRef?._id?.toString();
+      if (salonDistrict !== admin.districtRef?.toString()) {
         return next(Errors.forbidden("Access denied"));
       }
     }

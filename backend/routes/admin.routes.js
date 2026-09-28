@@ -336,7 +336,12 @@ router.get("/finance/wallets",          requireAdminLevel("INDIA","STATE","DISTR
 router.get("/finance/wallets/:salonId", requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getWalletDetail));
 router.get("/finance/transactions",     requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(listTransactions));
 router.get("/finance/transactions/:id", requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getTransaction));
-router.get  ("/finance/ledger/:salonId",  requireAdminLevel("INDIA","STATE"),            asyncHandler(getSalonLedger));
+// STEP 4.7B — DISTRICT added (previously excluded at this route-level
+// gate entirely, the one endpoint stricter than every sibling Wallet/
+// Revenue/Bookings/Salon-Detail read). getSalonLedger's own controller
+// already validates districtRef-based scope internally (via
+// isSalonWithinScope) — unchanged, per this ticket's own instruction.
+router.get  ("/finance/ledger/:salonId",  requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getSalonLedger));
 router.patch("/finance/wallets/:id/freeze", requireAdminLevel("INDIA"),                   asyncHandler(freezeWallet));
 
 // ── 404 ───────────────────────────────────────────────────

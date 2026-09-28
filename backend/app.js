@@ -50,6 +50,12 @@ import fieldAgentHelpRoutes from "./modules/fieldAgentTraining/routes/fieldAgent
 import adminFieldAgentTrainingRoutes from "./modules/fieldAgentTraining/routes/adminTraining.routes.js"; // ← NEW — FA-3.3 admin curriculum authoring/governance
 import adminFieldAgentTestRoutes from "./modules/fieldAgentTest/routes/adminTest.routes.js"; // ← NEW — FA-3.4.1 admin exam authoring/governance
 import adminFieldAgentApprovalRoutes from "./modules/fieldAgent/routes/adminFieldAgentApproval.routes.js"; // ← NEW — FA-4.2 admin approval/rejection
+import adminFieldAgentSummaryRoutes from "./modules/fieldAgent/routes/adminFieldAgentSummary.routes.js"; // ← NEW — STEP 2.1 admin Field Agent Summary API (read-only aggregation)
+import adminFieldAgentSalonsRoutes from "./modules/fieldAgent/routes/adminFieldAgentSalons.routes.js"; // ← NEW — STEP 2.2 admin Field Agent Acquired Salons API (read-only join)
+import adminFieldAgentEarningsRoutes from "./modules/fieldAgent/routes/adminFieldAgentEarnings.routes.js"; // ← NEW — STEP 2.3 admin Field Agent Earnings Ledger API (read-only join)
+import adminFieldAgentWalletRoutes from "./modules/fieldAgent/routes/adminFieldAgentWallet.routes.js"; // ← NEW — STEP 2.4 admin Field Agent Wallet & Payout History APIs (read-only)
+import adminFieldAgentRosterRoutes from "./modules/fieldAgent/routes/adminFieldAgentRoster.routes.js"; // ← NEW — STEP 3.1 backend addendum, user-approved exception: admin Field Agent Roster List API (read-only, minimal — see that route file's own header)
+import adminFieldAgentAnalyticsRoutes from "./modules/fieldAgent/routes/adminFieldAgentAnalytics.routes.js"; // ← NEW — STEP 3.5A admin Field Agent Analytics API (read-only, platform-wide aggregates)
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
@@ -77,6 +83,11 @@ import adminFinanceDashboardRoutes from "./modules/finance/routes/adminFinanceDa
 import adminFinanceAnalyticsRoutes from "./modules/finance/routes/adminFinanceAnalytics.routes.js"; // ← NEW — STEP 7.2 Finance Analytics Engine (read-only, aggregation only)
 import adminFinanceExportRoutes from "./modules/finance/routes/adminFinanceExport.routes.js"; // ← NEW — STEP 7.4 Finance Export Engine (read-only, xlsx/csv/pdf/json)
 import adminTerritoryRevenueRoutes from "./modules/finance/routes/adminTerritoryRevenue.routes.js"; // ← NEW — STEP 5.1 Territory Revenue Settings Engine (isolated module, does not touch CommercialPolicyVersion)
+import adminSalonRevenueRoutes from "./routes/adminSalonRevenue.routes.js"; // ← NEW — STEP 4.2A admin Salon Revenue API (read-only, RevenueSplit is the sole source — see that route file's own header)
+import adminCustomerSummaryRoutes from "./routes/adminCustomerSummary.routes.js"; // ← NEW — STEP 5.2A admin Customer Summary API (read-only, Booking-derived — see that route file's own header)
+import adminCustomerBookingsRoutes from "./routes/adminCustomerBookings.routes.js"; // ← NEW — STEP 5.2B admin Customer Booking History API (read-only join — see that route file's own header)
+import adminCustomerReviewsRoutes from "./routes/adminCustomerReviews.routes.js"; // ← NEW — STEP 5.5A admin Customer Reviews API (read-only, Rating-model-backed — see that route file's own header)
+import adminCustomerWalletRoutes from "./routes/adminCustomerWallet.routes.js"; // ← NEW — STEP 5.5B admin Customer Wallet API (read-only, raw User.walletBalance/rewardPoints, no calculation — see that route file's own header)
 import adminAreaPlatformFeeRoutes from "./routes/adminAreaPlatformFee.routes.js"; // ← NEW — PAN-India area-wise Platform Fee configuration authoring/governance
 import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
 import adminQueueRoutes from "./modules/support/routes/adminQueue.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Queues
@@ -435,6 +446,52 @@ app.use("/api/admin/field-agent-test", protect, adminFieldAgentTestRoutes);
 // "/api/admin/field-agents/performance" first (confirmed by a real
 // test failure during implementation — see the FA-11.3 report).
 app.use("/api/admin/field-agents/performance", protect, adminFieldAgentPerformanceRoutes);
+// STEP 3.1 backend addendum (user-approved exception) — same
+// full-prefix-mount defense as /performance immediately above: a
+// literal single-segment "/roster" path would otherwise collide with
+// adminFieldAgentApprovalRoutes' own "/:applicationId" route if this
+// were merged into the general "/api/admin/field-agents" router
+// instead. See adminFieldAgentRoster.routes.js's own header.
+app.use("/api/admin/field-agents/roster", protect, adminFieldAgentRosterRoutes);
+// STEP 3.5A — same full-prefix-mount defense as /performance and
+// /roster immediately above: a literal single-segment "/analytics"
+// path would otherwise collide with adminFieldAgentApprovalRoutes'
+// own "/:applicationId" route. See adminFieldAgentAnalytics.routes.js's
+// own header.
+app.use("/api/admin/field-agents/analytics", protect, adminFieldAgentAnalyticsRoutes);
+// STEP 2.1 — same base path as adminFieldAgentApprovalRoutes below
+// (GET /api/admin/field-agents/:id/summary), registered as its own
+// mount rather than added to that router. Two path segments with a
+// literal "summary" second segment never collides with
+// adminFieldAgentApprovalRoutes' own routes ("/", "/:applicationId",
+// "/:applicationId/approve", "/:applicationId/reject",
+// "/:fieldAgentId/commercial-model" — none has a literal "summary"
+// second segment), but mounted BEFORE it anyway, mirroring the exact
+// /performance precedent immediately above (a real test failure
+// during FA-11.3 implementation is why that one had to be registered
+// first — same defensive ordering applied here without waiting to
+// find out the hard way).
+app.use("/api/admin/field-agents", protect, adminFieldAgentSummaryRoutes);
+// STEP 2.2 — same base path again (GET /api/admin/field-agents/:id/
+// salons), same reasoning as STEP 2.1 immediately above: a literal
+// "salons" second segment never collides with adminFieldAgentApproval
+// Routes' own routes, nor with adminFieldAgentSummaryRoutes' own
+// "/:id/summary" route — but mounted before the approval router too,
+// same defensive-ordering precedent.
+app.use("/api/admin/field-agents", protect, adminFieldAgentSalonsRoutes);
+// STEP 2.3 — same base path again (GET /api/admin/field-agents/:id/
+// earnings), same reasoning as STEP 2.1/2.2 immediately above: a
+// literal "earnings" second segment never collides with any sibling
+// router's own routes — but mounted before the approval router too,
+// same defensive-ordering precedent.
+app.use("/api/admin/field-agents", protect, adminFieldAgentEarningsRoutes);
+// STEP 2.4 — same base path again (GET /api/admin/field-agents/:id/
+// wallet, GET /api/admin/field-agents/:id/payouts), same reasoning as
+// STEP 2.1/2.2/2.3 immediately above: literal "wallet"/"payouts"
+// second segments never collide with any sibling router's own routes
+// — but mounted before the approval router too, same defensive-
+// ordering precedent.
+app.use("/api/admin/field-agents", protect, adminFieldAgentWalletRoutes);
 app.use("/api/admin/field-agents", protect, adminFieldAgentApprovalRoutes);
 // FA-5.1 — admin CommercialPolicyVersion authoring/versioning. Read
 // AND write are INDIA-only (see adminCommercialPolicy.routes.js's own
@@ -537,6 +594,26 @@ app.use("/api/admin/finance/export", protect, adminFinanceExportRoutes);
 // read-only audit), which this module does not read, write or migrate.
 // INDIA-only, same rationale as every route immediately above.
 app.use("/api/admin/finance/territory-settings", protect, adminTerritoryRevenueRoutes);
+// STEP 4.2A — full-literal-path mount, see adminSalonRevenue.routes.js's
+// own header for why this can never collide with adminRoutes' own
+// "/salons/:id" route below (one segment longer, Express requires a
+// full match).
+app.use("/api/admin/salons/:id/revenue", protect, adminSalonRevenueRoutes);
+// STEP 5.2A — full-literal-path mount, see adminCustomerSummary.routes.js's
+// own header for why this can never collide with adminRoutes' own
+// "/users/:id" and "/users/summary" routes below.
+app.use("/api/admin/users/:id/summary", protect, adminCustomerSummaryRoutes);
+// STEP 5.2B — same full-literal-path idiom as STEP 5.2A immediately
+// above; a different literal 5th segment ("bookings" vs "summary")
+// never collides with it either.
+app.use("/api/admin/users/:id/bookings", protect, adminCustomerBookingsRoutes);
+// STEP 5.5A — same full-literal-path idiom; a different literal 5th
+// segment ("reviews" vs "summary"/"bookings") never collides with them.
+app.use("/api/admin/users/:id/reviews", protect, adminCustomerReviewsRoutes);
+// STEP 5.5B — same full-literal-path idiom; a different literal 5th
+// segment ("wallet") never collides with them, nor with the unrelated
+// "/api/admin/finance/wallets/:salonId" salon-wallet endpoint.
+app.use("/api/admin/users/:id/wallet", protect, adminCustomerWalletRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
