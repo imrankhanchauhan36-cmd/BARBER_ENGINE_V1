@@ -88,6 +88,7 @@ import adminCustomerSummaryRoutes from "./routes/adminCustomerSummary.routes.js"
 import adminCustomerBookingsRoutes from "./routes/adminCustomerBookings.routes.js"; // ← NEW — STEP 5.2B admin Customer Booking History API (read-only join — see that route file's own header)
 import adminCustomerReviewsRoutes from "./routes/adminCustomerReviews.routes.js"; // ← NEW — STEP 5.5A admin Customer Reviews API (read-only, Rating-model-backed — see that route file's own header)
 import adminCustomerWalletRoutes from "./routes/adminCustomerWallet.routes.js"; // ← NEW — STEP 5.5B admin Customer Wallet API (read-only, raw User.walletBalance/rewardPoints, no calculation — see that route file's own header)
+import adminNotificationsRoutes from "./routes/adminNotifications.routes.js"; // ← NEW — STEP 8.1B admin Notification APIs (reuses NotificationService/NotificationTemplate/NotificationDeliveryLog/providers only — see that route file's own header)
 import adminAreaPlatformFeeRoutes from "./routes/adminAreaPlatformFee.routes.js"; // ← NEW — PAN-India area-wise Platform Fee configuration authoring/governance
 import adminTeamRoutes from "./modules/support/routes/adminTeam.routes.js"; // ← NEW — Phase H Step 7 SUPPORT_ADMIN team read access
 import adminQueueRoutes from "./modules/support/routes/adminQueue.routes.js"; // ← NEW — Phase H Step 8 Support Configuration Management: Queues
@@ -614,6 +615,14 @@ app.use("/api/admin/users/:id/reviews", protect, adminCustomerReviewsRoutes);
 // segment ("wallet") never collides with them, nor with the unrelated
 // "/api/admin/finance/wallets/:salonId" salon-wallet endpoint.
 app.use("/api/admin/users/:id/wallet", protect, adminCustomerWalletRoutes);
+// STEP 8.1B — full-literal-prefix mount, /api/admin/notifications*, a
+// strict superset of nothing adminRoutes itself defines (grepped —
+// no existing "/notifications" sub-route on adminRoutes) and a wholly
+// different prefix than /api/notifications*/api/user/notifications*
+// (owner/field-agent inbox — untouched by this ticket). Mounted here,
+// before the general "/api/admin" catch-all below, same defensive
+// ordering as every sibling full-literal-path mount above.
+app.use("/api/admin/notifications", protect, adminNotificationsRoutes);
 app.use("/api/admin", protect, adminRoutes);
 
 ///////////////////////////////////////////////////////////
