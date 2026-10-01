@@ -37,9 +37,23 @@ import {
   startAssistedOnboardingHandler,
 } from "../controllers/assistedOnboarding.controller.js";
 import { listMyApplicationsHandler } from "../controllers/fieldAgentApplications.controller.js";
+import {
+  saveBasicInfoHandler,
+  saveLocationHandler,
+  saveServicesHandler,
+  saveChairsHandler,
+  saveTimingsHandler,
+  saveStaffHandler,
+  savePhotosHandler,
+  getReviewHandler,
+  submitSalonHandler,
+  resubmitOnboardingHandler,
+} from "../controllers/fieldAgentOnboarding.controller.js";
+import { requireActiveClaimForSalon } from "../middlewares/requireActiveClaimForSalon.js";
 import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validator.js";
 import { assistedOnboardingSchemas } from "../validators/assistedOnboarding.validator.js";
 import { fieldAgentApplicationsSchemas } from "../validators/fieldAgentApplications.validator.js";
+import { fieldAgentOnboardingSchemas } from "../validators/fieldAgentOnboarding.validator.js";
 
 const router = express.Router();
 
@@ -141,6 +155,109 @@ router.get(
   "/applications",
   validate(fieldAgentApplicationsSchemas.listApplicationsQuery, "query"),
   listMyApplicationsHandler
+);
+
+// PHASE 2B — salonId-scoped onboarding step-write surface. Every
+// route below runs, in order: (1) salonId param shape validation,
+// (2) requireActiveClaimForSalon — the new claim-ownership boundary
+// (404, never 403, on any mismatch — see that middleware's own
+// header), (3) body validation (mutating routes only), (4) idempotency
+// (mutating routes only, same "every mutating endpoint" convention as
+// every other POST/PATCH in this router — a retried PATCH can never
+// double-apply a step write, e.g. saveChairs' own delete+insert).
+// GET routes (review) carry neither idempotency nor a body schema,
+// matching /claims/mine, /dashboard, /recovery's own existing
+// GET-has-neither convention in this same file. No rate limiter is
+// applied here — the real Owner onboarding engine
+// (routes/salon.onboarding.routes.js, frozen, unmodified) has none on
+// any of these 10 endpoints either, and referralCreateLimiter's own
+// 20/hour budget is semantically a referral/claim-CREATION limit, not
+// a step-edit limit — applying it here would be a mismatched reuse,
+// not a faithful one.
+router.patch(
+  "/applications/:salonId/onboarding/basic-info",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.basicInfoBody, "body"),
+  idempotency,
+  saveBasicInfoHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/location",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.locationBody, "body"),
+  idempotency,
+  saveLocationHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/services",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.servicesBody, "body"),
+  idempotency,
+  saveServicesHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/chairs",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.chairsBody, "body"),
+  idempotency,
+  saveChairsHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/timings",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.timingsBody, "body"),
+  idempotency,
+  saveTimingsHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/staff",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.staffBody, "body"),
+  idempotency,
+  saveStaffHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/photos",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  validate(fieldAgentOnboardingSchemas.photosBody, "body"),
+  idempotency,
+  savePhotosHandler
+);
+
+router.get(
+  "/applications/:salonId/onboarding/review",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  getReviewHandler
+);
+
+router.post(
+  "/applications/:salonId/onboarding/submit",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  idempotency,
+  submitSalonHandler
+);
+
+router.patch(
+  "/applications/:salonId/onboarding/resubmit",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  idempotency,
+  resubmitOnboardingHandler
 );
 
 export default router;
