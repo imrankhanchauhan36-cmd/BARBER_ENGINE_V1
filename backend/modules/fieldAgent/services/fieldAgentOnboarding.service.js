@@ -76,9 +76,14 @@ import { invalidateAllNextSlotCache } from "../../../services/slotEngine.service
 import logger from "../../../utils/logger.js";
 import { Errors } from "../../../utils/response.js";
 
-// Same allow-list every editable step in the original enforces
-// (controller lines 405/755/914/1118/1400/1624) — ported verbatim.
-const EDITABLE_STATUSES = ["DRAFT", "APPROVED"];
+// FIELD-AGENT-SCOPED RULE (differs from the frozen Owner controller's
+// own [DRAFT,APPROVED] allow-list by deliberate product decision,
+// approved 2026-10-01, "Existing Owner / Second Salon Flow" fix):
+// an APPROVED salon is permanently LIVE and must never be editable by
+// a Field Agent through this service, regardless of claim status.
+// This constant/guard is intentionally NOT ported back to the Owner
+// controller — Owner's own [DRAFT,APPROVED] behavior is unchanged.
+const EDITABLE_STATUSES = ["DRAFT"];
 
 const generateSearchTags = (name, category, applicableFor) => {
   const tags = new Set();
@@ -106,10 +111,22 @@ const assertEditable = (salon) => {
 };
 
 // ─── STEP 1 — BASIC INFO ──────────────────────────────────────────
-// Port of saveBasicInfo (controller:21-163). No approval-status gate
-// and no step-threshold gate in the original — none added here.
+// Port of saveBasicInfo (controller:21-163). The original has no
+// approval-status gate and no step-threshold gate — none added here.
+// The ONLY gate added, isolated and additive (approved 2026-10-01,
+// "Existing Owner / Second Salon Flow" fix), rejects APPROVED salons
+// specifically, because an APPROVED salon is live and must never be
+// writable by a Field Agent. PENDING/REJECTED remain exactly as
+// originally ported (still ungated) — that pre-existing gap is
+// deliberately left untouched per the approved product rule.
 export const saveBasicInfo = async ({ salonId, body }) => {
   const { shopName, category, tagline, since, amenities, tier, setupType, specializations, capabilities, privacySetup, whatsapp, brandName, branchCode, experience } = body;
+
+  const existingForGate = await Salon.findById(salonId).select("approval.status").lean();
+  if (!existingForGate) throw Errors.notFound("Salon not found");
+  if (existingForGate.approval?.status === "APPROVED") {
+    throw Errors.badRequest("Salon not editable");
+  }
 
   if (!shopName || !category) throw Errors.badRequest("shopName and category required");
 
@@ -169,7 +186,11 @@ export const saveBasicInfo = async ({ salonId, body }) => {
 
 // ─── STEP 2 — LOCATION ─────────────────────────────────────────────
 // Port of saveLocation (controller:169-307). Same geoService/
-// assignAdminByDistrict dependencies, called identically.
+// assignAdminByDistrict dependencies, called identically. The ONLY
+// gate added, isolated and additive (approved 2026-10-01, "Existing
+// Owner / Second Salon Flow" fix), rejects APPROVED salons
+// specifically — see saveBasicInfo's header comment above for the
+// full rationale. PENDING/REJECTED remain ungated, unchanged.
 export const saveLocation = async ({ salonId, body }) => {
   const { address, lat, lng } = body;
   const latNum = Number(lat);
@@ -182,8 +203,11 @@ export const saveLocation = async ({ salonId, body }) => {
   const location = await geoService.detectLocation(latNum, lngNum);
   if (!location) throw Errors.badRequest("Service not available in this area");
 
-  const existingSalon = await Salon.findById(salonId).select("assignedAdmin").lean();
+  const existingSalon = await Salon.findById(salonId).select("assignedAdmin approval.status").lean();
   if (!existingSalon) throw Errors.notFound("Salon not found");
+  if (existingSalon.approval?.status === "APPROVED") {
+    throw Errors.badRequest("Salon not editable");
+  }
   if (existingSalon.assignedAdmin) {
     await User.findByIdAndUpdate(existingSalon.assignedAdmin, { $unset: { lastAssignedAt: 1 } });
   }
@@ -682,7 +706,14 @@ export const submitSalon = async ({ salonId }) => {
     const salon = await Salon.findById(salonId).select("_id onboarding approval").session(session);
     if (!salon) throw Errors.notFound("Salon not found");
 
-    if (!["DRAFT", "APPROVED"].includes(salon.approval?.status)) throw Errors.badRequest("Already submitted or not editable");
+    // Uses the same EDITABLE_STATUSES allow-list as every other step
+    // (now ["DRAFT"] only — see the constant's header comment above).
+    // Previously hardcoded its own separate ["DRAFT","APPROVED"] check
+    // here; functionally the APPROVED branch always a 400 anyway via
+    // the status-scoped findOneAndUpdate below, so behavior here is
+    // unchanged for every other status — this only removes the one
+    // place APPROVED was still named as if it were editable.
+    if (!EDITABLE_STATUSES.includes(salon.approval?.status)) throw Errors.badRequest("Already submitted or not editable");
     if (salon.onboarding?.step < 7) throw Errors.badRequest("Complete all steps before submit");
 
     const [servicesCount, staffCount, mediaCount, chairsCount] = await Promise.all([
