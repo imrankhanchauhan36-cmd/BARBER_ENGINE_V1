@@ -36,8 +36,10 @@ import {
   sendAssistedOnboardingOtpHandler,
   startAssistedOnboardingHandler,
 } from "../controllers/assistedOnboarding.controller.js";
+import { listMyApplicationsHandler } from "../controllers/fieldAgentApplications.controller.js";
 import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validator.js";
 import { assistedOnboardingSchemas } from "../validators/assistedOnboarding.validator.js";
+import { fieldAgentApplicationsSchemas } from "../validators/fieldAgentApplications.validator.js";
 
 const router = express.Router();
 
@@ -127,6 +129,18 @@ router.post(
   referralCreateLimiter,
   idempotency,
   startAssistedOnboardingHandler
+);
+
+// PHASE 2A — Field Agent "My Applications" list. Strictly read-only
+// (no idempotency/rate-limiter needed, same convention as every other
+// GET in this router — /referrals/mine, /claims/mine, /dashboard,
+// /recovery, /recovery/:claimId — none of which carry either). Scoped
+// exclusively to the caller's own fieldAgentRef inside the service —
+// see fieldAgentApplications.service.js's own header.
+router.get(
+  "/applications",
+  validate(fieldAgentApplicationsSchemas.listApplicationsQuery, "query"),
+  listMyApplicationsHandler
 );
 
 export default router;
