@@ -32,7 +32,12 @@ import {
   listMyAcquisitionRecoveryHandler,
   getMyAcquisitionRecoveryDetailHandler,
 } from "../controllers/fieldAgentAcquisitionRecovery.controller.js";
+import {
+  sendAssistedOnboardingOtpHandler,
+  startAssistedOnboardingHandler,
+} from "../controllers/assistedOnboarding.controller.js";
 import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validator.js";
+import { assistedOnboardingSchemas } from "../validators/assistedOnboarding.validator.js";
 
 const router = express.Router();
 
@@ -93,6 +98,35 @@ router.get(
   "/recovery/:claimId",
   validate(acquisitionClaimSchemas.claimIdParam, "params"),
   getMyAcquisitionRecoveryDetailHandler
+);
+
+// PHASE 1 — PAN-India Field Agent Assisted Onboarding. Deliberately
+// added to THIS existing router rather than a new file/new app.js
+// mount: requireRole("FIELD_AGENT") + requireActiveFieldAgent are
+// already applied above via router.use(...), and this flow reuses the
+// SAME referralCreateLimiter (FIELD_AGENT_REFERRAL_CREATE) already
+// defined above for /referrals — no second rate-limit system, exactly
+// as this phase's own instruction requires. idempotency is applied to
+// both (same "every mutating endpoint" convention as every other POST
+// in this router) so a client-side retry (e.g. a flaky mobile network
+// after OTP verify) can never create a duplicate OWNER/Salon/
+// AcquisitionClaim — see assistedOnboarding.service.js's own
+// transactional + partial-unique-index guarantees for the deeper
+// correctness story idempotency sits on top of here.
+router.post(
+  "/assisted-onboarding/send-otp",
+  validate(assistedOnboardingSchemas.sendOtpBody, "body"),
+  referralCreateLimiter,
+  idempotency,
+  sendAssistedOnboardingOtpHandler
+);
+
+router.post(
+  "/assisted-onboarding/start",
+  validate(assistedOnboardingSchemas.startBody, "body"),
+  referralCreateLimiter,
+  idempotency,
+  startAssistedOnboardingHandler
 );
 
 export default router;

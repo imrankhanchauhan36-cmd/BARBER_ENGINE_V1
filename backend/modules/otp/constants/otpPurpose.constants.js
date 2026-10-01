@@ -29,6 +29,18 @@ export const OTP_PURPOSE = Object.freeze({
   FIELD_AGENT_LOGIN: "FIELD_AGENT_LOGIN", // FA-13A approved-agent operational login
   BOOKING_NOSHOW: "BOOKING_NOSHOW", // Booking Engine no-show confirmation OTP (never Redis-backed — see otp.service.js#dispatchOtpSms)
   PHONE_CHANGE: "PHONE_CHANGE", // reserved — no phone-change flow exists yet
+  // PAN-India Field Agent Assisted Onboarding, Phase 1 — a Field
+  // Agent proves the SALON OWNER's phone possession on the owner's
+  // behalf, without ever issuing that owner a session (see
+  // modules/fieldAgent/services/assistedOnboarding.service.js). This
+  // is a genuinely NEW purpose, not a reuse of SALON_LOGIN — the
+  // Redis key namespace this file builds is `otp:{role}:{purpose}:
+  // {phone}`, so an OTP sent under this purpose is structurally
+  // unusable to satisfy a real SALON_LOGIN verify (and vice versa),
+  // even for the exact same phone number. That separation is the
+  // whole point: an assisted-onboarding OTP must never be redeemable
+  // as a real owner login credential.
+  ASSISTED_ONBOARDING_OWNER_VERIFY: "ASSISTED_ONBOARDING_OWNER_VERIFY",
 });
 
 // Which purposes are actually backed by a Redis hash/attempts/cooldown
@@ -39,4 +51,5 @@ export const REDIS_BACKED_PURPOSES = Object.freeze([
   OTP_PURPOSE.SALON_LOGIN,
   OTP_PURPOSE.FIELD_AGENT_APPLY,
   OTP_PURPOSE.FIELD_AGENT_LOGIN,
+  OTP_PURPOSE.ASSISTED_ONBOARDING_OWNER_VERIFY,
 ]);

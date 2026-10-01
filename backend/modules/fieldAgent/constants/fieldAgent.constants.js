@@ -214,6 +214,16 @@ export const AUDIT_ACTION = Object.freeze({
   FIELD_AGENT_PAYOUT_PAID: "FIELD_AGENT_PAYOUT_PAID",
   FIELD_AGENT_PAYOUT_FAILED: "FIELD_AGENT_PAYOUT_FAILED",
   FIELD_AGENT_PAYOUT_RETRIED: "FIELD_AGENT_PAYOUT_RETRIED",
+  // PAN-India Field Agent Assisted Onboarding, Phase 1 — additive
+  // only. Written by modules/fieldAgent/services/assistedOnboarding.
+  // service.js, entityType ACQUISITION_CLAIM, actorType AGENT, fired
+  // once per actual new AcquisitionClaim created via the assisted
+  // flow (never on an idempotent cached-response replay) — same
+  // "fires only on real creation" discipline as TEST_STARTED/
+  // FIELD_AGENT_PROFILE_CREATED above. Sits alongside (does not
+  // replace) the existing ACQUISITION_REFERRAL_CONSUMED/
+  // ACQUISITION_CLAIM_CREATED events that same call also emits.
+  ASSISTED_ONBOARDING_STARTED: "ASSISTED_ONBOARDING_STARTED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string
