@@ -316,6 +316,75 @@ export const withdrawMyClaim = async ({ userId, claimId }) => {
   return claim;
 };
 
+// ─── DELETE (salonId-scoped, PENDING-only) ───────────────────────────
+// "Field Agent Salon Delete" feature (2026-10-01). Called from
+// DELETE /api/field-agent/acquisition/applications/:salonId, AFTER
+// requireActiveClaimForSalon has already proven this exact Field
+// Agent owns a non-terminal claim on this exact salon (same
+// authorization boundary Phase 2B's own onboarding writes use — see
+// that middleware's own header). `claimId`/`fieldAgentRef` here are
+// the EXACT values that middleware already attached to the request
+// (req.fieldAgentClaim) — not re-derived, no second claim lookup,
+// same "trust the middleware, re-scope the write" convention Phase
+// 2B's own onboarding service functions (saveBasicInfo etc.) already
+// use for this identical middleware.
+//
+// DELIBERATELY NOT A HARD DELETE of anything, anywhere — this reuses
+// the EXACT SAME safe, already-proven transition withdrawMyClaim
+// above performs (status -> ENDED, endedReason -> AGENT_WITHDRAWN),
+// just entered via salonId instead of claimId, with ONE additional
+// business-rule gate: the Salon itself must currently be
+// approval.status === "PENDING". Salon, AcquisitionClaim (the
+// document itself), AcquisitionEarningProgress, FieldAgentEarningLedger,
+// the Owner/User account, and every other salon belonging to that
+// owner are all left completely untouched — exactly as withdrawMyClaim
+// already leaves them for an ACTIVE_RECOVERY claim with real earning
+// progress. withdrawMyClaim itself is UNCHANGED — this is a new,
+// separate, narrower operation, not a widened/modified version of it.
+export const deleteMyPendingSalonApplication = async ({ salonId, claimId, fieldAgentRef, userId }) => {
+  const salon = await Salon.findById(salonId).select("approval.status").lean();
+  if (!salon) throw Errors.notFound("Salon not found");
+
+  if (salon.approval?.status === "APPROVED") {
+    throw Errors.badRequest("Approved salons cannot be deleted by Field Agents");
+  }
+  if (salon.approval?.status !== "PENDING") {
+    throw Errors.badRequest("This salon cannot be deleted because its current status does not allow deletion");
+  }
+
+  // Same atomic, ownership-rescoped conditional transition
+  // withdrawMyClaim uses above — never a blind trust of the earlier
+  // middleware read for the actual write.
+  const claim = await AcquisitionClaim.findOneAndUpdate(
+    { _id: claimId, fieldAgentRef, status: { $in: CLAIM_NON_TERMINAL_STATUSES } },
+    {
+      $set: {
+        status: CLAIM_STATUS.ENDED,
+        endedReason: CLAIM_END_REASON.AGENT_WITHDRAWN,
+        endedBy: userId,
+        endedAt: new Date(),
+      },
+    },
+    { new: true }
+  );
+  if (!claim) {
+    // Same "404, never 403, don't leak" idiom as withdrawMyClaim/
+    // requireActiveClaimForSalon above.
+    throw Errors.notFound("Salon not found");
+  }
+
+  safeAuditEvent({
+    entityType: AUDIT_ENTITY_TYPE.ACQUISITION_CLAIM,
+    entityId: claim._id,
+    actorRef: userId,
+    actorType: AUDIT_ACTOR_TYPE.AGENT,
+    action: AUDIT_ACTION.ACQUISITION_CLAIM_ENDED,
+    newValue: { endedReason: CLAIM_END_REASON.AGENT_WITHDRAWN, viaSalonDelete: true, salonId },
+  });
+
+  return { salonId, claimId: claim._id, status: claim.status };
+};
+
 // ─── REDEEM (the ONLY claim-creation path) ───────────────────────────
 export const redeemReferral = async ({ ownerId, referralCode }) => {
   if (!referralCode || typeof referralCode !== "string") {

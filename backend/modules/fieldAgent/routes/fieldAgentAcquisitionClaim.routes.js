@@ -26,6 +26,7 @@ import {
   cancelMyReferralHandler,
   listMyClaimsHandler,
   withdrawMyClaimHandler,
+  deletePendingSalonApplicationHandler,
 } from "../controllers/fieldAgentAcquisitionClaim.controller.js";
 import {
   getMyAcquisitionDashboardHandler,
@@ -258,6 +259,24 @@ router.patch(
   requireActiveClaimForSalon,
   idempotency,
   resubmitOnboardingHandler
+);
+
+// "Field Agent Salon Delete" feature (2026-10-01) — same
+// requireActiveClaimForSalon boundary as every Phase 2B route above
+// (404, never 403, on any ownership mismatch). NOT an onboarding
+// step-write, so deliberately NOT nested under .../onboarding/* —
+// this removes the whole application (by ending its claim — see
+// deleteMyPendingSalonApplication's own header for why this is never
+// a hard delete of anything), matching the ticket's own preferred
+// DELETE /applications/:salonId contract. idempotency applied, same
+// "every mutating endpoint" convention as every other write in this
+// router.
+router.delete(
+  "/applications/:salonId",
+  validate(fieldAgentOnboardingSchemas.salonIdParam, "params"),
+  requireActiveClaimForSalon,
+  idempotency,
+  deletePendingSalonApplicationHandler
 );
 
 export default router;

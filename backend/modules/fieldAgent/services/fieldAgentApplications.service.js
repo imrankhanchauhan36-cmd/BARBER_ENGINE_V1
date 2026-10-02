@@ -114,8 +114,41 @@ export const listMyApplications = async ({ userId, page, limit, status }) => {
 
   // COLLECTION query, never findOne — see this file's own header for
   // why a singular current/active-claim assumption would be wrong here.
-  const filter = { fieldAgentRef: fieldAgent._id };
-  if (status) filter.status = status;
+  const baseFilter = { fieldAgentRef: fieldAgent._id };
+  if (status) baseFilter.status = status;
+
+  // ── Phase 11J — hide permanently-abandoned empty DRAFT applications ──
+  // "Resolve IDs first, then intersect" — the same idiom already used by
+  // acquisitionRecovery.service.js#listMyAcquisitionRecovery, not a new
+  // pattern. A Salon created the instant Owner OTP verifies starts at
+  // approval.status=DRAFT, onboarding.step=0 (assistedOnboarding.
+  // service.js's explicit $set, bypassing the schema's step:1 default —
+  // see fieldAgentOnboarding.service.js's saveBasicInfo). If the agent
+  // never gets past viewing that first screen, the salon sits at step=0
+  // forever with zero real data — that, and only that, is hidden here.
+  // Any salon with at least one real save (step>=1), already past DRAFT
+  // (PENDING/APPROVED/REJECTED), or a REJECTED->Fix&Resubmit draft
+  // (approval.rejectedAt still set — resubmitOnboarding() deliberately
+  // never clears it) stays visible, per the approved Phase 11I audit.
+  const myClaims = await AcquisitionClaim.find(baseFilter).select("_id salonRef").lean();
+
+  const visibleSalonIds = new Set(
+    (
+      await Salon.distinct("_id", {
+        _id: { $in: myClaims.map((c) => c.salonRef) },
+        $or: [
+          { "onboarding.step": { $gte: 1 } },
+          { "approval.status": { $ne: "DRAFT" } },
+          { "approval.rejectedAt": { $ne: null } },
+        ],
+      })
+    ).map(String)
+  );
+  const eligibleClaimIds = myClaims
+    .filter((c) => visibleSalonIds.has(String(c.salonRef)))
+    .map((c) => c._id);
+
+  const filter = { ...baseFilter, _id: { $in: eligibleClaimIds } };
 
   const [claims, total] = await Promise.all([
     AcquisitionClaim.find(filter)

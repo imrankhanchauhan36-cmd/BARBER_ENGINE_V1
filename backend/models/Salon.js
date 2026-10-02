@@ -211,6 +211,18 @@ const SalonSchema = new mongoose.Schema(
         assemblyRef: { type: mongoose.Schema.Types.ObjectId, ref: "Assembly", default: null },
         cityRef:     { type: mongoose.Schema.Types.ObjectId, ref: "City",     default: null, index: true },
         areaRef:     { type: mongoose.Schema.Types.ObjectId, ref: "Area",     default: null },
+        // PHASE 11E — "Address Structured Hydration" (2026-10-02).
+        // ADDITIVE ONLY — was never declared here, even though
+        // fieldAgentOnboarding.service.js#saveLocation (and the
+        // Owner's own services/salon.onboarding.service.js, same
+        // geoService.detectLocation() result) always attempted to
+        // $set this exact path. Confirmed live (read-only query, no
+        // schema declaration = Mongoose's default strict:true mode
+        // silently drops it from the update before it reaches
+        // MongoDB) that it was never actually persisted on any real
+        // salon. This single additive field is the fix — no rename,
+        // no restructure of any sibling field above.
+        pincodeRef:  { type: mongoose.Schema.Types.ObjectId, ref: "Pincode",  default: null },
       },
     },
 

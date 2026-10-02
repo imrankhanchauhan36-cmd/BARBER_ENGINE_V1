@@ -166,12 +166,17 @@ export const saveBasicInfo = async ({ salonId, body }) => {
     "location.geo.type": "Point",
     "location.geo.coordinates": [0, 0],
     "approval.status": "DRAFT",
-    $max: { "onboarding.step": 1 },
   };
 
+  // Phase 11K fix: $max MUST be a sibling top-level operator alongside
+  // $set, not a key nested inside the object passed to $set (that
+  // previous shape made it a literal, inert field named "$max" — a
+  // silent no-op that left onboarding.step stuck at 0 forever). Mirrors
+  // saveLocation's own correct `{ $set:{...}, $max:{...} }` shape
+  // immediately below in this same file.
   const salon = await Salon.findOneAndUpdate(
     { _id: salonId },
-    { $set: updatePayload },
+    { $set: updatePayload, $max: { "onboarding.step": 1 } },
     { new: true, runValidators: false }
   );
   if (!salon) throw Errors.notFound("Salon not found");
@@ -678,8 +683,25 @@ export const savePhotos = async ({ salonId, body }) => {
 // ─── STEP 8 — REVIEW (read-only) ───────────────────────────────────
 // Port of getReview (controller:1512-1589). No approval-status gate
 // in the original — none added here.
+//
+// PHASE 11E — "Address Structured Hydration" (2026-10-02). Four
+// additive .populate() calls on the EXACT same refs saveLocation
+// already writes — reusing, byte-for-byte, the identical pattern
+// already proven elsewhere in this codebase for the same fields
+// (controllers/salon.controller.js:192-193,
+// controllers/salonDetail.controller.js:24-28 — confirmed by reading
+// both directly in the Phase 11D audit) rather than inventing a new
+// one. Nothing else about this query changes: same model, same
+// salonId filter, same .lean(). A salon with no saved location (or a
+// ref not yet resolved) simply gets `null` back for that path —
+// Mongoose's own documented populate behavior — never an error.
 export const getReview = async ({ salonId }) => {
-  const salon = await Salon.findById(salonId).lean();
+  const salon = await Salon.findById(salonId)
+    .populate("location.territory.stateRef", "name")
+    .populate("location.territory.districtRef", "name")
+    .populate("location.territory.cityRef", "name")
+    .populate("location.territory.pincodeRef", "code")
+    .lean();
   if (!salon || !salon._id) throw Errors.notFound("Salon not found");
 
   const [services, staff, media, chairs] = await Promise.all([

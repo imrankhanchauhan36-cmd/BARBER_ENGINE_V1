@@ -122,17 +122,21 @@ export const saveBasicInfo = async (req, res) => {
       "location.geo.type": "Point",
       "location.geo.coordinates": [0, 0],
       "approval.status": "DRAFT",
-
-      $max: {
-        "onboarding.step": 1,
-      },
     };
 
+    // Phase 11L fix: $max MUST be a sibling top-level operator alongside
+    // $set/$setOnInsert, not a key nested inside the object passed to
+    // $set (that previous shape made it a literal, inert field named
+    // "$max" — a silent no-op that left onboarding.step stuck below 1
+    // whenever this ran against a pre-existing salon still at step 0,
+    // e.g. one created via Field Agent assisted onboarding for the same
+    // owner). Mirrors saveLocation's own correct shape just below.
     const salon = await Salon.findOneAndUpdate(
       { ownerId },
       {
         $set: updatePayload,
         $setOnInsert: { ownerId },
+        $max: { "onboarding.step": 1 },
       },
       {
         new: true,

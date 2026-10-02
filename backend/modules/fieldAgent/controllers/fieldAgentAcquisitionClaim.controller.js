@@ -16,6 +16,7 @@ import {
   cancelMyReferral,
   listMyClaims,
   withdrawMyClaim,
+  deleteMyPendingSalonApplication,
 } from "../services/acquisitionClaim.service.js";
 
 export const issueReferralHandler = async (req, res, next) => {
@@ -66,6 +67,26 @@ export const withdrawMyClaimHandler = async (req, res, next) => {
   try {
     const claim = await withdrawMyClaim({ userId: req.user._id, claimId: req.params.claimId });
     return successResponse(res, { message: "Acquisition claim withdrawn", data: { claim } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// "Field Agent Salon Delete" feature — mounted behind
+// requireActiveClaimForSalon (see the route), which already attaches
+// req.fieldAgentClaim: { _id, fieldAgentRef, ... }. claimId/fieldAgentRef
+// here are those exact attached values — never re-derived, no second
+// claim lookup, same trust-the-middleware convention Phase 2B's own
+// onboarding handlers already use for this identical middleware.
+export const deletePendingSalonApplicationHandler = async (req, res, next) => {
+  try {
+    const result = await deleteMyPendingSalonApplication({
+      salonId: req.params.salonId,
+      claimId: req.fieldAgentClaim._id,
+      fieldAgentRef: req.fieldAgentClaim.fieldAgentRef,
+      userId: req.user._id,
+    });
+    return successResponse(res, { message: "Salon application removed", data: result });
   } catch (err) {
     return next(err);
   }
