@@ -12,7 +12,7 @@ import { getAdminFieldAgentAnalytics } from "../services/adminFieldAgentAnalytic
 
 export const getAdminFieldAgentAnalyticsHandler = async (req, res, next) => {
   try {
-    const analytics = await getAdminFieldAgentAnalytics();
+    const analytics = await getAdminFieldAgentAnalytics({ admin: req.user });
     return successResponse(res, { message: "Field Agent analytics fetched", data: analytics });
   } catch (err) {
     return next(err);

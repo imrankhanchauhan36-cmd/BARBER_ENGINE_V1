@@ -117,6 +117,26 @@ const commercialPolicyVersionSchema = new mongoose.Schema(
       },
     },
 
+    // FA-9 Phase A — the nationally configured, ONE-TIME fixed reward
+    // paid to the Field Agent when their AcquisitionClaim is approved
+    // (CLAIM_STATUS.COMPLETED), i.e. the salon is considered acquired.
+    // Deliberately SEPARATE from acquisitionEarningTargetInPaise above
+    // (that field is, and remains, the cumulative per-booking-commission
+    // CAP for the OLD/pre-Phase-A mechanism — it is not renamed,
+    // removed, or reinterpreted). Required for new writes only; no
+    // default, matching acquisitionEarningTargetInPaise's own
+    // precedent — safe because CommercialPolicyVersion has zero
+    // documents in production as of this field's introduction.
+    acquisitionRewardAmountInPaise: {
+      type: Number,
+      required: true,
+      min: ACQUISITION_INCENTIVE_MIN_PAISE,
+      validate: {
+        validator: Number.isInteger,
+        message: "acquisitionRewardAmountInPaise must be a whole number (paise, not rupees)",
+      },
+    },
+
     // Path B — Territory Partner's ongoing commission rate, a
     // percentage of the authoritative Booking.commissionAmountInPaise
     // (FA-5.1 never reads that field itself — see file header).

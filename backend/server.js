@@ -22,6 +22,7 @@ import { startOtpAuditOutboxJob } from "./modules/otp/jobs/otpAuditOutbox.job.js
 import { startNotificationRetryJob } from "./modules/notifications/jobs/notificationRetry.job.js"; // ← FA-P2-A — retries FAILED PUSH NotificationDeliveryLog rows (atomic claim via processingStartedAt, same shape as ratingOutbox.job.js)
 import { startCashfreePayoutReconcileJob } from "./modules/fieldAgent/jobs/cashfreePayoutReconcile.job.js"; // ← FA-P4-D Step 1 — polls in-flight Cashfree Field Agent payouts whose webhook never arrived; idempotent, multi-instance safe
 import { startGenericPayoutReconcileJob } from "./modules/payout/jobs/genericPayoutReconcile.job.js"; // ← STEP 6.4 — polls in-flight RAZORPAY_ROUTE GenericPayoutRequest payouts whose webhook never arrived; idempotent, multi-instance safe; safe no-op when Razorpay Route isn't configured
+import { startPayoutRequestReconcileJob } from "./jobs/payoutRequestReconcile.job.js"; // ← FINANCE-P0-1 — same, for the canonical PayoutRequest (SALON) model
 import { initSocket } from "./socket/index.js";
 
 //////////////////////////////////////////////////////////////
@@ -313,6 +314,10 @@ const cashfreePayoutReconcileJob = startCashfreePayoutReconcileJob();
 // Razorpay Route is configured and a RAZORPAY_ROUTE payout is in flight).
 const genericPayoutReconcileJob = startGenericPayoutReconcileJob();
 
+// FINANCE-P0-1 — same reconciliation, for the canonical PayoutRequest
+// (SALON) model's own RAZORPAY_ROUTE payouts.
+const payoutRequestReconcileJob = startPayoutRequestReconcileJob();
+
 //////////////////////////////////////////////////////////////
 // 🚀 STEP 8: START SERVER
 //////////////////////////////////////////////////////////////
@@ -403,6 +408,7 @@ const shutdown = async (signal) => {
       notificationRetryJob.stop();
       cashfreePayoutReconcileJob.stop();
       genericPayoutReconcileJob.stop();
+      payoutRequestReconcileJob.stop();
       console.log("✅ Notification retry job stopped");
 
       // Drain all open sockets before closing the DB — ensures no

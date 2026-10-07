@@ -93,6 +93,7 @@ const run = async () => {
         status: "PUBLISHED",
         acquisitionAgentCommissionPercent: 10,
         acquisitionEarningTargetInPaise: 100000,
+        acquisitionRewardAmountInPaise: 20000, // FA-9 Phase A — ₹200, required since this field was introduced
         territoryPartnerCommissionPercent: 8,
         licenseTermMonths: 12,
         claimExpiryDays: 30,
@@ -103,10 +104,16 @@ const run = async () => {
       createdIds.policies.push(nationalPolicy._id);
     }
 
+    // ACQUISITION CLAIM ENUM DRIFT FIX (pre-existing, unrelated to Phase A):
+    // "ACTIVE" predates the FA-P3-B Step 1 PENDING_APPROVAL/ACTIVE_RECOVERY
+    // split and is not a valid CLAIM_STATUS value — corrected to
+    // ACTIVE_RECOVERY, the real non-terminal, earning-eligible state this
+    // fixture actually needs (confirmed by the immediate
+    // createAcquisitionEarningProgressForClaim call right below).
     const claim = await AcquisitionClaim.create({
       salonRef: salon._id,
       fieldAgentRef: fieldAgent._id,
-      status: "ACTIVE",
+      status: "ACTIVE_RECOVERY",
       stateRef: geo.state._id,
       districtRef: geo.district._id,
     });
@@ -136,6 +143,7 @@ const run = async () => {
     // a shortcut around the platform-fee resolution boundary itself
     // (which is exercised for real via resolvePlatformFeeForArea just below).
     const areaFeePolicy = await AreaPlatformFeePolicy.create({
+      scope: "AREA", // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope is now required by the schema
       areaRef: geo.area._id,
       feeInPaise: 3000, // ₹30 flat convenience fee
       status: "PUBLISHED",

@@ -18,9 +18,17 @@
 // either ACQUISITION or TERRITORY_PARTNER, never both (FA-9 Business
 // Decision Lock §7, Issue 2 correction). Never simultaneous for one
 // booking.
+//
+// FA-9 Phase A — ACQUISITION_REWARD is deliberately NOT booking-keyed
+// (unlike the two rows above): it is created exactly once, at claim
+// approval, for the fixed one-time acquisition reward. It does not
+// participate in the "at most one per booking" invariant above because
+// it is never produced by processCompletedBooking at all — see
+// acquisitionClaim.service.js#adminApproveClaim.
 export const EARNING_ENTITLEMENT_TYPE = Object.freeze({
   ACQUISITION: "ACQUISITION",
   TERRITORY_PARTNER: "TERRITORY_PARTNER",
+  ACQUISITION_REWARD: "ACQUISITION_REWARD",
 });
 
 // Every processed entitlement attempt produces exactly one of these —

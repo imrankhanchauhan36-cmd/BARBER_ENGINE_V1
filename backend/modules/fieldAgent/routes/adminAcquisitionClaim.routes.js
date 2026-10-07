@@ -13,6 +13,10 @@
  *
  * FA-P3-B Step 1 — added /:claimId/approve (PENDING_APPROVAL ->
  * ACTIVE_RECOVERY, the only path into recovery).
+ *
+ * PHASE C.3-A — added /:claimId/complete (ACTIVE_RECOVERY -> COMPLETED,
+ * the only path that pays the fixed acquisition reward and ends the
+ * relationship). INDIA-only, same rationale as approve/reject/reassign.
  */
 
 import express from "express";
@@ -24,6 +28,7 @@ import {
   adminApproveClaimHandler,
   adminRejectClaimHandler,
   adminReassignClaimHandler,
+  adminCompleteClaimHandler,
 } from "../controllers/adminAcquisitionClaim.controller.js";
 import { acquisitionClaimSchemas } from "../validators/acquisitionClaim.validator.js";
 
@@ -67,6 +72,18 @@ router.post(
   requireAdminLevel(...INDIA_ONLY),
   validate(acquisitionClaimSchemas.claimIdParam, "params"),
   adminReassignClaimHandler
+);
+
+// PHASE C.3-A — the explicit acquisition closure event (ACTIVE_RECOVERY
+// -> COMPLETED, fixed reward paid once). INDIA-only, same sensitivity
+// rationale as approve/reject/reassign above (ending the relationship
+// and triggering a financial reward is at least as sensitive as
+// starting one).
+router.post(
+  "/:claimId/complete",
+  requireAdminLevel(...INDIA_ONLY),
+  validate(acquisitionClaimSchemas.claimIdParam, "params"),
+  adminCompleteClaimHandler
 );
 
 export default router;

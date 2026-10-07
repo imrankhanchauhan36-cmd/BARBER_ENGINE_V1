@@ -30,13 +30,30 @@
  */
 
 import mongoose from "mongoose";
-import { Errors } from "../../../utils/response.js";
+import { Errors, AppError } from "../../../utils/response.js";
 import { logAdminAction } from "../../../utils/auditLog.js";
 import RevenueSettings from "../models/RevenueSettings.js";
 import { REVENUE_SETTINGS_STATUS } from "../constants/revenue.constants.js";
 
 const isTransientConflict = (err) =>
   err.hasErrorLabel?.("TransientTransactionError") || err.code === 112 || err.codeName === "WriteConflict";
+
+// FINANCE-P0-2 QUARANTINE — this entire engine is confirmed to have zero
+// live production consumers (see RevenueCalculationService.js's own header
+// and RevenueSplitIntegrationService.js's "STEP 8.2 — Pricing Engine
+// Unification" header for the full audit trail and the documented
+// ₹123.60-vs-₹141.60 incident this decoupling fixed). Every mutating
+// function below throws this before touching the database — the read
+// functions (listRevenueSettings/getRevenueSettingsDetail/
+// getPublishedRevenueSettings) are untouched and remain available for
+// historical audit, per the explicit quarantine scope.
+const assertNotQuarantined = () => {
+  throw new AppError(
+    "Legacy Revenue Engine is retired and no longer accepts configuration changes. Use the current Global Commercial Control / canonical finance policy modules.",
+    410,
+    "LEGACY_REVENUE_ENGINE_DISABLED"
+  );
+};
 
 const getVersionOrThrow = async (versionId) => {
   const version = await RevenueSettings.findById(versionId);
@@ -62,6 +79,7 @@ const MAX_VERSION_NUMBER_ATTEMPTS = 5;
 export const createDraftRevenueSettings = async ({
   adminId, platformFeeInPaise, gstRate, gstEnabled, minimumPayoutInPaise, autoPayoutEnabled, req,
 }) => {
+  assertNotQuarantined();
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_VERSION_NUMBER_ATTEMPTS; attempt++) {
     const last = await RevenueSettings.findOne().sort({ version: -1 }).select("version").lean();
@@ -115,6 +133,7 @@ export const getPublishedRevenueSettings = () =>
 export const updateDraftRevenueSettings = async ({
   versionId, adminId, platformFeeInPaise, gstRate, gstEnabled, minimumPayoutInPaise, autoPayoutEnabled, req,
 }) => {
+  assertNotQuarantined();
   const version = await getVersionOrThrow(versionId);
   assertDraft(version);
 
@@ -151,6 +170,7 @@ const MAX_PUBLISH_ATTEMPTS = 5;
  * could never create a second PUBLISHED row.
  */
 export const publishRevenueSettings = async ({ versionId, adminId, req }) => {
+  assertNotQuarantined();
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_PUBLISH_ATTEMPTS; attempt++) {
     const session = await mongoose.startSession();
@@ -203,6 +223,7 @@ export const publishRevenueSettings = async ({ versionId, adminId, req }) => {
 };
 
 export const retireRevenueSettings = async ({ versionId, adminId, req }) => {
+  assertNotQuarantined();
   const version = await getVersionOrThrow(versionId);
   if (version.status !== REVENUE_SETTINGS_STATUS.PUBLISHED) {
     throw Errors.conflict(`Revenue settings version is ${version.status}, not PUBLISHED`);

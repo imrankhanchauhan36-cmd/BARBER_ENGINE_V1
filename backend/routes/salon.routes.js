@@ -22,6 +22,7 @@ import scheduleRoutes from "./schedule.routes.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
+import { requireAdminLevel } from "../middlewares/requireAdminLevel.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { bookingWindowSchemas } from "../validators/salon.bookingWindow.validator.js";
 
@@ -147,6 +148,7 @@ ownerRouter.patch("/basic-info", updateBasicInfo);
 const adminRouter = express.Router();
 
 adminRouter.use(requireRole("ADMIN", "SUPER_ADMIN", "DISTRICT_ADMIN"));
+adminRouter.use(requireAdminLevel("INDIA", "STATE", "DISTRICT"));
 
 // Get all salons
 adminRouter.get("/", getSalonsForAdmin);

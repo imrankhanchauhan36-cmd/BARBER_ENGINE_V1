@@ -48,6 +48,14 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   WITHDRAW_REQUESTED: "WITHDRAW_REQUESTED", // reserved — no caller yet
   WITHDRAW_APPROVED:  "WITHDRAW_APPROVED",  // reserved — no caller yet
   WITHDRAW_REJECTED:  "WITHDRAW_REJECTED",  // reserved — no caller yet
+  // FINANCE-P0-1 — new canonical-payout lifecycle stages the merged
+  // Razorpay Route path can reach (PROCESSING/FAILED were never
+  // observable before this ticket; PAID previously reused
+  // WITHDRAW_APPROVED's own copy for the synchronous MANUAL path).
+  WITHDRAW_PROCESSING: "WITHDRAW_PROCESSING",
+  WITHDRAW_PAID:        "WITHDRAW_PAID",
+  WITHDRAW_FAILED:      "WITHDRAW_FAILED",
+  WITHDRAW_CANCELLED:   "WITHDRAW_CANCELLED",
 
   // KYC
   KYC_APPROVED: "KYC_APPROVED", // reserved — no caller yet
@@ -64,6 +72,12 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   NEW_SALON_ASSIGNED:       "NEW_SALON_ASSIGNED",
   REFERRAL_REWARD_CREDITED: "REFERRAL_REWARD_CREDITED",
   TERRITORY_REASSIGNED:     "TERRITORY_REASSIGNED",
+  // PHASE C.3 — AcquisitionClaim admin-decision notifications. Additive
+  // only, same "Field-Agent-only event" convention as the three above.
+  ACQUISITION_CLAIM_APPROVED:  "ACQUISITION_CLAIM_APPROVED",
+  ACQUISITION_CLAIM_ENDED:     "ACQUISITION_CLAIM_ENDED",
+  // PHASE C.3-A — the explicit admin completion action.
+  ACQUISITION_CLAIM_COMPLETED: "ACQUISITION_CLAIM_COMPLETED",
 
   // Support (Phase D — Ticket + Conversation + Message Engine).
   // Only SUPPORT_TICKET_STATUS_CHANGED has a caller — ticket-created

@@ -61,6 +61,7 @@ import GenericPayoutRequest from "../../payout/models/GenericPayoutRequest.js";
 import { GENERIC_PAYOUT_STATUS } from "../../payout/constants/genericPayoutRequest.constants.js";
 import FieldAgentPayoutRequest, { FIELD_AGENT_PAYOUT_STATUS } from "../models/FieldAgentPayoutRequest.js";
 import { FIELD_AGENT_OPERATIONAL_STATUS, COMMERCIAL_PATH } from "../constants/fieldAgent.constants.js";
+import { resolveAuthorizedFieldAgentIds } from "./fieldAgentGeographyAuthorization.service.js";
 
 const FIELD_AGENT_WALLET_ENTITY_TYPES = [COMMERCIAL_PATH.ACQUISITION_AGENT, COMMERCIAL_PATH.TERRITORY_PARTNER];
 const TREND_MONTHS = 12;
@@ -71,7 +72,16 @@ const sumField = async (Model, filter, field) => {
 };
 
 // ── KPIs ──────────────────────────────────────────────────────────
-const getKpis = async () => {
+// Field Agent Geography Phase C — `authorizedIds` is null for INDIA
+// (every query below runs exactly as before this phase) or an
+// ObjectId[] (possibly empty) for STATE/DISTRICT, resolved ONCE by
+// the caller and threaded through every sub-query here so the
+// underlying FieldAgent population — not just the response shape —
+// is restricted before aggregating, per the ticket's own instruction.
+const getKpis = async (authorizedIds) => {
+  const faFilter = authorizedIds !== null ? { _id: { $in: authorizedIds } } : {};
+  const byAgent = (field) => (authorizedIds !== null ? { [field]: { $in: authorizedIds } } : {});
+
   const [
     totalFieldAgents,
     activeAgents,
@@ -82,17 +92,17 @@ const getKpis = async () => {
     genericPaidOut,
     fieldAgentPaidOut,
   ] = await Promise.all([
-    FieldAgent.countDocuments({}),
-    FieldAgent.countDocuments({ operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.ACTIVE }),
-    FieldAgent.countDocuments({ operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.PENDING_ACTIVATION }),
-    AcquisitionClaim.distinct("salonRef"),
-    sumField(FieldAgentEarningLedger, {}, "creditedAmountInPaise"),
+    FieldAgent.countDocuments(faFilter),
+    FieldAgent.countDocuments({ ...faFilter, operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.ACTIVE }),
+    FieldAgent.countDocuments({ ...faFilter, operationalStatus: FIELD_AGENT_OPERATIONAL_STATUS.PENDING_ACTIVATION }),
+    AcquisitionClaim.distinct("salonRef", byAgent("fieldAgentRef")),
+    sumField(FieldAgentEarningLedger, byAgent("fieldAgentRef"), "creditedAmountInPaise"),
     SalonEarnings.aggregate([
-      { $match: { entityType: { $in: FIELD_AGENT_WALLET_ENTITY_TYPES } } },
+      { $match: { entityType: { $in: FIELD_AGENT_WALLET_ENTITY_TYPES }, ...byAgent("entityId") } },
       { $group: { _id: null, totalAvailable: { $sum: "$availableBalanceInPaise" }, totalPending: { $sum: "$pendingBalanceInPaise" } } },
     ]),
-    sumField(GenericPayoutRequest, { entityType: { $in: FIELD_AGENT_WALLET_ENTITY_TYPES }, status: GENERIC_PAYOUT_STATUS.PAID }, "amountInPaise"),
-    sumField(FieldAgentPayoutRequest, { status: FIELD_AGENT_PAYOUT_STATUS.PAID }, "amountInPaise"),
+    sumField(GenericPayoutRequest, { entityType: { $in: FIELD_AGENT_WALLET_ENTITY_TYPES }, status: GENERIC_PAYOUT_STATUS.PAID, ...byAgent("entityId") }, "amountInPaise"),
+    sumField(FieldAgentPayoutRequest, { status: FIELD_AGENT_PAYOUT_STATUS.PAID, ...byAgent("fieldAgentRef") }, "amountInPaise"),
   ]);
 
   // Same resolution rule as STEP 2.2 — a claim only counts as a real
@@ -117,14 +127,17 @@ const getKpis = async () => {
 };
 
 // ── Monthly Earnings Trend — last 12 months, chronological ────────
-const getMonthlyEarningsTrend = async () => {
+const getMonthlyEarningsTrend = async (authorizedIds) => {
   const since = new Date();
   since.setMonth(since.getMonth() - (TREND_MONTHS - 1));
   since.setDate(1);
   since.setHours(0, 0, 0, 0);
 
+  const match = { bookingCompletedAt: { $gte: since } };
+  if (authorizedIds !== null) match.fieldAgentRef = { $in: authorizedIds };
+
   const rows = await FieldAgentEarningLedger.aggregate([
-    { $match: { bookingCompletedAt: { $gte: since } } },
+    { $match: match },
     {
       $group: {
         _id: { $dateToString: { format: "%Y-%m", date: "$bookingCompletedAt" } },
@@ -143,12 +156,17 @@ const getMonthlyEarningsTrend = async () => {
 };
 
 // ── Top 10 Agents — by lifetime credited earnings ──────────────────
-const getTop10Agents = async () => {
-  const rows = await FieldAgentEarningLedger.aggregate([
+const getTop10Agents = async (authorizedIds) => {
+  const pipeline = [];
+  // Restrict the underlying population BEFORE aggregating, per the
+  // ticket's own instruction — not a response-shape filter.
+  if (authorizedIds !== null) pipeline.push({ $match: { fieldAgentRef: { $in: authorizedIds } } });
+  pipeline.push(
     { $group: { _id: "$fieldAgentRef", totalEarnedInPaise: { $sum: "$creditedAmountInPaise" }, bookingCount: { $sum: 1 } } },
     { $sort: { totalEarnedInPaise: -1 } },
-    { $limit: 10 },
-  ]);
+    { $limit: 10 }
+  );
+  const rows = await FieldAgentEarningLedger.aggregate(pipeline);
   if (!rows.length) return [];
 
   const agentIds = rows.map((r) => r._id);
@@ -177,11 +195,16 @@ const getTop10Agents = async () => {
   });
 };
 
-export const getAdminFieldAgentAnalytics = async () => {
+export const getAdminFieldAgentAnalytics = async ({ admin }) => {
+  // Resolved ONCE and threaded through every sub-query above — see
+  // fieldAgentGeographyAuthorization.service.js. INDIA's behavior is
+  // byte-for-byte unchanged (authorizedIds === null everywhere).
+  const authorizedIds = await resolveAuthorizedFieldAgentIds(admin);
+
   const [kpis, monthlyEarningsTrend, topAgents] = await Promise.all([
-    getKpis(),
-    getMonthlyEarningsTrend(),
-    getTop10Agents(),
+    getKpis(authorizedIds),
+    getMonthlyEarningsTrend(authorizedIds),
+    getTop10Agents(authorizedIds),
   ]);
 
   return { kpis, monthlyEarningsTrend, topAgents };

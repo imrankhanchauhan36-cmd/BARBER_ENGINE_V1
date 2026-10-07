@@ -348,6 +348,9 @@ export const getStateById = async (req, res, next) => {
     if (req.user.adminLevel === "STATE" && String(req.user.stateRef) !== String(state._id)) {
       return next(Errors.forbidden("Access denied"));
     }
+    if (req.user.adminLevel === "DISTRICT" && String(req.user.stateRef) !== String(state._id)) {
+      return next(Errors.forbidden("Access denied"));
+    }
 
     const [
       districtCount, adminCount, totalAreas, totalSalons, serviceableAreas,
@@ -753,6 +756,14 @@ export const getStateSummary = async (req, res, next) => {
 
     const state = await State.findById(req.params.id).lean();
     if (!state) return next(Errors.notFound("State not found"));
+
+    // Scope check — same pattern as getStateById above.
+    if (req.user.adminLevel === "STATE" && String(req.user.stateRef) !== String(state._id)) {
+      return next(Errors.forbidden("Access denied"));
+    }
+    if (req.user.adminLevel === "DISTRICT" && String(req.user.stateRef) !== String(state._id)) {
+      return next(Errors.forbidden("Access denied"));
+    }
 
     const [districtCount, adminCount, totalAreas, totalSalons, serviceableAreas] = await Promise.all([
       District.countDocuments({ stateRef: state._id, isActive: true, isDeleted: { $ne: true } }),

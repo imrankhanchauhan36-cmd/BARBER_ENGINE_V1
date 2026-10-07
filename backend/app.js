@@ -56,6 +56,7 @@ import adminFieldAgentEarningsRoutes from "./modules/fieldAgent/routes/adminFiel
 import adminFieldAgentWalletRoutes from "./modules/fieldAgent/routes/adminFieldAgentWallet.routes.js"; // ← NEW — STEP 2.4 admin Field Agent Wallet & Payout History APIs (read-only)
 import adminFieldAgentRosterRoutes from "./modules/fieldAgent/routes/adminFieldAgentRoster.routes.js"; // ← NEW — STEP 3.1 backend addendum, user-approved exception: admin Field Agent Roster List API (read-only, minimal — see that route file's own header)
 import adminFieldAgentAnalyticsRoutes from "./modules/fieldAgent/routes/adminFieldAgentAnalytics.routes.js"; // ← NEW — STEP 3.5A admin Field Agent Analytics API (read-only, platform-wide aggregates)
+import adminFieldAgentGeographyRoutes from "./modules/fieldAgent/routes/adminFieldAgentGeography.routes.js"; // ← NEW — Field Agent Geography Phase B admin assign/end/read API
 import fieldAgentTestRoutes from "./modules/fieldAgentTest/routes/fieldAgentTest.routes.js"; // ← NEW — FA-3.4.3 Field Agent test API
 import adminCommercialPolicyRoutes from "./modules/fieldAgent/routes/adminCommercialPolicy.routes.js"; // ← NEW — FA-5.1 admin commercial policy authoring/governance
 import adminCommercialTerritoryRoutes from "./modules/fieldAgent/routes/adminCommercialTerritory.routes.js"; // ← NEW — FA-5.2 admin Commercial Territory authoring/governance
@@ -83,6 +84,7 @@ import adminFinanceDashboardRoutes from "./modules/finance/routes/adminFinanceDa
 import adminFinanceAnalyticsRoutes from "./modules/finance/routes/adminFinanceAnalytics.routes.js"; // ← NEW — STEP 7.2 Finance Analytics Engine (read-only, aggregation only)
 import adminFinanceExportRoutes from "./modules/finance/routes/adminFinanceExport.routes.js"; // ← NEW — STEP 7.4 Finance Export Engine (read-only, xlsx/csv/pdf/json)
 import adminTerritoryRevenueRoutes from "./modules/finance/routes/adminTerritoryRevenue.routes.js"; // ← NEW — STEP 5.1 Territory Revenue Settings Engine (isolated module, does not touch CommercialPolicyVersion)
+import adminRefundPolicyRoutes from "./modules/finance/routes/adminRefundPolicy.routes.js"; // ← NEW — Global Refund & Cancellation Policy (isolated module, does not touch CommercialPolicyVersion/AreaPlatformFeePolicy/GstPolicyVersion)
 import adminSalonRevenueRoutes from "./routes/adminSalonRevenue.routes.js"; // ← NEW — STEP 4.2A admin Salon Revenue API (read-only, RevenueSplit is the sole source — see that route file's own header)
 import adminCustomerSummaryRoutes from "./routes/adminCustomerSummary.routes.js"; // ← NEW — STEP 5.2A admin Customer Summary API (read-only, Booking-derived — see that route file's own header)
 import adminCustomerBookingsRoutes from "./routes/adminCustomerBookings.routes.js"; // ← NEW — STEP 5.2B admin Customer Booking History API (read-only join — see that route file's own header)
@@ -493,6 +495,13 @@ app.use("/api/admin/field-agents", protect, adminFieldAgentEarningsRoutes);
 // — but mounted before the approval router too, same defensive-
 // ordering precedent.
 app.use("/api/admin/field-agents", protect, adminFieldAgentWalletRoutes);
+// Field Agent Geography Phase B — same base path again (GET/POST
+// /api/admin/field-agents/:id/geography[...]), same reasoning as
+// STEP 2.1/2.2/2.3/2.4 immediately above: a literal "geography"
+// second segment never collides with any sibling router's own routes
+// — but mounted before the approval router too, same defensive-
+// ordering precedent.
+app.use("/api/admin/field-agents", protect, adminFieldAgentGeographyRoutes);
 app.use("/api/admin/field-agents", protect, adminFieldAgentApprovalRoutes);
 // FA-5.1 — admin CommercialPolicyVersion authoring/versioning. Read
 // AND write are INDIA-only (see adminCommercialPolicy.routes.js's own
@@ -595,6 +604,11 @@ app.use("/api/admin/finance/export", protect, adminFinanceExportRoutes);
 // read-only audit), which this module does not read, write or migrate.
 // INDIA-only, same rationale as every route immediately above.
 app.use("/api/admin/finance/territory-settings", protect, adminTerritoryRevenueRoutes);
+
+// Global Refund & Cancellation Policy — new, isolated module (see
+// modules/finance/models/RefundPolicyVersion.js header). INDIA-only,
+// same rationale as every route immediately above.
+app.use("/api/admin/finance/refund-policy", protect, adminRefundPolicyRoutes);
 // STEP 4.2A — full-literal-path mount, see adminSalonRevenue.routes.js's
 // own header for why this can never collide with adminRoutes' own
 // "/salons/:id" route below (one segment longer, Express requires a

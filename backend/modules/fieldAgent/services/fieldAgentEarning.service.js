@@ -4,9 +4,17 @@
  *
  * FA-9 — the earning engine itself: policy resolution, the atomic
  * acquisition cap, the acquisition->territory transition, and every
- * FieldAgentEarningLedger write. Consumed exclusively by
- * fieldAgentEarning.job.js — no HTTP endpoint ever calls into this
- * file (no Field Agent financial write endpoint exists anywhere).
+ * FieldAgentEarningLedger write. The per-booking pipeline
+ * (processCompletedBooking/creditAcquisitionProgressAndLedger) is
+ * consumed exclusively by fieldAgentEarning.job.js. Two narrower,
+ * non-booking functions are the deliberate exception, already
+ * established before Phase A: resolveApplicableCommercialPolicyForBooking
+ * and createAcquisitionEarningProgressForClaim are both also called
+ * directly from acquisitionClaim.service.js's HTTP-reachable admin
+ * actions (claim creation / adminApproveClaim) to snapshot a claim's
+ * target at claim.createdAt. FA-9 Phase A adds one more such function
+ * on the same precedent: creditAcquisitionRewardForClaim (below),
+ * called only from acquisitionClaim.service.js#adminApproveClaim.
  *
  * FINANCIAL BOUNDARY (locked, non-negotiable): never mutates Booking,
  * AcquisitionClaim, CommercialTerritory, TerritoryAssignment,
@@ -268,6 +276,74 @@ export const createAcquisitionEarningProgressForClaim = async ({ claim, salon, s
     if (err.code === 11000) {
       // Already created by a concurrent/prior attempt — idempotent no-op.
       return AcquisitionEarningProgress.findOne({ acquisitionClaimRef: claim._id }).lean();
+    }
+    throw err;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// FA-9 PHASE A — ONE-TIME ACQUISITION REWARD
+//
+// Deliberately NOT part of the per-booking atomic-cap pipeline below
+// (creditAcquisitionProgressAndLedger/attemptAcquisitionCredit) — this
+// is a single, claim-keyed credit, resolved and snapshotted at the
+// SAME canonical instant (claim.createdAt, via
+// resolveApplicableCommercialPolicyForBooking) as
+// createAcquisitionEarningProgressForClaim above, for the identical
+// "never let a later policy change retroactively affect an existing
+// claim" reason.
+//
+// Unlike createAcquisitionEarningProgressForClaim's GAP-tolerant
+// behavior (proceeds with a durable gap + console.warn when no policy
+// is applicable), this function returns null on ANY unresolved
+// condition (no applicable policy, or a policy that predates this
+// field) and credits NOTHING — acquisitionClaim.service.js#
+// adminApproveClaim's own transaction is responsible for treating a
+// null return as a hard abort (full rollback: claim must NOT become
+// COMPLETED without its reward also being recorded). This is a
+// deliberate, intentional divergence from the tolerant GAP pattern,
+// required by Phase A's own atomicity instruction — not an oversight.
+//
+// Idempotent by construction: idempotencyKey is claim-keyed
+// (`earning:${claimId}:ACQUISITION_REWARD`), not booking-keyed, so a
+// duplicate/concurrent approval attempt for the same claim can never
+// produce a second reward row (E11000 on retry resolves to the
+// existing row, same idiom as createAcquisitionEarningProgressForClaim
+// above).
+// ═══════════════════════════════════════════════════════════════════
+export const creditAcquisitionRewardForClaim = async ({ claim, salon, session = null }) => {
+  const resolved = await resolveApplicableCommercialPolicyForBooking(salon, claim.createdAt);
+  if (!resolved) return null; // caller must abort — see header above
+
+  const rewardAmountInPaise = resolved.policy.acquisitionRewardAmountInPaise;
+  // Historical policy documents created before this field existed have
+  // it undefined — never invent a value, never fall back to 0.
+  if (!Number.isInteger(rewardAmountInPaise)) return null;
+
+  const idempotencyKey = `earning:${claim._id}:${EARNING_ENTITLEMENT_TYPE.ACQUISITION_REWARD}`;
+
+  try {
+    const [row] = await FieldAgentEarningLedger.create(
+      [
+        {
+          entitlementType: EARNING_ENTITLEMENT_TYPE.ACQUISITION_REWARD,
+          idempotencyKey,
+          fieldAgentRef: claim.fieldAgentRef,
+          acquisitionClaimRef: claim._id,
+          policySource: resolved.policySource,
+          policyVersionRef: resolved.policy._id,
+          creditedAmountInPaise: rewardAmountInPaise,
+          creditOutcome: EARNING_CREDIT_OUTCOME.CREDITED,
+        },
+      ],
+      session ? { session } : {}
+    );
+    return row;
+  } catch (err) {
+    if (err.code === 11000) {
+      // Already created by a concurrent/prior approval attempt on this
+      // same claim — idempotent no-op, return the existing row.
+      return FieldAgentEarningLedger.findOne({ idempotencyKey }, null, session ? { session } : {});
     }
     throw err;
   }

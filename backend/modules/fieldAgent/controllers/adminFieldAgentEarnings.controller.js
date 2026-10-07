@@ -13,7 +13,7 @@ import { getAdminFieldAgentEarnings } from "../services/adminFieldAgentEarnings.
 
 export const getAdminFieldAgentEarningsHandler = async (req, res, next) => {
   try {
-    const earnings = await getAdminFieldAgentEarnings({ fieldAgentId: req.params.id });
+    const earnings = await getAdminFieldAgentEarnings({ admin: req.user, fieldAgentId: req.params.id });
     return successResponse(res, { message: "Field Agent earnings ledger fetched", data: earnings });
   } catch (err) {
     return next(err);

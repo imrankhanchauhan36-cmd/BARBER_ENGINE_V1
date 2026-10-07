@@ -182,6 +182,7 @@ const run = async () => {
       nationalPolicy = await CommercialPolicyVersion.create({
         versionNumber: 900000 + Math.floor(Math.random() * 99999), status: "PUBLISHED",
         acquisitionAgentCommissionPercent: 10, acquisitionEarningTargetInPaise: 100000,
+        acquisitionRewardAmountInPaise: 20000, // FA-9 Phase A — ₹200, required since this field was introduced
         territoryPartnerCommissionPercent: 8, licenseTermMonths: 12, claimExpiryDays: 30,
         createdBy: indiaAdmin._id, publishedBy: indiaAdmin._id, publishedAt: new Date(Date.now() - 24 * 3600 * 1000),
       });
@@ -227,6 +228,15 @@ const run = async () => {
 
     // B — duplicate-application guard: a second verify-otp for the
     // SAME phone must reuse the same draft, never create a duplicate.
+    // PRE-EXISTING, UNRELATED TEST-INFRASTRUCTURE FIX: a second
+    // send-otp for the same phone hits the real, unmodified 30s Redis
+    // resend-cooldown lock (OTP_RESEND_COOLDOWN_SECONDS, otp.service.js)
+    // — this script was simply missing the wait every sibling script
+    // that does the same thing already includes (see
+    // verifyFieldAgentAttributionCommission.js's own two identical
+    // `setTimeout(r, 31000)` calls). Not a Phase A issue, and not a
+    // production OTP change — production security is untouched.
+    await new Promise((r) => setTimeout(r, 31000));
     const secondOtpRes = await authFetch("/api/field-agent/auth/send-otp", null, { method: "POST", body: JSON.stringify({ phone }) });
     const secondOtp = requireField(secondOtpRes.data, "otp", "second send-otp response");
     await authFetch("/api/field-agent/auth/verify-otp", null, { method: "POST", body: JSON.stringify({ phone, otp: secondOtp }) });
@@ -542,7 +552,7 @@ const run = async () => {
     // acquisition-agent commission (₹150/booking) comfortably clears
     // the real ₹100 minimum withdrawal threshold tested in Group O,
     // without needing many bookings just to accumulate balance.
-    const areaFeePolicy = await AreaPlatformFeePolicy.create({ areaRef: geo.area._id, feeInPaise: 150000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() });
+    const areaFeePolicy = await AreaPlatformFeePolicy.create({ scope: "AREA", areaRef: geo.area._id, feeInPaise: 150000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() }); // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope now required
     createdIds.areaFeePolicies.push(areaFeePolicy._id);
     const { feeInPaise: commissionAmountInPaise } = await resolvePlatformFeeForArea(geo.area._id);
     const gstPolicy = await getPublishedGstPolicy();
@@ -758,7 +768,12 @@ const run = async () => {
     // GROUP U — DATA INTEGRITY (final direct Mongo invariant checks)
     // ═══════════════════════════════════════════════════════════
     check("U1. Exactly one FieldAgentApplication for the main agent identity", (await FieldAgentApplication.countDocuments({ userRef: agentUser._id })) === 1, "checked");
-    check("U2. Exactly one ACTIVE AcquisitionClaim per salon (salonA)", (await AcquisitionClaim.countDocuments({ salonRef: salon._id, status: "ACTIVE" })) <= 1, "checked");
+    // ACQUISITION CLAIM ENUM DRIFT FIX (pre-existing, unrelated to Phase
+    // A): "ACTIVE" is not a valid CLAIM_STATUS value, so this check was
+    // vacuously true (count always 0, 0 <= 1) regardless of the real
+    // claim state — corrected to the real non-terminal statuses so this
+    // actually verifies the uniqueness invariant it claims to.
+    check("U2. Exactly one non-terminal AcquisitionClaim per salon (salonA)", (await AcquisitionClaim.countDocuments({ salonRef: salon._id, status: { $in: ["PENDING_APPROVAL", "ACTIVE_RECOVERY"] } })) <= 1, "checked");
     check("U3. Exactly one FieldAgentEarningLedger row per booking (both bookings)", (await FieldAgentEarningLedger.countDocuments({ bookingRef: booking._id })) === 1 && (await FieldAgentEarningLedger.countDocuments({ bookingRef: booking2._id })) === 1, "checked");
     check("U4. No impossible payout state — final payout is PAID, isOpen false", finalPayout.status === "PAID" && finalPayout.isOpen === false, "checked");
     check("U5. Exactly one ACTIVE TerritoryAssignment for the Territory Partner agent", (await TerritoryAssignment.countDocuments({ fieldAgentRef: tpAgent._id, status: "ACTIVE" })) === 1, "checked");

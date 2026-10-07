@@ -128,13 +128,19 @@ export const listSalonsForAdmin = async (req, res, next) => {
 /**
  * =====================================================
  * UPDATE SALON STATUS (APPROVE / REJECT)
- * DISTRICT admin only
+ * INDIA = PAN-India authority. STATE = own state only.
+ * DISTRICT = own district only — and has FINAL approval
+ * authority there (no second-stage review by a higher level).
+ * Only a PENDING salon may be approved or rejected; APPROVED/
+ * REJECTED are terminal here — the only way back to PENDING is
+ * the existing owner resubmission flow (REJECTED → DRAFT →
+ * onboarding → PENDING), unchanged by this endpoint.
  * =====================================================
  */
 export const updateSalonStatus = async (req, res, next) => {
   try {
     if (!["INDIA", "STATE", "DISTRICT"].includes(req.user.adminLevel)) {
-      return next(Errors.forbidden("Only DISTRICT admin can approve salons"));
+      return next(Errors.forbidden("Invalid admin level for salon approval"));
     }
 
     const allowedStatuses = ["APPROVED", "REJECTED"];
@@ -142,11 +148,21 @@ export const updateSalonStatus = async (req, res, next) => {
       return next(Errors.badRequest("Invalid status"));
     }
 
-    const { status, rejectionReason } = req.body;
+    const { status } = req.body;
+    const rejectionReason = typeof req.body.rejectionReason === "string" ? req.body.rejectionReason.trim() : "";
 
     const salon = await Salon.findById(req.params.id);
     if (!salon) return next(Errors.notFound("Salon not found"));
 
+    // Scope check first — an admin outside their own state/district must
+    // get a plain 403 without learning anything about the salon's current
+    // approval status.
+    if (req.user.adminLevel === "STATE") {
+      const salonStateId = salon.location?.territory?.stateRef?.toString();
+      if (!salonStateId || salonStateId !== req.user.stateRef?.toString()) {
+        return next(Errors.forbidden("Not allowed to approve this salon"));
+      }
+    }
     // DISTRICT admin → apne poore district ke salons approve kar sakta hai
     // (matches listSalonsForAdmin scope — one district = one district admin,
     // so district-wide access, not per-salon assignedAdmin matching)
@@ -156,10 +172,36 @@ export const updateSalonStatus = async (req, res, next) => {
         return next(Errors.forbidden("Not allowed to approve this salon"));
       }
     }
-  // INDIA + STATE → koi bhi salon approve kar sakte hai
+    // INDIA → koi bhi salon approve kar sakta hai (PAN-India)
 
-    const updated = await Salon.findByIdAndUpdate(
-      req.params.id,
+    // State-machine guard — only a PENDING salon can receive a new
+    // decision. APPROVED→REJECTED, REJECTED→APPROVED, and re-deciding an
+    // already-decided salon are all invalid transitions in this workflow.
+    if (salon.approval?.status !== "PENDING") {
+      return next(Errors.conflict("Only a PENDING salon can be approved or rejected"));
+    }
+
+    if (status === "REJECTED") {
+      if (!rejectionReason) {
+        return next(Errors.badRequest("Rejection reason is required"));
+      }
+      if (rejectionReason.length > 300) {
+        return next(Errors.badRequest("Rejection reason must be 300 characters or fewer"));
+      }
+    }
+
+    // MUST-DO-NOW #3 — concurrency fix. The pre-check above (line 180)
+    // reads from `salon`, loaded by a separate, earlier findById — two
+    // concurrent requests can both read PENDING and both pass it. The
+    // DATABASE WRITE ITSELF must also require "approval.status":
+    // "PENDING" so only the first one to actually commit can match;
+    // the second finds no matching document (status already changed
+    // by the first) and gets null back here, never a silent second
+    // "success". This is the only change — every $set field and the
+    // existing { new: true, runValidators: true } behavior are
+    // unchanged.
+    const updated = await Salon.findOneAndUpdate(
+      { _id: req.params.id, "approval.status": "PENDING" },
       {
         $set: {
           "approval.status":          status,
@@ -167,12 +209,21 @@ export const updateSalonStatus = async (req, res, next) => {
           "approval.approvedAt":      status === "APPROVED" ? new Date()   : null,
           "approval.rejectedBy":      status === "REJECTED" ? req.user._id : null,
           "approval.rejectedAt":      status === "REJECTED" ? new Date()   : null,
-          "approval.rejectionReason": status === "REJECTED"
-            ? (rejectionReason || "Not specified") : null,
+          "approval.rejectionReason": status === "REJECTED" ? rejectionReason : null,
         },
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
+
+    // Lost the race (or the status genuinely changed between the
+    // earlier read and this write) — no document matched the
+    // conditional filter. Same conflict response as the existing
+    // pre-check, and — critically — return BEFORE any notification is
+    // sent, so a losing concurrent request can never produce a
+    // duplicate/contradictory notification.
+    if (!updated) {
+      return next(Errors.conflict("Only a PENDING salon can be approved or rejected"));
+    }
 
     //////////////////////////////////////////////////////
     // 📬 NOTIFICATION (non-blocking, after write)
@@ -246,7 +297,20 @@ export const forceCloseSalon = async (req, res, next) => {
       return next(Errors.forbidden("Insufficient privileges to force close salon"));
     }
 
-    const salon = await Salon.findByIdAndUpdate(
+    const salon = await Salon.findById(req.params.id);
+    if (!salon) return next(Errors.notFound("Salon not found"));
+
+    // Scope check — same pattern as updateSalonStatus above: a STATE
+    // admin may only force-close salons within their own state.
+    if (req.user.adminLevel === "STATE") {
+      const salonStateId = salon.location?.territory?.stateRef?.toString();
+      if (!salonStateId || salonStateId !== req.user.stateRef?.toString()) {
+        return next(Errors.forbidden("Not allowed to force close this salon"));
+      }
+    }
+    // INDIA → koi bhi salon force close kar sakta hai (PAN-India)
+
+    const updated = await Salon.findByIdAndUpdate(
       req.params.id,
       {
         $set: {
@@ -257,9 +321,7 @@ export const forceCloseSalon = async (req, res, next) => {
       { new: true }
     );
 
-    if (!salon) return next(Errors.notFound("Salon not found"));
-
-    return successResponse(res, { message: "Salon force closed", data: salon });
+    return successResponse(res, { message: "Salon force closed", data: updated });
   } catch (err) {
     next(err);
   }

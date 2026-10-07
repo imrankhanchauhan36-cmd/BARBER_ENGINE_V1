@@ -5,8 +5,8 @@
  * STEP 5.3 — Territory Revenue Distribution Engine.
  *
  * WHAT THIS DOES: right after a booking's RevenueSplit is created,
- * resolves whether that booking's salon currently has an ACTIVE
- * Territory Partner (STEP 5.2 — SalonTerritoryAssignment) and whether a
+ * resolves whether that booking's salon's commercial territory
+ * currently has an ACTIVE Territory Partner assignment and whether a
  * TerritoryRevenueSettings commission rate is currently PUBLISHED
  * (STEP 5.1). If both hold, creates one immutable TerritoryRevenueSplit
  * snapshot plus its SALE TerritoryRevenueLedger row — mirroring
@@ -15,12 +15,31 @@
  * most bookings will have no Territory Partner yet, and that is normal,
  * not an error.
  *
+ * PHASE 2 (locked business rule — earning follows the LIVE partner,
+ * never a stale one): partner resolution is done FRESH, at the exact
+ * moment each RevenueSplit is created, by reading the salon's own
+ * geography (Salon.location.territory) and calling
+ * TerritoryAutoAssignmentService.js#resolveActiveTerritoryForGeography
+ * + a live TerritoryAssignment ACTIVE check — the EXACT SAME resolver
+ * and the EXACT SAME "territory -> currentAssignmentRef -> re-read
+ * assignment, require ACTIVE" sequence that module's own
+ * resolveAndUpsertLink already uses at salon-approval time, never a
+ * second/divergent algorithm. This REPLACES the previous
+ * SalonTerritoryAssignment (STEP 5.2) point-in-time snapshot read,
+ * which could otherwise keep crediting a partner whose assignment had
+ * since ended or been reassigned. SalonTerritoryAssignment itself is
+ * untouched, unmodified, and not deleted — this file simply no longer
+ * reads it; it remains available for any other consumer.
+ *
  * READ-ONLY DEPENDENCIES (LOCKED, per the ticket — none of these are
  * ever written to by this file):
  *   - RevenueSplit (Step 1/3) — read-only, passed in by the caller
  *   - Booking — one findById().select() to learn salonRef, nothing else
- *   - modules/territoryAutoAssignment (STEP 5.2) — getTerritoryLinkForSalon,
- *     a plain .lean() read
+ *   - Salon — one findById().select("location.territory"), nothing else
+ *   - modules/territoryAutoAssignment — resolveActiveTerritoryForGeography,
+ *     a plain .lean() read (PHASE 2 — replaces getTerritoryLinkForSalon)
+ *   - modules/fieldAgent TerritoryAssignment — one findOne().lean(), to
+ *     confirm the territory's current assignment is still ACTIVE
  *   - modules/finance TerritoryRevenueSettingsService (STEP 5.1) —
  *     getPublishedTerritoryRevenueSettings, a plain .lean() read
  *   - Refund (models/Refund.js) — one findOne().select(), exactly the
@@ -29,6 +48,10 @@
  * NEVER imported or touched anywhere in this file: Wallet, WalletLedger,
  * Razorpay (the gateway calls), Cashfree, GST models/services,
  * CommercialPolicyVersion/CommercialPolicyOverride, AcquisitionClaim.
+ * commercialTerritory.service.js's own write functions (assignPartner/
+ * vacatePartner/activateTerritory/retireTerritory) are never called
+ * here either — only CommercialTerritory/TerritoryAssignment documents
+ * are read, never written.
  *
  * IDEMPOTENT, same idiom as every other engine in this session:
  *   - createTerritoryRevenueSplitForBooking: a pre-check by revenueSplitId
@@ -59,10 +82,13 @@
 
 import mongoose from "mongoose";
 import Booking from "../../../models/Booking.js";
+import Salon from "../../../models/Salon.js";
 import Refund, { REFUND_STATUS } from "../../../models/Refund.js";
 import TerritoryRevenueSplit from "../models/TerritoryRevenueSplit.js";
 import TerritoryRevenueLedger from "../models/TerritoryRevenueLedger.js";
-import { getTerritoryLinkForSalon } from "../../territoryAutoAssignment/services/TerritoryAutoAssignmentService.js";
+import TerritoryAssignment from "../../fieldAgent/models/TerritoryAssignment.js";
+import { ASSIGNMENT_STATUS } from "../../fieldAgent/constants/commercialTerritory.constants.js";
+import { resolveActiveTerritoryForGeography } from "../../territoryAutoAssignment/services/TerritoryAutoAssignmentService.js";
 import { getPublishedTerritoryRevenueSettings } from "./TerritoryRevenueSettingsService.js";
 import { TERRITORY_REVENUE_LEDGER_TYPE, TERRITORY_REVENUE_LEDGER_STATUS } from "../constants/territoryRevenueDistribution.constants.js";
 
@@ -92,10 +118,34 @@ export const createTerritoryRevenueSplitForBooking = async ({ revenueSplit }) =>
   const booking = await Booking.findById(revenueSplit.bookingId).select("salonRef").lean();
   if (!booking?.salonRef) return null;
 
-  // STEP 5.2 — read-only. No link yet (most salons, most of the time)
-  // is expected and normal, not an error.
-  const link = await getTerritoryLinkForSalon(booking.salonRef);
-  if (!link) return null;
+  // PHASE 2 — live ACTIVE-partner resolution, resolved FRESH at the
+  // moment each RevenueSplit is created, never from a point-in-time
+  // snapshot. Reuses the EXACT SAME resolver
+  // (resolveActiveTerritoryForGeography) and the exact same
+  // "territory -> currentAssignmentRef -> re-read assignment, require
+  // status ACTIVE" sequence that
+  // TerritoryAutoAssignmentService.js#resolveAndUpsertLink already
+  // uses for salon-approval-time assignment — no second/divergent
+  // resolution algorithm. This is the one change Phase 2 makes: a
+  // partner whose TerritoryAssignment has since ended, or who has
+  // been replaced by a different partner on the same territory, is
+  // never credited — the old SalonTerritoryAssignment snapshot
+  // (STEP 5.2) is no longer read here at all, though it remains
+  // untouched and in place for any other consumer.
+  const salonDoc = await Salon.findById(booking.salonRef).select("location.territory").lean();
+  const { districtRef, cityRef, areaRef } = salonDoc?.location?.territory || {};
+  if (!districtRef) return null; // no geography yet — safe no-op, same as "no link" before
+
+  const territory = await resolveActiveTerritoryForGeography({ districtRef, cityRef, areaRef });
+  if (!territory || !territory.currentAssignmentRef) return null; // uncovered or vacant — safe no-op
+
+  const assignment = await TerritoryAssignment.findOne({
+    _id: territory.currentAssignmentRef,
+    status: ASSIGNMENT_STATUS.ACTIVE,
+  }).lean();
+  if (!assignment) return null; // denormalized pointer somehow stale — never guessed at, same as resolveAndUpsertLink
+
+  const link = { fieldAgentRef: assignment.fieldAgentRef, territoryRef: territory._id };
 
   // STEP 5.1 — read-only. No PUBLISHED commission rate yet is expected
   // and normal in a fresh environment, same precedent as

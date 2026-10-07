@@ -117,6 +117,7 @@ const run = async () => {
       status: "PUBLISHED",
       acquisitionAgentCommissionPercent: 10,
       acquisitionEarningTargetInPaise: 100000,
+      acquisitionRewardAmountInPaise: 20000, // FA-9 Phase A — ₹200, required since this field was introduced
       territoryPartnerCommissionPercent: 8,
       licenseTermMonths: 12,
       claimExpiryDays: 30,

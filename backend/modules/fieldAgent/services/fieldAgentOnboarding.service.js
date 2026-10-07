@@ -112,21 +112,26 @@ const assertEditable = (salon) => {
 
 // ─── STEP 1 — BASIC INFO ──────────────────────────────────────────
 // Port of saveBasicInfo (controller:21-163). The original has no
-// approval-status gate and no step-threshold gate — none added here.
-// The ONLY gate added, isolated and additive (approved 2026-10-01,
-// "Existing Owner / Second Salon Flow" fix), rejects APPROVED salons
-// specifically, because an APPROVED salon is live and must never be
-// writable by a Field Agent. PENDING/REJECTED remain exactly as
-// originally ported (still ungated) — that pre-existing gap is
-// deliberately left untouched per the approved product rule.
+// approval-status gate and no step-threshold gate.
+//
+// C.4-P1-1 (audited, approved, implemented — supersedes the prior
+// APPROVED-only gate from the 2026-10-01 "Existing Owner / Second
+// Salon Flow" fix): now uses the SAME DRAFT-only assertEditable(salon)
+// guard as every other Field-Agent step (saveServices/Chairs/Timings/
+// Staff/Photos), instead of the narrower inline APPROVED-only check.
+// PENDING/REJECTED are no longer writable through this endpoint —
+// closing the gap where a direct API call could silently edit the
+// shop name (and, via the unconditional "approval.status":"DRAFT"
+// write below, silently un-submit the salon) while an admin review
+// was in progress. Owner's own saveBasicInfo is unchanged/untouched —
+// this divergence is isolated to the Field-Agent-scoped service only,
+// same as the original APPROVED-only divergence it replaces.
 export const saveBasicInfo = async ({ salonId, body }) => {
-  const { shopName, category, tagline, since, amenities, tier, setupType, specializations, capabilities, privacySetup, whatsapp, brandName, branchCode, experience } = body;
+  const { shopName, category, tagline, since, amenities, tier, setupType, specializations, capabilities, privacySetup, whatsapp, brandName, branchCode, experience, gstStatus } = body;
 
   const existingForGate = await Salon.findById(salonId).select("approval.status").lean();
   if (!existingForGate) throw Errors.notFound("Salon not found");
-  if (existingForGate.approval?.status === "APPROVED") {
-    throw Errors.badRequest("Salon not editable");
-  }
+  assertEditable(existingForGate);
 
   if (!shopName || !category) throw Errors.badRequest("shopName and category required");
 
@@ -143,6 +148,9 @@ export const saveBasicInfo = async ({ salonId, body }) => {
   const finalSetupType = allowedSetupTypes.includes(setupType) ? setupType : "PROPER_SHOP";
   const allowedPrivacy = ["SEPARATE", "MIXED"];
   const finalPrivacy = allowedPrivacy.includes(privacySetup) ? privacySetup : "MIXED";
+  // SALON GST — same allow-list-with-safe-default pattern as the
+  // owner's own saveBasicInfo (controllers/salon.onboarding.controller.js).
+  const finalGstStatus = gstStatus === "REGISTERED" ? "REGISTERED" : "UNREGISTERED";
 
   const updatePayload = {
     "basicInfo.shopName": cleanName,
@@ -158,6 +166,7 @@ export const saveBasicInfo = async ({ salonId, body }) => {
     capabilities: Array.isArray(capabilities) ? capabilities : [],
     "basicInfo.setupType": finalSetupType,
     "basicInfo.privacySetup": finalPrivacy,
+    "basicInfo.gstStatus": finalGstStatus,
     "basicInfo.amenities.hasAC": amenities?.hasAC ?? false,
     "basicInfo.amenities.hasParking": amenities?.hasParking ?? false,
     "basicInfo.amenities.hasWifi": amenities?.hasWifi ?? false,
@@ -165,7 +174,6 @@ export const saveBasicInfo = async ({ salonId, body }) => {
     "basicInfo.amenities.restroom": amenities?.restroom ?? false,
     "location.geo.type": "Point",
     "location.geo.coordinates": [0, 0],
-    "approval.status": "DRAFT",
   };
 
   // Phase 11K fix: $max MUST be a sibling top-level operator alongside
@@ -191,11 +199,17 @@ export const saveBasicInfo = async ({ salonId, body }) => {
 
 // ─── STEP 2 — LOCATION ─────────────────────────────────────────────
 // Port of saveLocation (controller:169-307). Same geoService/
-// assignAdminByDistrict dependencies, called identically. The ONLY
-// gate added, isolated and additive (approved 2026-10-01, "Existing
-// Owner / Second Salon Flow" fix), rejects APPROVED salons
-// specifically — see saveBasicInfo's header comment above for the
-// full rationale. PENDING/REJECTED remain ungated, unchanged.
+// assignAdminByDistrict dependencies, called identically.
+//
+// C.4-P1-1 (audited, approved, implemented — supersedes the prior
+// APPROVED-only gate from the 2026-10-01 "Existing Owner / Second
+// Salon Flow" fix): now uses the SAME DRAFT-only assertEditable(salon)
+// guard as every other Field-Agent step — see saveBasicInfo's header
+// comment above for the full rationale. Closes the gap where a direct
+// API call could silently change a salon's address/territory while it
+// sat PENDING under admin review (no DRAFT-reset existed for this
+// function, so the salon previously stayed PENDING with silently
+// changed data). Owner's own saveLocation is unchanged/untouched.
 export const saveLocation = async ({ salonId, body }) => {
   const { address, lat, lng } = body;
   const latNum = Number(lat);
@@ -210,9 +224,7 @@ export const saveLocation = async ({ salonId, body }) => {
 
   const existingSalon = await Salon.findById(salonId).select("assignedAdmin approval.status").lean();
   if (!existingSalon) throw Errors.notFound("Salon not found");
-  if (existingSalon.approval?.status === "APPROVED") {
-    throw Errors.badRequest("Salon not editable");
-  }
+  assertEditable(existingSalon);
   if (existingSalon.assignedAdmin) {
     await User.findByIdAndUpdate(existingSalon.assignedAdmin, { $unset: { lastAssignedAt: 1 } });
   }

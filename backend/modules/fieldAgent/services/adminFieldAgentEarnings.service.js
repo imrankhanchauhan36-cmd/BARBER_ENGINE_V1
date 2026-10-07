@@ -35,10 +35,14 @@ import FieldAgent from "../models/FieldAgent.js";
 import FieldAgentEarningLedger from "../models/FieldAgentEarningLedger.js";
 import RevenueSplit from "../../finance/models/RevenueSplit.js";
 import { Errors } from "../../../utils/response.js";
+import { assertAdminCanAccessFieldAgent } from "./fieldAgentGeographyAuthorization.service.js";
 
-export const getAdminFieldAgentEarnings = async ({ fieldAgentId }) => {
+export const getAdminFieldAgentEarnings = async ({ admin, fieldAgentId }) => {
   const fieldAgent = await FieldAgent.findById(fieldAgentId).select("_id").lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent not found");
+
+  // Field Agent Geography Phase C — see fieldAgentGeographyAuthorization.service.js.
+  await assertAdminCanAccessFieldAgent({ admin, fieldAgentId: fieldAgent._id });
 
   const ledgerRows = await FieldAgentEarningLedger.find({ fieldAgentRef: fieldAgent._id })
     .select("bookingRef creditedAmountInPaise entitlementType bookingCompletedAt")

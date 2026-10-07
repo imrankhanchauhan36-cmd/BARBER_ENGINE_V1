@@ -11,18 +11,59 @@
  */
 
 import mongoose from "mongoose";
-import PayoutRequest, { PAYOUT_STATUS } from "../models/PayoutRequest.js";
+import PayoutRequest, { PAYOUT_STATUS, PAYOUT_PROVIDER } from "../models/PayoutRequest.js";
 import Salon from "../models/Salon.js";
 import User from "../models/User.js";
 import KYC from "../modules/kyc/models/KYC.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import SettlementEngine from "../services/settlement/SettlementEngine.js";
+import { dispatchApprovedPayout } from "../services/settlement/payoutRequestDispatch.service.js"; // FINANCE-P0-1
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../utils/response.js";
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 const p2        = (v)  => Math.round(v ?? 0) / 100;
+
+// Same retry primitive already proven in genericPayoutDispatch.service.js /
+// payoutRequestDispatch.service.js — two concurrent admin approvals on the
+// same payout both start a transaction, and MongoDB can abort one with a
+// transient write conflict even though the conditional findOneAndUpdate
+// below is the real correctness guard. Without this retry, that transient
+// error surfaced as a raw Mongo message instead of the controlled
+// "Cannot approve — current status is X" response the blueprint requires.
+const isTransientConflict = (err) =>
+  err?.hasErrorLabel?.("TransientTransactionError") || err?.code === 112 || err?.codeName === "WriteConflict";
+
+const MAX_ATTEMPTS = 6;
+const withTxn = async (fn) => {
+  let lastErr;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      const out = await fn(session);
+      await session.commitTransaction();
+      return out;
+    } catch (err) {
+      if (session.inTransaction()) await session.abortTransaction();
+      lastErr = err;
+      if (isTransientConflict(err) && attempt < MAX_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastErr;
+};
+
+/** Sentinel thrown from inside withTxn to carry a controlled next(err) response out past the retry loop without being mistaken for a transient conflict. */
+class ControlledResponse extends Error {
+  constructor(responder) { super("ControlledResponse"); this.responder = responder; }
+}
 
 /**
  * Admin geographic scope for payouts. Same convention verified in
@@ -74,103 +115,182 @@ const isSalonWithinPayoutScope = (admin, salon) => {
 /**
  * PATCH /api/payouts/admin/approve/:id
  *
- * Flow: REQUESTED(LOCKED) → PROCESSING → PAID
+ * FINANCE-P0-1 — Canonical Salon Payout merge. Flow is now a genuine
+ * two-phase sequence, per the approved blueprint:
  *
- * ✅ Fix — walletMid replaced with result-based validation.
- *   WalletBalanceService throws on failure (insufficient balance,
- *   idempotency race, etc.), so we trust the throw — not a
- *   post-hoc wallet read — as proof of success. walletMid check
- *   removed because it only verified wallet *existence*, not
- *   the actual state transition.
+ *   Phase 1 (this transaction): REQUESTED -> APPROVED. Funds remain
+ *   LOCKED (never touched here) — APPROVED is a durable, queryable
+ *   checkpoint. The atomic conditional findOneAndUpdate below matches
+ *   {status: REQUESTED or APPROVED} — REQUESTED is the normal first
+ *   approval; APPROVED-already is a safe RESUME of a previous attempt
+ *   that was interrupted before dispatch/settlement completed (the
+ *   exact "server crashes between approval and dispatch" scenario the
+ *   blueprint requires recovering from) — never re-dispatches blindly:
+ *   see dispatchApprovedPayout()'s own idempotent guard and
+ *   SettlementEngine's/WalletBalanceService's existing idempotency
+ *   keys below for why a concurrent or repeated Phase 2 attempt can
+ *   never produce two gateway payouts or two ledger entries (both
+ *   layers are reused completely unmodified).
  *
- * ✅ Explicit abortTransaction before every early return inside try.
- * ✅ Wallet read after commit (consistent snapshot).
- * ✅ parseInt with radix 10.
+ *   Phase 2 (post-commit, outside any transaction holding the
+ *   approval): branches on payout.payoutProvider —
+ *     MANUAL (default, unchanged default) — settles synchronously via
+ *       the existing, unmodified SettlementEngine (ManualProvider),
+ *       in its OWN second transaction, preserving the exact one-click
+ *       admin UX this endpoint already had before this ticket (a
+ *       MANUAL approval still completes to PAID in a single API call).
+ *     RAZORPAY_ROUTE (merged in from GenericPayoutRequest) — moves
+ *       APPROVED->PROCESSING and dispatches to the real gateway via
+ *       services/settlement/payoutRequestDispatch.service.js (reused,
+ *       unmodified Razorpay provider/client underneath) — genuinely
+ *       async; this call returns at PROCESSING (or PAID, if the
+ *       gateway resolved synchronously), never blocking on a webhook.
+ *
+ * An async gateway call must never run inside the same transaction
+ * that just committed the approval (same rationale documented in
+ * genericPayoutDispatch.service.js's own header) — hence the split.
  */
 export const approvePayout = async (req, res, next) => {
   if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid payout ID"));
 
-  const session = await mongoose.startSession();
+  const adminId = req.user?._id ?? null;
+  const { utr, adminNote } = req.body;
+  let payout;
+
+  // ── Phase 1 — REQUESTED (or a stuck APPROVED) -> APPROVED ──────────
+  // Wrapped in the same TransientTransactionError/WriteConflict retry
+  // already proven in genericPayoutDispatch.service.js /
+  // payoutRequestDispatch.service.js — two genuinely concurrent approve
+  // calls on the same document can make MongoDB abort one transaction
+  // with a transient conflict even though the conditional
+  // findOneAndUpdate below is the real correctness guard; without this
+  // retry that transient error would leak to the admin as a raw Mongo
+  // message instead of a controlled response.
   try {
-    session.startTransaction();
+    payout = await withTxn(async (session) => {
+      const existing = await PayoutRequest.findById(req.params.id).session(session).lean();
+      if (!existing) {
+        throw new ControlledResponse(() => next(Errors.notFound("Payout request not found")));
+      }
 
-    const payout = await PayoutRequest.findById(req.params.id).session(session);
-    if (!payout) {
-      await session.abortTransaction();
-      return next(Errors.notFound("Payout request not found"));
+      const targetSalon = await Salon.findOne({ _id: existing.salonId, isDeleted: { $ne: true } })
+        .select("location.territory.stateRef location.territory.districtRef")
+        .lean();
+      if (!targetSalon || !isSalonWithinPayoutScope(req.user, targetSalon)) {
+        throw new ControlledResponse(() => next(Errors.forbidden("Out of your authorized scope")));
+      }
+
+      // Atomic conditional — the real concurrency guard. Two simultaneous
+      // approve calls on a REQUESTED payout: only one matches and flips
+      // to APPROVED; the loser gets null and a clean 409, never a second
+      // dispatch. See the function header for why re-matching an
+      // already-APPROVED payout here is intentional (safe resume), not a
+      // bypass of this guard.
+      const updated = await PayoutRequest.findOneAndUpdate(
+        { _id: req.params.id, status: { $in: [PAYOUT_STATUS.REQUESTED, PAYOUT_STATUS.APPROVED] } },
+        { $set: { status: PAYOUT_STATUS.APPROVED, approvedBy: adminId, approvedAt: new Date() } },
+        { new: true, session }
+      );
+
+      if (!updated) {
+        const current = await PayoutRequest.findById(req.params.id).session(session).lean();
+        throw new ControlledResponse(() => next(Errors.conflict(`Cannot approve — current status is ${current?.status ?? "unknown"}`)));
+      }
+
+      return updated;
+    });
+  } catch (err) {
+    if (err instanceof ControlledResponse) return err.responder();
+    return next(err);
+  }
+
+  // ── Phase 2 — post-commit dispatch/settlement. APPROVED is already
+  // durable at this point — a failure anywhere below never loses the
+  // approval decision itself (see function header). ──────────────────
+  try {
+    if (payout.payoutProvider === PAYOUT_PROVIDER.RAZORPAY_ROUTE) {
+      await notifyApproved(payout);
+      await dispatchApprovedPayout(payout._id);
+
+      const fresh = await PayoutRequest.findById(payout._id).lean();
+      const wallet = await WalletBalanceService.getWallet(fresh.salonId);
+      return successResponse(res, {
+        message: fresh.status === PAYOUT_STATUS.PAID ? "Payout approved and completed" : "Payout approved — dispatching to gateway",
+        data: {
+          payoutId:                 fresh._id,
+          status:                   fresh.status,
+          amountInPaise:            fresh.amountInPaise,
+          amountInRupees:           p2(fresh.amountInPaise),
+          utr:                      fresh.utr,
+          providerStatus:           fresh.providerStatus,
+          availableBalanceInPaise:  wallet?.availableBalanceInPaise ?? 0,
+          availableBalanceInRupees: p2(wallet?.availableBalanceInPaise),
+        },
+      });
     }
 
-    const targetSalon = await Salon.findOne({ _id: payout.salonId, isDeleted: { $ne: true } })
-      .select("location.territory.stateRef location.territory.districtRef")
-      .lean();
-    if (!targetSalon || !isSalonWithinPayoutScope(req.user, targetSalon)) {
-      await session.abortTransaction();
-      return next(Errors.forbidden("Out of your authorized scope"));
-    }
-
-    if (payout.status !== PAYOUT_STATUS.REQUESTED) {
-      await session.abortTransaction();
-      return next(Errors.conflict(`Cannot approve — current status is ${payout.status}`));
-    }
-
-    const { utr, adminNote } = req.body;
-    const adminId = req.user?._id ?? null;
-
-    // Controller no longer knows HOW this payout gets executed — it
-    // only knows it wants it executed, and persists whatever the
-    // engine reports back. See services/settlement/SettlementEngine.js.
-    const result = await SettlementEngine.execute({ payout, adminId, utr, adminNote, session });
-
-    payout.status           = result.status;
-    payout.approvedBy       = adminId;
-    payout.approvedAt       = new Date();
-    payout.utr              = result.utr;
-    payout.adminNote        = adminNote || null;
-    payout.providerPayoutId = result.providerPayoutId;
-    payout.providerResponse = result.providerResponse;
-    await payout.save({ session });
-
-    await session.commitTransaction();
-
-    //////////////////////////////////////////////////////
-    // 📬 NOTIFICATION (non-blocking, after commit)
-    //////////////////////////////////////////////////////
-
-    await NotificationService.send({
-      recipientId:   payout.salonId,
-      recipientType: "SALON",
-      templateKey:   NOTIFICATION_EVENTS.WITHDRAW_APPROVED,
-      variables:     { amount: p2(payout.amountInPaise) },
-      title:         "Withdrawal Approved ✅",
-      message:       `Your withdrawal of ₹${p2(payout.amountInPaise)} has been approved and processed.`,
-      type:          "PAYMENT",
-      priority:      "HIGH",
-      actionType:    "OPEN_WALLET",
-      actionUrl:     "/wallet",
-      meta:          { payoutId: payout._id, amountInPaise: payout.amountInPaise, utr: payout.utr },
+    // MANUAL (default) — settle synchronously, own transaction, exactly
+    // mirroring what this endpoint already did in one shot before this
+    // ticket (same SettlementEngine call, same fields persisted). Same
+    // transient-conflict retry as Phase 1 — a concurrent/resumed
+    // approval racing into this same settlement transaction must not
+    // leak a raw Mongo error either.
+    const settled = await withTxn(async (session2) => {
+      const fresh = await PayoutRequest.findById(payout._id).session(session2);
+      if (fresh.status !== PAYOUT_STATUS.APPROVED) {
+        // Already settled by a concurrent/previous resumed attempt —
+        // idempotent no-op, return the real current state.
+        return fresh;
+      }
+      const result = await SettlementEngine.execute({ payout: fresh, adminId, utr, adminNote, session: session2 });
+      fresh.status           = result.status;
+      fresh.utr              = result.utr;
+      fresh.providerPayoutId = result.providerPayoutId;
+      fresh.providerResponse = result.providerResponse;
+      fresh.adminNote        = adminNote || fresh.adminNote || null;
+      await fresh.save({ session: session2 });
+      return fresh;
     });
 
-    const wallet = await WalletBalanceService.getWallet(payout.salonId);
+    await notifyApproved(settled);
 
+    const wallet = await WalletBalanceService.getWallet(settled.salonId);
     return successResponse(res, {
       message: "Payout approved and completed",
       data: {
-        payoutId:                payout._id,
-        status:                  payout.status,
-        amountInPaise:           payout.amountInPaise,
-        amountInRupees:          p2(payout.amountInPaise),
-        utr:                     payout.utr,
-        availableBalanceInPaise: wallet?.availableBalanceInPaise  ?? 0,
-        availableBalanceInRupees:p2(wallet?.availableBalanceInPaise),
+        payoutId:                 settled._id,
+        status:                   settled.status,
+        amountInPaise:            settled.amountInPaise,
+        amountInRupees:           p2(settled.amountInPaise),
+        utr:                      settled.utr,
+        availableBalanceInPaise:  wallet?.availableBalanceInPaise ?? 0,
+        availableBalanceInRupees: p2(wallet?.availableBalanceInPaise),
       },
     });
   } catch (err) {
-    await session.abortTransaction();
-    next(err);
-  } finally {
-    session.endSession();
+    // The approval itself is already committed and safe (see header).
+    // A MANUAL-path failure here surfaces as a real error to the admin,
+    // same as this endpoint already did before this ticket. The payout
+    // is left at APPROVED, re-resumable by a repeat approve call.
+    return next(err);
   }
 };
+
+/** Non-blocking "approved" notification, shared by both provider branches. */
+const notifyApproved = (payout) =>
+  NotificationService.send({
+    recipientId:   payout.salonId,
+    recipientType: "SALON",
+    templateKey:   NOTIFICATION_EVENTS.WITHDRAW_APPROVED,
+    variables:     { amount: p2(payout.amountInPaise) },
+    title:         "Withdrawal Approved ✅",
+    message:       `Your withdrawal of ₹${p2(payout.amountInPaise)} has been approved.`,
+    type:          "PAYMENT",
+    priority:      "HIGH",
+    actionType:    "OPEN_WALLET",
+    actionUrl:     "/wallet",
+    meta:          { payoutId: payout._id, amountInPaise: payout.amountInPaise },
+  }).catch(() => {});
 
 /**
  * PATCH /api/payouts/admin/reject/:id
@@ -198,7 +318,14 @@ export const rejectPayout = async (req, res, next) => {
       return next(Errors.forbidden("Out of your authorized scope"));
     }
 
-    if (payout.status !== PAYOUT_STATUS.REQUESTED) {
+    // FINANCE-P0-1 — widened from REQUESTED-only to also allow APPROVED:
+    // the canonical blueprint's own cutoff is "no rejection after
+    // gateway dispatch" (i.e. once PROCESSING), not "no rejection after
+    // approval" — an APPROVED-but-not-yet-PROCESSING payout (the narrow
+    // crash-recovery window, or simply an admin reconsidering before
+    // dispatch has actually run) must still be rejectable. PROCESSING/
+    // PAID/FAILED/REJECTED/CANCELLED remain correctly blocked.
+    if (![PAYOUT_STATUS.REQUESTED, PAYOUT_STATUS.APPROVED].includes(payout.status)) {
       await session.abortTransaction();
       return next(Errors.conflict(`Cannot reject — current status is ${payout.status}`));
     }
@@ -276,6 +403,8 @@ export const getPayoutSummary = async (req, res, next) => {
         _id:                    null,
         total:                  { $sum: 1 },
         requested:              { $sum: { $cond: [{ $eq: ["$status","REQUESTED"]  }, 1, 0] } },
+        // FINANCE-P0-1 — additive bucket for the new APPROVED state.
+        approved:               { $sum: { $cond: [{ $eq: ["$status","APPROVED"]   }, 1, 0] } },
         processing:             { $sum: { $cond: [{ $eq: ["$status","PROCESSING"] }, 1, 0] } },
         paid:                   { $sum: { $cond: [{ $eq: ["$status","PAID"]       }, 1, 0] } },
         rejected:               { $sum: { $cond: [{ $eq: ["$status","REJECTED"]   }, 1, 0] } },
@@ -295,6 +424,7 @@ export const getPayoutSummary = async (req, res, next) => {
       data: {
         total:                   d.total                  ?? 0,
         requested:               d.requested              ?? 0,
+        approved:                d.approved               ?? 0, // FINANCE-P0-1 — additive
         processing:              d.processing             ?? 0,
         paid:                    d.paid                   ?? 0,
         rejected:                d.rejected               ?? 0,
@@ -375,8 +505,10 @@ export const listPayouts = async (req, res, next) => {
         status:         p.status,
         utr:            p.utr,
         provider:       p.payoutProvider,
+        providerStatus: p.providerStatus ?? null, // FINANCE-P0-1 — additive
         approvedBy:     p.approvedBy ? { id: p.approvedBy._id, name: p.approvedBy.name } : null,
         approvedAt:     p.approvedAt,
+        processingAt:   p.processingAt ?? null,    // FINANCE-P0-1 — additive
         adminNote:      p.adminNote,
         failureReason:  p.failureReason,
         createdAt:      p.createdAt,
@@ -438,11 +570,14 @@ export const getPayoutDetail = async (req, res, next) => {
         amountInRupees: p2(payout.amountInPaise),
         currency:       payout.currency,
         provider:       payout.payoutProvider,
+        providerStatus: payout.providerStatus ?? null, // FINANCE-P0-1 — additive
+        providerPayoutId: payout.providerPayoutId ?? null, // FINANCE-P0-1 — additive
         utr:            payout.utr,
         adminNote:      payout.adminNote,
         failureReason:  payout.failureReason,
         approvedBy:     payout.approvedBy ? { id: payout.approvedBy._id, name: payout.approvedBy.name } : null,
         approvedAt:     payout.approvedAt,
+        processingAt:   payout.processingAt ?? null, // FINANCE-P0-1 — additive
         cancelledAt:    payout.cancelledAt,
         createdAt:      payout.createdAt,
         updatedAt:      payout.updatedAt,

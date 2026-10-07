@@ -31,12 +31,16 @@ import FieldAgent from "../models/FieldAgent.js";
 import WalletBalanceService from "../../../services/WalletBalanceService.js";
 import WalletLedger from "../../../models/WalletLedger.js";
 import { Errors } from "../../../utils/response.js";
+import { assertAdminCanAccessFieldAgent } from "./fieldAgentGeographyAuthorization.service.js";
 
 const EMPTY_WALLET = { availableInPaise: 0, pendingInPaise: 0, lockedInPaise: 0 };
 
-export const getAdminFieldAgentWallet = async ({ fieldAgentId }) => {
+export const getAdminFieldAgentWallet = async ({ admin, fieldAgentId }) => {
   const fieldAgent = await FieldAgent.findById(fieldAgentId).select("_id commercialPath").lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent not found");
+
+  // Field Agent Geography Phase C — see fieldAgentGeographyAuthorization.service.js.
+  await assertAdminCanAccessFieldAgent({ admin, fieldAgentId: fieldAgent._id });
 
   if (!fieldAgent.commercialPath) {
     return { wallet: EMPTY_WALLET, ledger: [] };

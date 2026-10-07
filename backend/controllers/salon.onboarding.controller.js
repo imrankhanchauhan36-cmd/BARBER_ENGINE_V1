@@ -44,6 +44,7 @@ export const saveBasicInfo = async (req, res) => {
       brandName,
       branchCode,
       experience,
+      gstStatus,
     } = req.body;
 
     if (!shopName || !category) {
@@ -92,6 +93,12 @@ export const saveBasicInfo = async (req, res) => {
       ? privacySetup
       : "MIXED";
 
+    // SALON GST — same allow-list-with-safe-default pattern as
+    // setupType/privacySetup above. Any value other than exactly
+    // "REGISTERED" (including undefined/omitted) defaults to
+    // UNREGISTERED — never silently becomes REGISTERED.
+    const finalGstStatus = gstStatus === "REGISTERED" ? "REGISTERED" : "UNREGISTERED";
+
     const updatePayload = {
       "basicInfo.shopName": cleanName,
       "basicInfo.category": finalCategory,
@@ -112,6 +119,7 @@ export const saveBasicInfo = async (req, res) => {
         : [],
       "basicInfo.setupType": finalSetupType,
       "basicInfo.privacySetup": finalPrivacy,
+      "basicInfo.gstStatus": finalGstStatus,
 
       "basicInfo.amenities.hasAC": amenities?.hasAC ?? false,
       "basicInfo.amenities.hasParking": amenities?.hasParking ?? false,

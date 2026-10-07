@@ -344,6 +344,69 @@ const BookingSchema = new mongoose.Schema(
       immutable: true,
     },
 
+    // Global Refund & Cancellation Policy — audit-trail ONLY, same
+    // null-vs-"never applied" convention as platformFeePolicyRef/
+    // gstPolicyVersionRef above. Unlike those two (resolved at
+    // lockSlot time), this is resolved at CANCELLATION EVALUATION time
+    // — a booking may never be cancelled, so there is nothing to
+    // snapshot until CancellationPolicyService.evaluate() actually
+    // runs (cancelBooking/ownerCancelBooking). Stays null forever for
+    // a booking that is never cancelled, and — by design — also stays
+    // null for a booking cancelled via the separate, untouched no-show
+    // OTP flow (confirmNoShowCancellation never calls
+    // CancellationPolicyService at all; full retention, no refund
+    // policy applies).
+    //
+    // NOT declared `immutable: true` — deliberately, unlike
+    // platformFeePolicyRef/gstPolicyVersionRef above. Mongoose's
+    // immutable setter no-ops a write whenever the document is not
+    // new (`!this.$isNew`); platformFeePolicyRef/gstPolicyVersionRef
+    // are safely immutable because they are set at Booking.create()
+    // time, while the document IS new. This field, by contrast, is
+    // always set on an ALREADY-EXISTING booking fetched by
+    // cancelBooking/ownerCancelBooking/performAdminCancellation — a
+    // real `immutable: true` here would silently drop the write
+    // (confirmed empirically while building this feature: the field
+    // stayed null in the database after a successful cancellation
+    // until this was fixed). The historical-immutability GUARANTEE
+    // instead rests on convention, same as cancellationPolicy/
+    // refundAmountInPaise directly below (also not schema-immutable):
+    // exactly four call sites ever write this field (the three
+    // cancellation paths' own cancellation-time assignment), and none
+    // of them ever runs twice for the same booking (CANCELLED is a
+    // terminal status — see bookingState.machine.js).
+    refundPolicyVersionRef: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     "RefundPolicyVersion",
+      default: null,
+    },
+
+    // The exact CUSTOMER REFUND fraction (0-1) CancellationPolicyService.evaluate()
+    // produced for this booking's cancellation — set together with
+    // refundPolicyVersionRef above, same null-vs-"never applied"
+    // convention. This is ALWAYS the customer's own refund share
+    // (`1 - cancellationPercent/100` of the admin-configured
+    // RefundPolicyVersion rule — see that model's own header: the
+    // published rule stores the CANCELLATION/RETENTION percentage,
+    // not this fraction, directly). This is now the SINGLE
+    // authoritative source any later consumer (RefundExecutionService,
+    // RazorpayRefundService, admin booking detail) must read to
+    // reproduce the exact split — never re-derived from the
+    // cancellationPolicy label below, which remains a human-readable
+    // bucket only (NO_REFUND/HALF_REFUND/FULL_REFUND/PARTIAL_REFUND/
+    // NO_PAYMENT) and can no longer losslessly represent an arbitrary
+    // admin-configured percentage (e.g. 37% cancellation hit) on its
+    // own.
+    // NOT declared `immutable: true` — see refundPolicyVersionRef's
+    // own comment immediately above for why (same Mongoose
+    // "immutable no-ops on an already-existing document" pitfall).
+    refundFractionApplied: {
+      type:    Number,
+      default: null,
+      min:     [0, "refundFractionApplied cannot be negative"],
+      max:     [1, "refundFractionApplied cannot exceed 1"],
+    },
+
     // ⚠️  DISPLAY ONLY — NEVER use this for finance logic.
     // All authoritative calculations (commission, payout, wallet)
     // MUST use totalAmountInPaise above.
@@ -527,16 +590,22 @@ const BookingSchema = new mongoose.Schema(
     },
 
     // Set by cancelBooking (booking.controller.js) — one of
-    // "NO_PAYMENT" | "FULL_REFUND" | "HALF_REFUND" | "NO_REFUND".
-    // Previously written by the controller but silently dropped
-    // (not declared in schema) — added here as additive-only.
+    // "NO_PAYMENT" | "FULL_REFUND" | "HALF_REFUND" | "PARTIAL_REFUND" |
+    // "NO_REFUND". A human-readable BUCKET label only — since the
+    // Global Refund & Cancellation Policy made the refund percentage
+    // admin-configurable (not fixed at 0/50/100), this label can no
+    // longer losslessly represent every possible outcome on its own;
+    // "PARTIAL_REFUND" is the generic bucket for any configured
+    // percentage that isn't exactly 0/50/100. refundFractionApplied
+    // above is the authoritative numeric source for any dollar
+    // calculation going forward — this field remains display-only.
     // enum is the exhaustive set CancellationPolicyService.evaluate()
     // can ever return — null included explicitly (never-cancelled
     // bookings), matching WalletTransaction.js's failureCode pattern.
     cancellationPolicy: {
       type:    String,
       default: null,
-      enum:    [null, "NO_PAYMENT", "FULL_REFUND", "HALF_REFUND", "NO_REFUND"],
+      enum:    [null, "NO_PAYMENT", "FULL_REFUND", "HALF_REFUND", "PARTIAL_REFUND", "NO_REFUND"],
     },
 
     // Set by cancelBooking (booking.controller.js) — refund amount

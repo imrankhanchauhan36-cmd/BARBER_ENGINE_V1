@@ -44,6 +44,7 @@ import { GENERIC_PAYOUT_STATUS } from "../../payout/constants/genericPayoutReque
 import FieldAgentPayoutRequest from "../models/FieldAgentPayoutRequest.js";
 import { COMMERCIAL_PATH } from "../constants/fieldAgent.constants.js";
 import { Errors } from "../../../utils/response.js";
+import { assertAdminCanAccessFieldAgent } from "./fieldAgentGeographyAuthorization.service.js";
 
 // Both payout systems share the identical status vocabulary (REQUESTED/
 // PROCESSING/PAID/FAILED/REJECTED/CANCELLED — confirmed against each
@@ -63,9 +64,14 @@ const sumAmount = async (Model, filter) => {
   return row?.total || 0;
 };
 
-export const getAdminFieldAgentSummary = async ({ fieldAgentId }) => {
+export const getAdminFieldAgentSummary = async ({ admin, fieldAgentId }) => {
   const fieldAgent = await FieldAgent.findById(fieldAgentId).lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent not found");
+
+  // Field Agent Geography Phase C — throws Errors.forbidden() for a
+  // STATE/DISTRICT admin without an ACTIVE assignment matching their
+  // own geography. See fieldAgentGeographyAuthorization.service.js.
+  await assertAdminCanAccessFieldAgent({ admin, fieldAgentId: fieldAgent._id });
 
   const [user, kyc, activeTerritoryAssignment, totalSalons, lifetimeEarningsRow] = await Promise.all([
     User.findById(fieldAgent.userRef).select("name phone email").lean(),

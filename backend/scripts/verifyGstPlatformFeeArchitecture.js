@@ -113,7 +113,10 @@ const run = async () => {
         ...salonGeo(area),
       });
       fixtureSalonIds.push(salon._id);
-      await SalonEarnings.create({ salonId: salon._id, pendingBalanceInPaise: 1000000, availableBalanceInPaise: 0 });
+      // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY (unrelated drift): SalonEarnings
+      // moved to the generic {entityType, entityId} identity some time after
+      // this script was last run — salonId no longer exists on the schema.
+      await SalonEarnings.create({ entityType: "SALON", entityId: salon._id, pendingBalanceInPaise: 1000000, availableBalanceInPaise: 0 });
       return salon;
     };
 
@@ -122,7 +125,18 @@ const run = async () => {
     const salonC = await mkSalon(areaC, "C"); // unconfigured area
 
     // ── A. GST — create + publish 5% ────────────────────────────
-    const createGst = (ratePercent, token = indiaToken) => authFetch("/api/admin/finance/gst", token, { method: "POST", body: JSON.stringify({ ratePercent }) });
+    // SAFETY GUARD (post-incident): this script's own publish calls
+    // retire whatever is currently PUBLISHED — refuse to run against
+    // a live-configured policy rather than silently retiring it.
+    const livePublishedGst = await GstPolicyVersion.findOne({ status: "PUBLISHED" }).lean();
+    if (livePublishedGst) throw new Error(`Refusing to run — a GstPolicyVersion is already PUBLISHED (_id=${livePublishedGst._id}); this script WILL retire it via its own publish calls.`);
+
+    // NEEDS UPDATE FOR SALON GST LAUNCH PHASE: both rates required;
+    // registeredRatePercent/unregisteredRatePercent set to the SAME
+    // value so this script's own flat-rate assertions stay
+    // deterministic regardless of a salon's gstStatus — see
+    // mkPricedBooking's own header comment above.
+    const createGst = (ratePercent, token = indiaToken) => authFetch("/api/admin/finance/gst", token, { method: "POST", body: JSON.stringify({ registeredRatePercent: ratePercent, unregisteredRatePercent: ratePercent }) });
     const publishGst = (id, token = indiaToken) => authFetch(`/api/admin/finance/gst/${id}/publish`, token, { method: "POST" });
 
     const rGstDraft = await createGst(5);
@@ -136,7 +150,10 @@ const run = async () => {
     check("A3. Non-admin cannot create GST policy (403)", rGstNonAdmin.status === 403, rGstNonAdmin.status);
 
     // ── B. Platform Fee — Area A = ₹10, Area B = ₹20, Area C unconfigured ──
-    const createFee = (areaRef, feeInPaise, token = indiaToken) => authFetch("/api/admin/finance/platform-fee", token, { method: "POST", body: JSON.stringify({ areaRef: areaRef.toString(), feeInPaise }) });
+    // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: this whole section tests the
+    // preserved-but-now-unused-by-lockSlot AREA scope path (scope is now a
+    // required field on create — see AreaPlatformFeePolicy.js).
+    const createFee = (areaRef, feeInPaise, token = indiaToken) => authFetch("/api/admin/finance/platform-fee", token, { method: "POST", body: JSON.stringify({ scope: "AREA", areaRef: areaRef.toString(), feeInPaise }) });
     const publishFee = (id, token = indiaToken) => authFetch(`/api/admin/finance/platform-fee/${id}/publish`, token, { method: "POST" });
 
     const rFeeADraft = await createFee(areaA._id, 1000);
@@ -174,11 +191,23 @@ const run = async () => {
     const { resolvePlatformFeeForArea } = await import("../services/areaPlatformFee.service.js");
     const { getPublishedGstPolicy } = await import("../services/gstPolicy.service.js");
 
+    // NEEDS UPDATE FOR SALON GST LAUNCH PHASE: GST base is now
+    // serviceAmountInPaise ONLY (platform fee excluded) and the
+    // resolver returns {registeredRatePercent, unregisteredRatePercent}
+    // instead of a single ratePercent. This script's own fixture
+    // salons never set basicInfo.gstStatus (so they default to
+    // UNREGISTERED), and this script's own intent is to test the GST
+    // CALCULATION/SNAPSHOT mechanics at a known flat rate, not the
+    // registered-vs-unregistered distinction (that is covered by the
+    // new, dedicated verifySalonGstEngine.js) — so createGst below now
+    // publishes the SAME rate for both registered and unregistered,
+    // keeping this script's own assertions deterministic regardless
+    // of which rate actually gets selected.
     const mkPricedBooking = async (salon, area, { offsetMinutes = 150, serviceAmountInPaise = 50000, status = BOOKING_STATUS.CONFIRMED } = {}) => {
       const { feeInPaise } = await resolvePlatformFeeForArea(area?._id);
       const gstPolicy = await getPublishedGstPolicy();
-      const gstRatePercent = gstPolicy ? gstPolicy.ratePercent : null;
-      const gstAmountInPaise = gstPolicy ? Math.round((serviceAmountInPaise + feeInPaise) * gstPolicy.ratePercent / 100) : null;
+      const gstRatePercent = gstPolicy ? gstPolicy.registeredRatePercent : null;
+      const gstAmountInPaise = gstPolicy ? Math.round(serviceAmountInPaise * gstPolicy.registeredRatePercent / 100) : null;
       const totalAmountInPaise = serviceAmountInPaise + feeInPaise + (gstAmountInPaise || 0);
       const startTime = new Date(Date.now() + offsetMinutes * 60000);
       const booking = await Booking.create({
@@ -204,8 +233,8 @@ const run = async () => {
 
     const bookingAreaA = await mkPricedBooking(salonA, areaA);
     check("C1. Area A resolves fee = ₹10 (1000 paise)", bookingAreaA.feeInPaise === 1000, bookingAreaA.feeInPaise);
-    check("C2. GST base = service+fee, GST 5% correct (₹25.50 on ₹500+₹10)", bookingAreaA.gstAmountInPaise === 2550, bookingAreaA.gstAmountInPaise);
-    check("C3. Total = service+fee+gst (₹535.50)", bookingAreaA.totalAmountInPaise === 53550, bookingAreaA.totalAmountInPaise);
+    check("C2. GST base = SERVICE ONLY (platform fee excluded), GST 5% correct (₹25 on ₹500)", bookingAreaA.gstAmountInPaise === 2500, bookingAreaA.gstAmountInPaise);
+    check("C3. Total = service+fee+gst (₹535)", bookingAreaA.totalAmountInPaise === 53500, bookingAreaA.totalAmountInPaise);
 
     const bookingAreaB = await mkPricedBooking(salonB, areaB);
     check("C4. Area B resolves a DIFFERENT fee = ₹20 (2000 paise)", bookingAreaB.feeInPaise === 2000, bookingAreaB.feeInPaise);

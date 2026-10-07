@@ -19,6 +19,12 @@
 import express from "express";
 import { verifyWebhookSignature } from "../../../services/settlement/razorpayx/razorpayxPayoutClient.js";
 import { handleGenericPayoutWebhookEvent } from "../services/genericPayoutDispatch.service.js";
+// FINANCE-P0-1 — canonical PayoutRequest's own dispatch counterpart.
+// Tried only as a fallback (see below) when the event's reference_id
+// doesn't resolve to a GenericPayoutRequest — see that file's own
+// header for why the reference_id prefix is safely shared between the
+// two models and disambiguated by _id, not by the prefix label.
+import { handlePayoutRequestWebhookEvent } from "../../../services/settlement/payoutRequestDispatch.service.js";
 import logger from "../../../utils/logger.js";
 
 const router = express.Router();
@@ -43,7 +49,16 @@ router.post("/", express.raw({ type: "*/*", limit: "1mb" }), async (req, res) =>
   }
 
   try {
-    const result = await handleGenericPayoutWebhookEvent(payload);
+    let result = await handleGenericPayoutWebhookEvent(payload);
+    // FINANCE-P0-1 — GenericPayoutRequest.js is untouched (ACQUISITION_AGENT/
+    // TERRITORY_PARTNER payouts still resolve there, unaffected). Only
+    // when this exact event's underlying payout _id is NOT a
+    // GenericPayoutRequest (reason UNKNOWN_PAYOUT) do we try the
+    // canonical PayoutRequest counterpart — never both, never a double
+    // transition, since they key off the same real _id.
+    if (!result.handled && result.reason === "UNKNOWN_PAYOUT") {
+      result = await handlePayoutRequestWebhookEvent(payload);
+    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     logger.error("[GenericPayoutWebhook] processing failed", { message: err.message });

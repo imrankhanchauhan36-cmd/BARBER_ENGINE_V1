@@ -43,6 +43,7 @@ import FieldAgentPayoutRequest from "../models/FieldAgentPayoutRequest.js";
 import { GENERIC_PAYOUT_STATUS } from "../../payout/constants/genericPayoutRequest.constants.js";
 import { FIELD_AGENT_PAYOUT_STATUS } from "../models/FieldAgentPayoutRequest.js";
 import { Errors } from "../../../utils/response.js";
+import { assertAdminCanAccessFieldAgent } from "./fieldAgentGeographyAuthorization.service.js";
 
 const normalizeGeneric = (row) => ({
   id: row._id,
@@ -66,9 +67,12 @@ const normalizeFieldAgent = (row) => ({
   paidDate: row.status === FIELD_AGENT_PAYOUT_STATUS.PAID ? row.updatedAt : null,
 });
 
-export const getAdminFieldAgentPayoutHistory = async ({ fieldAgentId }) => {
+export const getAdminFieldAgentPayoutHistory = async ({ admin, fieldAgentId }) => {
   const fieldAgent = await FieldAgent.findById(fieldAgentId).select("_id commercialPath").lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent not found");
+
+  // Field Agent Geography Phase C — see fieldAgentGeographyAuthorization.service.js.
+  await assertAdminCanAccessFieldAgent({ admin, fieldAgentId: fieldAgent._id });
 
   const [genericRows, fieldAgentRows] = await Promise.all([
     fieldAgent.commercialPath

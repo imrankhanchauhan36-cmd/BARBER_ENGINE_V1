@@ -50,6 +50,7 @@ import {
   updateUserStatus,
 } from "../controllers/adminUser.controller.js";
 import { getSalonDetail } from "../controllers/salonDetail.controller.js";
+import { getAdminSalonAnalyticsHandler } from "../controllers/adminSalonAnalytics.controller.js";
 
 import {
   approveKYCHandler,
@@ -279,6 +280,11 @@ router.post(
 // ── Salons ────────────────────────────────────────────────
 router.get  ("/salons",                requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(listSalonsForAdmin));
 router.get  ("/salons/:id",            requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getSalonDetail));
+// ADMIN PANEL MUST-DO-NOW #2 — real per-salon analytics (replaces the
+// hardcoded ANALYTICS_DB that used to back admin-panel's
+// SalonAnalyticsPage.jsx). Same read levels + same inline scope-guard
+// pattern as getSalonDetail immediately above.
+router.get  ("/salons/:id/analytics",  requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getAdminSalonAnalyticsHandler));
 router.patch("/salons/:id/status",     requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(updateSalonStatus));
 router.patch("/salons/:id/commission", requireAdminLevel("INDIA"),                    asyncHandler(setSalonCommission));
 router.patch("/salons/:id/force-close",requireAdminLevel("INDIA","STATE"),            asyncHandler(forceCloseSalon));

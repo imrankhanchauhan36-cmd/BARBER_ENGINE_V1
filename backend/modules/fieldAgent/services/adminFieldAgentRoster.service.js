@@ -18,10 +18,20 @@
  * idiom exactly: a bounded ($limit 500), escaped-regex sub-lookup
  * against User (name/phone) first, never an unbounded regex against
  * FieldAgent itself.
+ *
+ * Field Agent Geography Phase C — this list is now authorization-
+ * scoped via fieldAgentGeographyAuthorization.service.js's
+ * resolveAuthorizedFieldAgentIds(admin): INDIA sees everything
+ * unchanged; STATE/DISTRICT are constrained to FieldAgent._id values
+ * with an ACTIVE FieldAgentGeographyAssignment in their own state/
+ * district, applied to BOTH find() and countDocuments() via the same
+ * `filter` object, BEFORE pagination/search are layered on top — an
+ * empty authorized-id set still filters (never "no filter").
  */
 
 import FieldAgent from "../models/FieldAgent.js";
 import User from "../../../models/User.js";
+import { resolveAuthorizedFieldAgentIds } from "./fieldAgentGeographyAuthorization.service.js";
 
 const MAX_SEARCH_LENGTH = 100;
 
@@ -31,13 +41,21 @@ const clampLimit = (limit) => {
 };
 const clampPage = (page) => Math.max(1, Number(page) || 1);
 
-export const listAdminFieldAgentRoster = async ({ page, limit, search, status, commercialType }) => {
+export const listAdminFieldAgentRoster = async ({ admin, page, limit, search, status, commercialType }) => {
   const safeLimit = clampLimit(limit);
   const safePage = clampPage(page);
 
   const filter = {};
   if (status) filter.operationalStatus = status;
   if (commercialType) filter.commercialPath = commercialType;
+
+  // Field Agent Geography Phase C — authorization scope, applied
+  // before search/pagination and shared identically by find()/
+  // countDocuments() below (see file header).
+  const authorizedIds = await resolveAuthorizedFieldAgentIds(admin);
+  if (authorizedIds !== null) {
+    filter._id = { $in: authorizedIds };
+  }
 
   if (search) {
     const trimmed = String(search).trim().slice(0, MAX_SEARCH_LENGTH);

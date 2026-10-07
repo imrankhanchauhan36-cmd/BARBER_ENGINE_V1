@@ -14,6 +14,7 @@ import {
   adminApproveClaim,
   adminRejectClaim,
   adminReassignClaim,
+  adminCompleteClaim,
 } from "../services/acquisitionClaim.service.js";
 
 export const adminListClaimsHandler = async (req, res, next) => {
@@ -66,6 +67,25 @@ export const adminReassignClaimHandler = async (req, res, next) => {
   try {
     const claim = await adminReassignClaim({ adminId: req.user._id, claimId: req.params.claimId });
     return successResponse(res, { message: "Acquisition claim reassigned", data: { claim } });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// PHASE C.3-A — the explicit "Mark Acquisition Complete" action.
+// ACTIVE_RECOVERY -> COMPLETED, fixed reward paid exactly once. Only
+// the claim and a plain reward summary are returned — no transaction/
+// session internals.
+export const adminCompleteClaimHandler = async (req, res, next) => {
+  try {
+    const { claim, reward } = await adminCompleteClaim({ adminId: req.user._id, claimId: req.params.claimId });
+    return successResponse(res, {
+      message: "Acquisition completed — fixed reward credited",
+      data: {
+        claim,
+        reward: { creditedAmountInPaise: reward.creditedAmountInPaise, entitlementType: reward.entitlementType },
+      },
+    });
   } catch (err) {
     return next(err);
   }

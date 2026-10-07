@@ -56,6 +56,11 @@ const policyBusinessFields = {
   // target/cap per salon, in paise. No business maximum is invented
   // here — only the structural (non-negative, integer) bound.
   acquisitionEarningTargetInPaise: Joi.number().integer().min(ACQUISITION_INCENTIVE_MIN_PAISE),
+  // FA-9 Phase A — the nationally configured ONE-TIME fixed reward paid
+  // on claim completion. Separate field, separate business meaning from
+  // acquisitionEarningTargetInPaise above (see CommercialPolicyVersion.js
+  // field comment) — no business maximum invented here either.
+  acquisitionRewardAmountInPaise: Joi.number().integer().min(ACQUISITION_INCENTIVE_MIN_PAISE),
   territoryPartnerCommissionPercent: Joi.number()
     .min(TERRITORY_COMMISSION_PERCENT_MIN)
     .max(TERRITORY_COMMISSION_PERCENT_MAX),
@@ -76,6 +81,7 @@ export const adminCommercialPolicySchemas = {
     acquisitionIncentiveAmountInPaise: policyBusinessFields.acquisitionIncentiveAmountInPaise.optional(),
     acquisitionAgentCommissionPercent: policyBusinessFields.acquisitionAgentCommissionPercent.required(),
     acquisitionEarningTargetInPaise: policyBusinessFields.acquisitionEarningTargetInPaise.required(),
+    acquisitionRewardAmountInPaise: policyBusinessFields.acquisitionRewardAmountInPaise.required(),
     territoryPartnerCommissionPercent: policyBusinessFields.territoryPartnerCommissionPercent.required(),
     licenseTermMonths: policyBusinessFields.licenseTermMonths.required(),
     claimExpiryDays: policyBusinessFields.claimExpiryDays.required(),
@@ -91,6 +97,7 @@ export const adminCommercialPolicySchemas = {
     acquisitionIncentiveAmountInPaise: policyBusinessFields.acquisitionIncentiveAmountInPaise.optional(),
     acquisitionAgentCommissionPercent: policyBusinessFields.acquisitionAgentCommissionPercent.optional(),
     acquisitionEarningTargetInPaise: policyBusinessFields.acquisitionEarningTargetInPaise.optional(),
+    acquisitionRewardAmountInPaise: policyBusinessFields.acquisitionRewardAmountInPaise.optional(),
     territoryPartnerCommissionPercent: policyBusinessFields.territoryPartnerCommissionPercent.optional(),
     licenseTermMonths: policyBusinessFields.licenseTermMonths.optional(),
     claimExpiryDays: policyBusinessFields.claimExpiryDays.optional(),

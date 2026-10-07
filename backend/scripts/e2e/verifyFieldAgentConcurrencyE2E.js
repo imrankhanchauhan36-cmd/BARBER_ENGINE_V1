@@ -121,6 +121,7 @@ const run = async () => {
       nationalPolicy = await CommercialPolicyVersion.create({
         versionNumber: 900000 + Math.floor(Math.random() * 99999), status: "PUBLISHED",
         acquisitionAgentCommissionPercent: 10, acquisitionEarningTargetInPaise: 1000000,
+        acquisitionRewardAmountInPaise: 20000, // FA-9 Phase A — ₹200, required since this field was introduced
         territoryPartnerCommissionPercent: 8, licenseTermMonths: 12, claimExpiryDays: 30,
         createdBy: indiaAdmin._id, publishedBy: indiaAdmin._id, publishedAt: new Date(Date.now() - 24 * 3600 * 1000),
       });
@@ -145,9 +146,16 @@ const run = async () => {
       const A = await mkActiveAgent("CON01");
       const { owner, salon } = await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) });
       createdIds.salons.push(salon._id);
-      const areaFee = await AreaPlatformFeePolicy.create({ areaRef: geo.area._id, feeInPaise: 3000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() });
+      const areaFee = await AreaPlatformFeePolicy.create({ scope: "AREA", areaRef: geo.area._id, feeInPaise: 3000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() }); // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope now required
       createdIds.areaFeePolicies.push(areaFee._id);
-      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+      // ACQUISITION CLAIM ENUM DRIFT FIX (pre-existing, unrelated to
+      // Phase A): "ACTIVE" predates the FA-P3-B Step 1 PENDING_APPROVAL/
+      // ACTIVE_RECOVERY split and is not a valid CLAIM_STATUS value —
+      // corrected to ACTIVE_RECOVERY (every occurrence in this file),
+      // the real non-terminal, earning-eligible state these fixtures
+      // actually need (confirmed by the immediate
+      // createAcquisitionEarningProgressForClaim call right below).
+      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
       createdIds.claims.push(claim._id);
       const progress = await createAcquisitionEarningProgressForClaim({ claim, salon });
       createdIds.progress.push(progress._id);
@@ -198,13 +206,13 @@ const run = async () => {
       createdIds.kycs.push(kyc._id);
       const { owner, salon } = await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) });
       createdIds.salons.push(salon._id);
-      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: agent.fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: agent.fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
       createdIds.claims.push(claim._id);
       const progress = await createAcquisitionEarningProgressForClaim({ claim, salon });
       createdIds.progress.push(progress._id);
       const fundGeo = await makeGeoFixture({ Country, State, District, City, Area }, `F${label}`);
       createdIds.states.push(fundGeo.state._id); createdIds.districts.push(fundGeo.district._id); createdIds.cities.push(fundGeo.city._id); createdIds.areas.push(fundGeo.area._id);
-      const bigFee = await AreaPlatformFeePolicy.create({ areaRef: fundGeo.area._id, feeInPaise, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() });
+      const bigFee = await AreaPlatformFeePolicy.create({ scope: "AREA", areaRef: fundGeo.area._id, feeInPaise, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() }); // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope now required
       createdIds.areaFeePolicies.push(bigFee._id);
       const fundBooking = await Booking.create({
         userRef: owner._id, salonRef: salon._id, chairRef: new mongoose.Types.ObjectId(), serviceRefs: [new mongoose.Types.ObjectId()],
@@ -344,7 +352,7 @@ const run = async () => {
       const A = await mkActiveAgent("CON07");
       const { owner, salon } = await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) });
       createdIds.salons.push(salon._id);
-      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
       createdIds.claims.push(claim._id);
       const progress = await createAcquisitionEarningProgressForClaim({ claim, salon });
       createdIds.progress.push(progress._id);
@@ -440,7 +448,7 @@ const run = async () => {
       const B = await mkActiveAgent("CON11B");
       const { owner, salon } = await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) });
       createdIds.salons.push(salon._id);
-      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+      const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: A.fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
       createdIds.claims.push(claim._id);
       const progress = await createAcquisitionEarningProgressForClaim({ claim, salon });
       createdIds.progress.push(progress._id);

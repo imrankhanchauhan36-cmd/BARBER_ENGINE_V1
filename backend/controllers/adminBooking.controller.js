@@ -30,6 +30,8 @@ import WalletBalanceService from "../services/WalletBalanceService.js"; // ← P
 import { splitRefundComponents, REFUND_FRACTION_BY_POLICY } from "../services/refundComponentSplitter.js"; // ← NEW — PAN-India Platform Fee + GST: derives the admin-visible refund breakdown, never invents a value
 import { transitionBookingStatus, validateBookingTransition } from "../utils/bookingState.machine.js"; // ← P0-1 — canonical state machine
 import { Errors, successResponse } from "../utils/response.js";
+import { getPublishedRefundPolicy } from "../modules/finance/services/RefundPolicyService.js"; // Global Refund & Cancellation Policy
+import { reverseRevenueForCancelledBooking } from "../modules/finance/services/RefundReversalService.js"; // Global Refund & Cancellation Policy
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -264,16 +266,20 @@ export const getBookingDetail = async (req, res, next) => {
     const transaction = await Transaction.findOne({ bookingId: booking._id }).lean();
 
     // PAN-India Platform Fee + GST — refund breakdown for a cancelled
-    // booking is DERIVED here, never stored/invented: the exact same
-    // REFUND_FRACTION_BY_POLICY restatement + splitRefundComponents()
-    // helper RefundExecutionService uses, applied to this booking's own
-    // frozen snapshot (serviceAmountInPaise/commissionAmountInPaise/
-    // gstAmountInPaise) and its own recorded cancellationPolicy. Absent
-    // entirely for a non-cancelled booking or one with no recorded
-    // cancellationPolicy (e.g. a legacy booking) — never fabricated.
+    // booking is DERIVED here, never stored/invented: splitRefundComponents()
+    // applied to this booking's own frozen snapshot
+    // (serviceAmountInPaise/commissionAmountInPaise/gstAmountInPaise).
+    // Absent entirely for a non-cancelled booking or one with no
+    // recorded cancellationPolicy (e.g. a legacy booking) — never
+    // fabricated. Global Refund & Cancellation Policy — reads
+    // refundFractionApplied (the exact fraction frozen at cancellation
+    // time) in preference to the legacy REFUND_FRACTION_BY_POLICY
+    // label table, which can no longer represent an arbitrary
+    // admin-configured percentage; the label table remains the
+    // fallback for a booking cancelled before this field existed.
     let refundBreakdown = null;
     if (booking.status === BOOKING_STATUS.CANCELLED && booking.cancellationPolicy) {
-      const refundFraction = REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
+      const refundFraction = booking.refundFractionApplied ?? REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
       if (refundFraction !== undefined) {
         const { serviceRefundPaise, commissionRefundPaise, gstRefundPaise, totalRefundPaise } = splitRefundComponents({
           refundFraction,
@@ -425,11 +431,38 @@ export const getBookingDetail = async (req, res, next) => {
 async function performAdminCancellation({ booking, now, reason, adminUser, session }) {
   const salonId = booking.salonRef?._id ?? booking.salonRef;
 
+  // Global Refund & Cancellation Policy — the SAME published
+  // RefundPolicyVersion as the customer/owner cancellation paths
+  // (booking.controller.js), fetched fresh here. One global policy, no
+  // fault-based or admin-specific override.
+  const refundPolicyVersion = await getPublishedRefundPolicy();
+
+  const { refundPolicy, refundFraction } = CancellationPolicyService.evaluate({ booking, now, refundPolicy: refundPolicyVersion });
+
+  // Global Refund & Cancellation Policy — apply the SAME fraction to
+  // EVERY applicable frozen component (service, GST, Platform Fee),
+  // via the exact same shared helper cancelBooking/ownerCancelBooking
+  // use. PRE-EXISTING GAP FIXED HERE: this function previously used
+  // CancellationPolicyService.evaluate()'s own refundPaise directly
+  // (service + commission only — evaluate() has never computed GST,
+  // that is splitRefundComponents' own job), so an admin-cancelled
+  // booking's GST was silently never refunded to the customer even
+  // though cancelBooking/ownerCancelBooking already included it. Not
+  // introduced by this feature, but squarely in this feature's own
+  // explicit requirement ("apply proportionally... for customer,
+  // salon, AND ADMIN cancellation") — fixed now, same call shape as
+  // the other two paths, no GST/Platform-Fee business rule touched.
   const {
-    refundPolicy,
     serviceRefundPaise,
-    refundPaise,
-  } = CancellationPolicyService.evaluate({ booking, now });
+    commissionRefundPaise,
+    gstRefundPaise,
+    totalRefundPaise: refundPaise,
+  } = splitRefundComponents({
+    refundFraction,
+    serviceAmountInPaise: booking.serviceAmountInPaise,
+    commissionAmountInPaise: booking.commissionAmountInPaise,
+    gstAmountInPaise: booking.gstAmountInPaise,
+  });
 
   // Preserves the exact customer-flow condition from cancelBooking() —
   // only a CONFIRMED booking has money sitting in PENDING to claw
@@ -475,16 +508,20 @@ async function performAdminCancellation({ booking, now, reason, adminUser, sessi
         requestId:     `refund:${booking._id}`,
         balanceBeforeInPaise,
         balanceAfterInPaise: Math.round((updatedUser?.walletBalance || 0) * 100),
-        metadata:      { refundPolicy, bookingId: booking._id.toString(), executedVia: "ADMIN_PANEL" },
+        metadata:      { refundPolicy, bookingId: booking._id.toString(), executedVia: "ADMIN_PANEL", serviceRefundPaise, commissionRefundPaise, gstRefundPaise },
       }],
       { session }
     );
   }
 
   // Financial outcome — persisted exactly as the customer flow does.
-  booking.cancellationPolicy  = refundPolicy;
-  booking.refundAmountInPaise = refundPaise;
-  booking.cancelledAt         = now;
+  // refundPolicyVersionRef/refundFractionApplied — same convention as
+  // booking.controller.js's cancelBooking/ownerCancelBooking.
+  booking.cancellationPolicy     = refundPolicy;
+  booking.refundAmountInPaise    = refundPaise;
+  booking.refundPolicyVersionRef = booking.status !== BOOKING_STATUS.HOLD ? (refundPolicyVersion?._id ?? null) : null;
+  booking.refundFractionApplied  = refundFraction;
+  booking.cancelledAt            = now;
 
   // Admin-specific audit fields — unrelated to the financial fix,
   // preserved exactly as the existing admin behavior already set them.
@@ -498,7 +535,7 @@ async function performAdminCancellation({ booking, now, reason, adminUser, sessi
     session,
   });
 
-  return { refundPolicy, refundPaise };
+  return { refundPolicy, refundFraction, refundPaise };
 }
 
 /**
@@ -611,10 +648,23 @@ export const adminCancelBooking = async (req, res, next) => {
         },
       });
 
-      await performAdminCancellation({ booking, now, reason, adminUser: req.user, session });
+      const { refundFraction } = await performAdminCancellation({ booking, now, reason, adminUser: req.user, session });
 
       await session.commitTransaction();
       session.endSession();
+
+      // Global Refund & Cancellation Policy — same isolated,
+      // post-commit, non-blocking reversal call as the customer/owner
+      // cancellation paths, same `cancel:<bookingId>` idempotency key
+      // (so a booking can never be double-reversed regardless of which
+      // of the four cancellation paths produced it).
+      if (refundFraction > 0) {
+        await reverseRevenueForCancelledBooking({
+          bookingId: booking._id,
+          refundFraction,
+          reversalKey: `cancel:${booking._id}`,
+        });
+      }
 
       return successResponse(res, {
         message: "Booking cancelled by admin",
@@ -733,8 +783,9 @@ export const adminUpdateBookingStatus = async (req, res, next) => {
         changedBy: req.user._id,
       });
 
+      let cancelledRefundFraction = 0;
       if (status === "CANCELLED") {
-        await performAdminCancellation({ booking, now, reason, adminUser: req.user, session });
+        ({ refundFraction: cancelledRefundFraction } = await performAdminCancellation({ booking, now, reason, adminUser: req.user, session }));
       } else if (status === "COMPLETED") {
         await performAdminCompletion({ booking, adminUser: req.user, session });
       } else {
@@ -752,6 +803,18 @@ export const adminUpdateBookingStatus = async (req, res, next) => {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Global Refund & Cancellation Policy — same isolated,
+      // post-commit, non-blocking reversal call as every other
+      // cancellation path (see performAdminCancellation's own caller
+      // above for the full rationale).
+      if (status === "CANCELLED" && cancelledRefundFraction > 0) {
+        await reverseRevenueForCancelledBooking({
+          bookingId: booking._id,
+          refundFraction: cancelledRefundFraction,
+          reversalKey: `cancel:${booking._id}`,
+        });
+      }
 
       return successResponse(res, {
         message: `Booking status updated to ${status}`,

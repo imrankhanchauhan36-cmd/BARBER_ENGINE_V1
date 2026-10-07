@@ -174,7 +174,7 @@ export const onboardSalon = async (req, res) => {
 ///////////////////////////////////////////////////////////
 export const getSalonsForAdmin = async (req, res) => {
   try {
-    const { adminLevel, stateRef, cityRef } = req.user;
+    const { adminLevel, stateRef, cityRef, districtRef } = req.user;
     const { status } = req.query;
 
     let query = { isDeleted: false };
@@ -182,11 +182,17 @@ export const getSalonsForAdmin = async (req, res) => {
     if (status) query["approval.status"] = status;
 
     // FIX 5: territory paths corrected
+    // MUST-DO-NOW #6 GAP B fix — DISTRICT previously matched no branch
+    // here, so a DISTRICT admin fell through with no scope filter at
+    // all and received every salon nationwide.
     if (adminLevel === "STATE") {
       query["location.territory.stateRef"] = stateRef;
+    } else if (adminLevel === "DISTRICT") {
+      query["location.territory.districtRef"] = districtRef;
     } else if (adminLevel === "CITY") {
       query["location.territory.cityRef"] = cityRef;
     }
+    // INDIA → koi bhi salon dekh sakta hai (PAN-India), no filter added
 
     const salons = await Salon.find(query)
       .populate("location.territory.stateRef", "name")

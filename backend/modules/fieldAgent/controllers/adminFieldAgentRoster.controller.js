@@ -13,6 +13,7 @@ import { listAdminFieldAgentRoster } from "../services/adminFieldAgentRoster.ser
 export const listAdminFieldAgentRosterHandler = async (req, res, next) => {
   try {
     const { items, pagination } = await listAdminFieldAgentRoster({
+      admin: req.user,
       page: req.query.page,
       limit: req.query.limit,
       search: req.query.search,

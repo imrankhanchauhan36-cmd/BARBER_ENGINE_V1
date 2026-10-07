@@ -1145,8 +1145,16 @@ export const getDistrictAuditLog = async (req, res, next) => {
   try {
     if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid district ID"));
 
-    const district = await District.findById(req.params.id).select("_id isDeleted").lean();
+    const district = await District.findById(req.params.id).select("_id isDeleted stateRef").lean();
     if (!district || district.isDeleted) return next(Errors.notFound("District not found"));
+
+    // Scope check — same pattern as getDistrictById above.
+    if (req.user.adminLevel === "STATE" && String(req.user.stateRef) !== String(district.stateRef)) {
+      return next(Errors.forbidden("Access denied"));
+    }
+    if (req.user.adminLevel === "DISTRICT" && String(req.user.districtRef) !== String(district._id)) {
+      return next(Errors.forbidden("Access denied"));
+    }
 
     const { page = 1, limit = 20 } = req.query;
     const pageNum  = Math.max(parseInt(page, 10), 1);

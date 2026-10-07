@@ -115,6 +115,7 @@ const run = async () => {
       nationalPolicy = await CommercialPolicyVersion.create({
         versionNumber: 900000 + Math.floor(Math.random() * 99999), status: "PUBLISHED",
         acquisitionAgentCommissionPercent: 10, acquisitionEarningTargetInPaise: 100000,
+        acquisitionRewardAmountInPaise: 20000, // FA-9 Phase A — ₹200, required since this field was introduced
         territoryPartnerCommissionPercent: 8, licenseTermMonths: 12, claimExpiryDays: 30,
         createdBy: indiaAdmin._id, publishedBy: indiaAdmin._id, publishedAt: new Date(Date.now() - 24 * 3600 * 1000),
       });
@@ -122,14 +123,21 @@ const run = async () => {
     }
     results.push(`ℹ️  Using CommercialPolicyVersion _id=${nationalPolicy._id} rate=${nationalPolicy.acquisitionAgentCommissionPercent}% target=${nationalPolicy.acquisitionEarningTargetInPaise}`);
 
-    const areaFeePolicy = await AreaPlatformFeePolicy.create({ areaRef: geo.area._id, feeInPaise: 3000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() });
+    const areaFeePolicy = await AreaPlatformFeePolicy.create({ scope: "AREA", areaRef: geo.area._id, feeInPaise: 3000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() }); // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope now required
     createdIds.areaFeePolicies.push(areaFeePolicy._id);
     const { feeInPaise: commissionAmountInPaise } = await resolvePlatformFeeForArea(geo.area._id);
     const gstPolicy = await getPublishedGstPolicy();
     const gstRatePercent = gstPolicy ? gstPolicy.ratePercent : null;
     results.push(`ℹ️  Live policy values: platformFeeInPaise=${commissionAmountInPaise} gstRatePercent=${gstRatePercent}`);
 
-    const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+    // ACQUISITION CLAIM ENUM DRIFT FIX (pre-existing, unrelated to Phase A):
+    // "ACTIVE" predates the FA-P3-B Step 1 PENDING_APPROVAL/ACTIVE_RECOVERY
+    // split and is not a valid CLAIM_STATUS value — corrected to
+    // ACTIVE_RECOVERY, the real non-terminal, earning-eligible state this
+    // fixture actually needs (confirmed by the immediate
+    // createAcquisitionEarningProgressForClaim call right below, which
+    // only makes sense for a claim already past approval).
+    const claim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
     createdIds.claims.push(claim._id);
     const progress = await createAcquisitionEarningProgressForClaim({ claim, salon });
     createdIds.progress.push(progress._id);
@@ -249,8 +257,14 @@ const run = async () => {
       // The real unique-partial-index only allows one ACTIVE claim per
       // salon — the FIRST claim must be neutralized BEFORE creating
       // the second, not after.
-      await AcquisitionClaim.updateOne({ _id: claim._id }, { $set: { status: "CANCELLED" } });
-      const targetClaim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+      // "CANCELLED" -> "ENDED" (the real terminal CLAIM_STATUS value;
+      // CANCELLED was never a real enum value — this write previously
+      // succeeded silently only because Mongoose's updateOne() skips
+      // validators by default). Functionally this already worked (any
+      // status outside the non-terminal partial-unique-index set frees
+      // the salon for a new claim), but ENDED is the correct value.
+      await AcquisitionClaim.updateOne({ _id: claim._id }, { $set: { status: "ENDED" } });
+      const targetClaim = await AcquisitionClaim.create({ salonRef: salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
       createdIds.claims.push(targetClaim._id);
       const targetProgress = await createAcquisitionEarningProgressForClaim({ claim: targetClaim, salon });
       createdIds.progress.push(targetProgress._id);
@@ -337,7 +351,7 @@ const run = async () => {
     // still the real Booking Engine field shapes and the real
     // processCompletedBooking function, just enough real earnings to
     // exercise FIN-06/07's withdrawal chain meaningfully. ──
-    const fundingClaim = await AcquisitionClaim.create({ salonRef: (await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) })).salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE", stateRef: geo.state._id, districtRef: geo.district._id });
+    const fundingClaim = await AcquisitionClaim.create({ salonRef: (await makeSalonFixture({ User, Salon }, geo, { registerUserId: (id) => createdIds.users.push(id) })).salon._id, fieldAgentRef: fieldAgent._id, status: "ACTIVE_RECOVERY", stateRef: geo.state._id, districtRef: geo.district._id });
     createdIds.claims.push(fundingClaim._id);
     createdIds.salons.push(fundingClaim.salonRef);
     const fundingProgress = await createAcquisitionEarningProgressForClaim({ claim: fundingClaim, salon: { _id: fundingClaim.salonRef } });
@@ -351,7 +365,7 @@ const run = async () => {
     createdIds.districts.push(fundingGeo.district._id);
     createdIds.cities.push(fundingGeo.city._id);
     createdIds.areas.push(fundingGeo.area._id);
-    const fundingAreaFee = await AreaPlatformFeePolicy.create({ areaRef: fundingGeo.area._id, feeInPaise: 500000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() });
+    const fundingAreaFee = await AreaPlatformFeePolicy.create({ scope: "AREA", areaRef: fundingGeo.area._id, feeInPaise: 500000, status: "PUBLISHED", createdBy: owner._id, publishedBy: owner._id, publishedAt: new Date() }); // NEEDS UPDATE FOR LAUNCH GLOBAL POLICY: scope now required
     createdIds.areaFeePolicies.push(fundingAreaFee._id);
     const fundingBooking = await Booking.create({
       userRef: owner._id, salonRef: fundingClaim.salonRef, chairRef: new mongoose.Types.ObjectId(), serviceRefs: [new mongoose.Types.ObjectId()],

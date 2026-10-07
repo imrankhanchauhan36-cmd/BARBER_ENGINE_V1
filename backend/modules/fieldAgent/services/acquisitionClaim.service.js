@@ -46,9 +46,20 @@
  * the same transaction — never cached, never written.
  *
  * FINANCIAL BOUNDARY (locked, non-negotiable): this file never reads
- * Booking, never computes an incentive/commission amount, never
- * creates a ledger/payout entry, never touches Salon, never touches
- * FieldAgent.operationalStatus.
+ * Booking, never computes a PER-BOOKING incentive/commission amount,
+ * never touches FieldAgent.operationalStatus. Salon is read-only here
+ * (never written).
+ *
+ * PHASE C.3 — adminApproveClaim (below) now stops at ACTIVE_RECOVERY
+ * only; it no longer pays the fixed acquisition reward or completes
+ * the claim (reverted from the earlier FA-9 Phase A "straight to
+ * COMPLETED" behavior — see that function's own header comment for
+ * why). creditAcquisitionRewardForClaim (fieldAgentEarning.service.js)
+ * still exists and is still correct, but currently has no caller
+ * anywhere in this codebase: no legitimate "acquisition closure"
+ * event was found during the C.3 audit. Paying the reward and
+ * completing the claim remain explicitly unimplemented pending that
+ * product/API decision.
  */
 
 import crypto from "crypto";
@@ -72,7 +83,7 @@ import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationE
 // claim creation; it never reads, writes, or otherwise touches
 // AcquisitionClaim's own schema, fields, or lifecycle. See the call
 // site inside redeemReferral below for the exact coupling.
-import { createAcquisitionEarningProgressForClaim } from "./fieldAgentEarning.service.js";
+import { createAcquisitionEarningProgressForClaim, creditAcquisitionRewardForClaim } from "./fieldAgentEarning.service.js";
 // FA-5.2 — read-only imports. Never written by this file.
 import CommercialTerritory from "../models/CommercialTerritory.js";
 import TerritoryAssignment from "../models/TerritoryAssignment.js";
@@ -612,6 +623,27 @@ const adminEndClaim = async ({ adminId, claimId, reason }) => {
     newValue: { endedReason: reason },
   });
 
+  // PHASE C.3 — non-blocking, after write, same fire-and-forget
+  // convention as adminApproveClaim's own notification above.
+  await NotificationService.send(
+    {
+      recipientId:   claim.fieldAgentRef,
+      recipientType: "FIELD_AGENT",
+      templateKey:   NOTIFICATION_EVENTS.ACQUISITION_CLAIM_ENDED,
+      variables:     { reason },
+      title:         "Acquisition Claim Ended",
+      message:       "Your acquisition claim for this salon has ended without a completed acquisition.",
+      type:          "SYSTEM",
+      priority:      "HIGH",
+      actionType:    "OPEN_SALON",
+      actionUrl:     "/field-agent/acquired-salons",
+      entityType:    "SALON",
+      entityId:      claim.salonRef,
+      meta:          { claimId: claim._id, salonId: claim.salonRef, endedReason: reason },
+    },
+    [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+  );
+
   return claim;
 };
 
@@ -621,20 +653,35 @@ export const adminRejectClaim = ({ adminId, claimId }) =>
 export const adminReassignClaim = ({ adminId, claimId }) =>
   adminEndClaim({ adminId, claimId, reason: CLAIM_END_REASON.ADMIN_REASSIGNED });
 
-// ─── ADMIN APPROVE (FA-P3-B Step 1 — the only path to ACTIVE_RECOVERY) ──
-// PENDING_APPROVAL -> ACTIVE_RECOVERY, atomically coupled with creating
-// this claim's AcquisitionEarningProgress in the SAME transaction —
-// mirrors redeemReferral's own claim+progress atomicity precedent
-// exactly, just moved to this later trigger point. Reuses
-// createAcquisitionEarningProgressForClaim completely unchanged: the
-// target is still snapshotted from whichever commercial policy was
-// applicable at claim.createdAt (the original redemption instant, not
-// the approval instant) — an agent's terms are fixed at the moment
-// they actually acquired the salon, never affected by how long admin
-// review takes. If no policy was applicable at that instant, this
-// function does not fail — the existing CLAIM_PROGRESS_GAP mechanism
-// (unchanged) durably tracks it for later reconciliation, exactly as
-// redeemReferral's own prior call site already relied on.
+// ─── ADMIN APPROVE (PHASE C.3 — approval now ENDS at ACTIVE_RECOVERY) ──
+// PENDING_APPROVAL -> ACTIVE_RECOVERY only. Approval no longer pays the
+// fixed acquisition reward and no longer completes the claim — see the
+// C.3 audit: the prior "straight to COMPLETED in one transaction"
+// behavior made ACTIVE_RECOVERY structurally unobservable, so the
+// locked business rule ("while ACTIVE, Field Agent earns global % of
+// Platform Fee per booking") had no live path to ever fire. A claim
+// approved here now sits at ACTIVE_RECOVERY for real — bookings
+// completing while it does are credited by the existing, unmodified
+// fieldAgentEarning.service.js#processCompletedBooking ->
+// attemptAcquisitionCredit path (its own `status: ACTIVE_RECOVERY`
+// query now genuinely matches).
+//
+// AcquisitionEarningProgress is still created here via
+// createAcquisitionEarningProgressForClaim, unchanged, still
+// GAP-tolerant — this is exactly what attemptAcquisitionCredit needs
+// to exist before it can credit a booking against this claim.
+//
+// creditAcquisitionRewardForClaim is NOT called here — PHASE C.3-A
+// introduces the explicit closure trigger (adminCompleteClaim, below)
+// as the ONE place that pays the reward and completes the claim. No
+// implicit event (booking count, cumulative target, time elapsed, …)
+// drives completion — see adminCompleteClaim's own header.
+//
+// The conditional findOneAndUpdate below remains this function's own
+// concurrency gate — a duplicate/concurrent approval attempt on the
+// same claim is still impossible (second caller's filter matches
+// nothing once the first commits -> conflict, with the existing
+// transient-conflict retry loop unchanged).
 export const adminApproveClaim = async ({ adminId, claimId }) => {
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_REDEEM_ATTEMPTS; attempt++) {
@@ -675,7 +722,134 @@ export const adminApproveClaim = async ({ adminId, claimId }) => {
         newValue: { status: CLAIM_STATUS.ACTIVE_RECOVERY },
       });
 
+      // PHASE C.3 — non-blocking, after commit, same fire-and-forget
+      // convention as redeemReferral's own NEW_SALON_ASSIGNED call
+      // above (NotificationService.send never throws — see that
+      // function's own internal try/catch, verified in Phase C.2).
+      await NotificationService.send(
+        {
+          recipientId:   claim.fieldAgentRef,
+          recipientType: "FIELD_AGENT",
+          templateKey:   NOTIFICATION_EVENTS.ACQUISITION_CLAIM_APPROVED,
+          variables:     {},
+          title:         "Acquisition Claim Approved",
+          message:       "Your acquisition claim was approved — you are now in the active recovery period for this salon.",
+          type:          "SYSTEM",
+          priority:      "HIGH",
+          actionType:    "OPEN_SALON",
+          actionUrl:     "/field-agent/acquired-salons",
+          entityType:    "SALON",
+          entityId:      claim.salonRef,
+          meta:          { claimId: claim._id, salonId: claim.salonRef },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
+
       return claim;
+    } catch (err) {
+      await session.abortTransaction();
+      lastErr = err;
+      if (isTransientConflict(err) && attempt < MAX_REDEEM_ATTEMPTS - 1) {
+        continue;
+      }
+      throw err;
+    } finally {
+      session.endSession();
+    }
+  }
+  throw lastErr;
+};
+
+// ─── ADMIN COMPLETE (PHASE C.3-A — the explicit, authoritative
+// acquisition closure event) ────────────────────────────────────────
+// ACTIVE_RECOVERY -> COMPLETED only. This is the ONE place in the
+// entire codebase that pays the fixed acquisitionRewardAmountInPaise
+// reward and ends the acquisition relationship — no implicit event
+// (booking count, cumulative AcquisitionEarningProgress target, time
+// elapsed, salon/KYC approval, …) may ever drive this transition; see
+// the C.3 audit's exhaustive inspection of every existing route for
+// why none of those qualified as an authoritative closure event.
+//
+// Mirrors adminApproveClaim's exact shape: a bounded retry loop, one
+// Mongo transaction per attempt, a conditional findOneAndUpdate as the
+// concurrency gate (a second/concurrent completion attempt on the same
+// claim finds no match once the first commits -> 409, with the same
+// transient-conflict retry already proven there).
+//
+// creditAcquisitionRewardForClaim (fieldAgentEarning.service.js,
+// UNCHANGED) resolves the reward from whichever policy was applicable
+// at claim.createdAt — the same canonical instant already used for the
+// AcquisitionEarningProgress target snapshot at approval time (C.3
+// audit §16) — never approval time, never completion time. A null
+// return (no applicable policy) throws and aborts the WHOLE
+// transaction, exactly like adminApproveClaim's old reward-credit step
+// used to: the claim is left exactly at ACTIVE_RECOVERY, never
+// COMPLETED without its reward also durably recorded in the same
+// commit. Idempotency is the SAME existing claim-keyed ledger unique
+// index (`earning:${claimId}:ACQUISITION_REWARD`) — unchanged, not
+// weakened — so even a retried/duplicate call after a transient
+// conflict can never produce two reward rows.
+export const adminCompleteClaim = async ({ adminId, claimId }) => {
+  let lastErr = null;
+  for (let attempt = 0; attempt < MAX_REDEEM_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+
+      const claim = await AcquisitionClaim.findOneAndUpdate(
+        { _id: claimId, status: CLAIM_STATUS.ACTIVE_RECOVERY },
+        { $set: { status: CLAIM_STATUS.COMPLETED } },
+        { new: true, session }
+      );
+      if (!claim) {
+        const existing = await AcquisitionClaim.findById(claimId).session(session).lean();
+        if (!existing) throw Errors.notFound("Claim not found");
+        throw Errors.conflict(`Claim is ${existing.status} — cannot complete`);
+      }
+
+      const salon = await Salon.findById(claim.salonRef).session(session).lean();
+      if (!salon) throw Errors.notFound("Salon not found for this claim");
+
+      const rewardRow = await creditAcquisitionRewardForClaim({ claim, salon, session });
+      if (!rewardRow) {
+        throw Errors.conflict(
+          `No published Commercial Policy with acquisitionRewardAmountInPaise configured was applicable at ${claim.createdAt.toISOString()} — cannot complete this claim yet. Publish a policy with a reward amount, then retry.`
+        );
+      }
+
+      await session.commitTransaction();
+
+      safeAuditEvent({
+        entityType: AUDIT_ENTITY_TYPE.ACQUISITION_CLAIM,
+        entityId: claim._id,
+        actorRef: adminId,
+        actorType: AUDIT_ACTOR_TYPE.ADMIN,
+        action: AUDIT_ACTION.ACQUISITION_CLAIM_COMPLETED,
+        newValue: { status: CLAIM_STATUS.COMPLETED, acquisitionRewardAmountInPaise: rewardRow.creditedAmountInPaise },
+      });
+
+      // Non-blocking, after commit — same fire-and-forget convention
+      // as adminApproveClaim's own notification above.
+      await NotificationService.send(
+        {
+          recipientId:   claim.fieldAgentRef,
+          recipientType: "FIELD_AGENT",
+          templateKey:   NOTIFICATION_EVENTS.ACQUISITION_CLAIM_COMPLETED,
+          variables:     {},
+          title:         "Acquisition Completed 🎉",
+          message:       "Your acquisition for this salon is complete — the fixed acquisition reward has been credited.",
+          type:          "SYSTEM",
+          priority:      "HIGH",
+          actionType:    "OPEN_SALON",
+          actionUrl:     "/field-agent/acquired-salons",
+          entityType:    "SALON",
+          entityId:      claim.salonRef,
+          meta:          { claimId: claim._id, salonId: claim.salonRef, rewardAmountInPaise: rewardRow.creditedAmountInPaise },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
+
+      return { claim, reward: rewardRow };
     } catch (err) {
       await session.abortTransaction();
       lastErr = err;

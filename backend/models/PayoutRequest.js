@@ -1,5 +1,24 @@
 import mongoose from "mongoose";
 
+// FINANCE-P0-1 — same immutable bank-snapshot shape as
+// modules/payout/models/GenericPayoutRequest.js's own bankSnapshotSchema.
+// Structurally required for Razorpay Route dispatch: PayoutProvider's
+// resolveDispatchDestinationForEntity() cross-checks live KYC bank data
+// against exactly this snapshot before ever sending money, and fails
+// safe (returns null, no dispatch) if no snapshot is present — so this
+// is additive-but-necessary for the RAZORPAY_ROUTE provider path to be
+// functional, not merely decorative. Unused/null for the MANUAL
+// provider (unchanged behavior).
+const bankSnapshotSchema = new mongoose.Schema(
+  {
+    accountHolder: { type: String, default: null, immutable: true },
+    maskedAccount: { type: String, default: null, immutable: true },
+    ifsc:          { type: String, default: null, immutable: true },
+    bankName:      { type: String, default: null, immutable: true },
+  },
+  { _id: false }
+);
+
 //////////////////////////////////////////////////////////////
 // 🔥 STATUS — expanded from the original 3-state enum
 //
@@ -25,8 +44,17 @@ import mongoose from "mongoose";
 //////////////////////////////////////////////////////////////
 
 export const PAYOUT_STATUS = {
-  REQUESTED:  "REQUESTED",   // owner submitted, awaiting admin
-  PROCESSING: "PROCESSING",  // admin approved, payout in flight (manual transfer or gateway)
+  REQUESTED:  "REQUESTED",   // owner submitted, funds LOCKED, awaiting admin decision
+  // FINANCE-P0-1 — NEW. Admin has approved but gateway dispatch has not
+  // yet completed (or, for the MANUAL provider, this is a transient
+  // internal state the request passes through within the same approve
+  // call — see adminPayout.controller.js#approvePayout). Funds remain
+  // LOCKED here, never PROCESSING, until dispatch actually runs — see
+  // this file's own header for why this state must exist and be durable
+  // (crash-safety: a server crash after this commits but before gateway
+  // dispatch leaves the payout safely recoverable from exactly here).
+  APPROVED:   "APPROVED",
+  PROCESSING: "PROCESSING",  // gateway dispatch in flight (manual settlement or Razorpay Route)
   PAID:       "PAID",        // confirmed successful
   FAILED:     "FAILED",      // gateway/manual transfer failed after approval
   REJECTED:   "REJECTED",    // admin declined before processing
@@ -39,14 +67,32 @@ export const PAYOUT_STATUS = {
 // pre-check so the two can never drift. FAILED is deliberately NOT
 // open: WalletBalanceService.failPayout returns the money to AVAILABLE,
 // so a failed payout no longer blocks a new request.
+//
+// FINANCE-P0-1 — widened to include APPROVED: once admin has approved
+// a payout, funds are still LOCKED and no second request may be opened
+// for this salon until this one reaches a terminal state (PAID/FAILED/
+// REJECTED/CANCELLED).
 export const OPEN_PAYOUT_STATUSES = [
   PAYOUT_STATUS.REQUESTED,
+  PAYOUT_STATUS.APPROVED,
   PAYOUT_STATUS.PROCESSING,
 ];
 
 export const PAYOUT_PROVIDER = {
   MANUAL:    "MANUAL",     // admin transfers by hand, enters UTR themselves
-  RAZORPAYX: "RAZORPAYX",  // automatic — Razorpay Payouts API
+  // Deliberately NEVER registered in PayoutProviderResolver — see that
+  // file's own header. Resolving this throws loudly rather than
+  // silently falling back to ManualProvider. Left in place, unused,
+  // not activated by FINANCE-P0-1 — the ticket's own explicit
+  // instruction ("Do NOT activate the intentionally blocked RAZORPAYX
+  // provider path from System A").
+  RAZORPAYX: "RAZORPAYX",
+  // FINANCE-P0-1 — the real, live gateway path, merged in from
+  // GenericPayoutRequest (modules/payout/). Same string
+  // ("RAZORPAY_ROUTE") already registered in PayoutProviderResolver
+  // against the real RazorpayXPayoutProvider — no resolver change
+  // needed, it already resolves this value.
+  RAZORPAY_ROUTE: "RAZORPAY_ROUTE",
 };
 
 const PayoutRequestSchema = new mongoose.Schema(
@@ -89,6 +135,22 @@ const PayoutRequestSchema = new mongoose.Schema(
       type:    String,
       default: null,
     },
+    // FINANCE-P0-1 — merged in from GenericPayoutRequest's own Razorpay
+    // Route dispatch tracking. Additive only; null/unused for the
+    // MANUAL provider, exactly as on that model.
+    providerContactId: { type: String, default: null },
+    providerFundAccountId: { type: String, default: null },
+    // Last raw status string reported by Razorpay (e.g. "processing",
+    // "processed") — informational only, never the source of truth for
+    // `status` above. Same field/convention as GenericPayoutRequest.
+    providerStatus: { type: String, default: null },
+    // FINANCE-P0-1 — optional, captured only when a dispatch via
+    // RAZORPAY_ROUTE is possible; null/unused for MANUAL. See schema
+    // header comment above for why this is required for that path.
+    bankSnapshot: {
+      type: bankSnapshotSchema,
+      default: null,
+    },
     utr: {
       type:    String,
       default: null,
@@ -114,6 +176,14 @@ const PayoutRequestSchema = new mongoose.Schema(
       default: null,
     },
     approvedAt: {
+      type: Date,
+      default: null,
+    },
+    // FINANCE-P0-1 — when APPROVED moved to PROCESSING (gateway dispatch
+    // began). Null for a MANUAL-provider payout that settles within the
+    // same approve call. Purely informational/audit — no code branches
+    // on this field.
+    processingAt: {
       type: Date,
       default: null,
     },
@@ -154,6 +224,16 @@ PayoutRequestSchema.index({ salonId: 1 });
 //     Mongo names "salonId_1" — the same name as the plain lookup
 //     index, so the two collided and the unique one was never actually
 //     built in the database. It now has its own explicit name.
+//
+// FINANCE-P0-1 — the partialFilterExpression now reflects the widened
+// OPEN_PAYOUT_STATUSES (adds APPROVED) automatically, since it reads
+// that constant directly. DEPLOYMENT NOTE (not performed by this
+// change, since the live collection has 0 documents today — see the
+// FINANCE-P0-1 implementation report): an index with this same name
+// already exists in production with the OLD filter; the live database
+// will need this index dropped and rebuilt on deploy (safe and
+// instant on an empty collection) — no index mutation was run against
+// the live database as part of this implementation.
 PayoutRequestSchema.index(
   { salonId: 1 },
   {

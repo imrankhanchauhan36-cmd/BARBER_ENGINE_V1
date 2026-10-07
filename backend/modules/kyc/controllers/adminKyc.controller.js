@@ -270,11 +270,15 @@ export const approveKYCHandler = async (req, res, next) => {
 
     const kyc = await KYC.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!kyc) return next(Errors.notFound("KYC not found"));
-    if (kyc.status === KYC_STATUS.VERIFIED) return next(Errors.badRequest("KYC already verified"));
 
     // ✅ Fix 2 — scope guard
     await assertKYCInScope(kyc, admin);
 
+    // PHASE C.2 — the authoritative, atomic state-eligibility check now
+    // lives entirely in approveKYC() (re-reads live state inside its
+    // own transaction) so it cannot be bypassed by a future caller of
+    // the service that skips this controller. No pre-check duplicated
+    // here beyond existence/scope above.
     const updated = await approveKYC({
       kyc,
       adminId:    admin._id,
@@ -375,11 +379,13 @@ export const rejectKYCHandler = async (req, res, next) => {
 
     const kyc = await KYC.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
     if (!kyc) return next(Errors.notFound("KYC not found"));
-    if (kyc.status === KYC_STATUS.REJECTED) return next(Errors.badRequest("KYC already rejected"));
 
     // ✅ Fix 2 — scope guard
     await assertKYCInScope(kyc, admin);
 
+    // PHASE C.2 — same rationale as approveKYCHandler above: the
+    // authoritative, atomic state-eligibility check now lives entirely
+    // in rejectKYC().
     const updated = await rejectKYC({
       kyc,
       adminId:    admin._id,

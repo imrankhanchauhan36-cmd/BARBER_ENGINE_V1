@@ -17,7 +17,7 @@ import { getAdminFieldAgentPayoutHistory } from "../services/adminFieldAgentPayo
 
 export const getAdminFieldAgentWalletHandler = async (req, res, next) => {
   try {
-    const result = await getAdminFieldAgentWallet({ fieldAgentId: req.params.id });
+    const result = await getAdminFieldAgentWallet({ admin: req.user, fieldAgentId: req.params.id });
     return successResponse(res, { message: "Field Agent wallet fetched", data: result });
   } catch (err) {
     return next(err);
@@ -26,7 +26,7 @@ export const getAdminFieldAgentWalletHandler = async (req, res, next) => {
 
 export const getAdminFieldAgentPayoutHistoryHandler = async (req, res, next) => {
   try {
-    const payouts = await getAdminFieldAgentPayoutHistory({ fieldAgentId: req.params.id });
+    const payouts = await getAdminFieldAgentPayoutHistory({ admin: req.user, fieldAgentId: req.params.id });
     return successResponse(res, { message: "Field Agent payout history fetched", data: { payouts } });
   } catch (err) {
     return next(err);

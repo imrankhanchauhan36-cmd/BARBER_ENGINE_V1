@@ -35,10 +35,14 @@
 import FieldAgent from "../models/FieldAgent.js";
 import AcquisitionClaim from "../models/AcquisitionClaim.js";
 import { Errors } from "../../../utils/response.js";
+import { assertAdminCanAccessFieldAgent } from "./fieldAgentGeographyAuthorization.service.js";
 
-export const getAdminFieldAgentSalons = async ({ fieldAgentId }) => {
+export const getAdminFieldAgentSalons = async ({ admin, fieldAgentId }) => {
   const fieldAgent = await FieldAgent.findById(fieldAgentId).select("_id").lean();
   if (!fieldAgent) throw Errors.notFound("Field Agent not found");
+
+  // Field Agent Geography Phase C — see fieldAgentGeographyAuthorization.service.js.
+  await assertAdminCanAccessFieldAgent({ admin, fieldAgentId: fieldAgent._id });
 
   const claims = await AcquisitionClaim.find({ fieldAgentRef: fieldAgent._id })
     .select("salonRef")

@@ -29,8 +29,11 @@ import WalletBalanceService from "../../../services/WalletBalanceService.js";
 import WalletLedger from "../../../models/WalletLedger.js";
 import GenericPayoutRequest from "../../payout/models/GenericPayoutRequest.js";
 import { requestGenericPayout } from "../../payout/services/GenericPayoutRequestService.js";
+import { requestSalonPayout } from "../../../services/salonPayout.service.js"; // FINANCE-P0-1
 import { resolveWalletIdentityForUser } from "../services/walletIdentityResolver.service.js";
 import { successResponse, Errors } from "../../../utils/response.js";
+
+const p2 = (v) => Math.round(v ?? 0) / 100; // same convention every other payout controller uses locally
 
 const paginationParams = (req) => {
   const page = Math.max(parseInt(req.query.page ?? 1, 10), 1);
@@ -86,14 +89,51 @@ export const getMyWalletHistoryHandler = async (req, res, next) => {
   }
 };
 
-/** POST /api/wallet/payout/request */
+/**
+ * POST /api/wallet/payout/request
+ *
+ * FINANCE-P0-1 — Canonical Salon Payout merge. For a SALON identity
+ * (an OWNER caller), this endpoint is now a thin COMPATIBILITY
+ * delegation into the SAME canonical service the real
+ * `/api/payouts/withdraw` endpoint uses — it must NOT create a
+ * GenericPayoutRequest, must NOT bypass Admin approval, must NOT
+ * directly dispatch Razorpay, and must NOT create a second wallet
+ * hold (ticket §17). This is the one, narrow change this ticket makes
+ * to this file — the ACQUISITION_AGENT / TERRITORY_PARTNER branch
+ * (FIELD_AGENT callers) is completely untouched: it still calls
+ * requestGenericPayout exactly as before, unaffected by this merge.
+ */
 export const requestPayoutHandler = async (req, res, next) => {
   try {
     const identity = await resolveWalletIdentityForUser(req.user);
     if (!identity) return next(Errors.notFound("No wallet found for this account"));
 
     const { amountInPaise, idempotencyKey } = req.body;
-    const triggeredBy = identity.entityType === "SALON" ? "OWNER" : "FIELD_AGENT";
+
+    // FINANCE-P0-1 — SALON delegates to the canonical PayoutRequest
+    // service. No GenericPayoutRequest is created, no gateway dispatch
+    // happens here, and the request still awaits real Admin approval —
+    // exactly the same as a request made via /api/payouts/withdraw.
+    if (identity.entityType === "SALON") {
+      const { payout } = await requestSalonPayout({ ownerId: req.user._id, amountInPaise });
+      return successResponse(res, {
+        statusCode: 201,
+        message: "Payout requested",
+        data: {
+          _id: payout._id,
+          entityType: "SALON",
+          entityId: payout.salonId,
+          amountInPaise: payout.amountInPaise,
+          amountInRupees: p2(payout.amountInPaise),
+          status: payout.status,
+          createdAt: payout.createdAt,
+        },
+      });
+    }
+
+    // Unchanged — ACQUISITION_AGENT / TERRITORY_PARTNER (FIELD_AGENT
+    // callers) are explicitly out of this ticket's scope.
+    const triggeredBy = "FIELD_AGENT";
 
     const request = await requestGenericPayout({
       entityType: identity.entityType,

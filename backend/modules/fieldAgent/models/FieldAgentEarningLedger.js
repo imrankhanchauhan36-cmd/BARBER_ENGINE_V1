@@ -16,9 +16,19 @@
  * duplicate workers, retries, or replayed batches (FA-9 Issue 1/3
  * corrections).
  *
+ * FA-9 Phase A — entitlementType ACQUISITION_REWARD is the one
+ * exception to the "per booking" framing above: it is a one-time,
+ * claim-keyed row (never produced by a completed Booking), so its
+ * idempotencyKey is instead `earning:${acquisitionClaimRef}:ACQUISITION_REWARD`
+ * (still unique, still the sole concurrency authority — just keyed by
+ * claim instead of booking). See the booking-shaped fields below for
+ * which ones this row leaves unpopulated.
+ *
  * Every field here is written exactly once, server-side, inside
- * fieldAgentEarning.service.js's own transaction — no update endpoint
- * exists anywhere in this codebase for this collection.
+ * fieldAgentEarning.service.js's own transaction (or, for
+ * ACQUISITION_REWARD, acquisitionClaim.service.js#adminApproveClaim's
+ * own transaction) — no update endpoint exists anywhere in this
+ * codebase for this collection.
  */
 
 import mongoose from "mongoose";
@@ -29,9 +39,40 @@ const integerValidator = {
   message: "{VALUE} is not a valid integer amount (paise)",
 };
 
+// FA-9 Phase A — same rule, but tolerant of the explicit `null` that
+// bookingCommissionAmountInPaise/rawEligibleAmountInPaise now carry
+// for a non-booking-keyed ACQUISITION_REWARD row (Mongoose still runs
+// a custom `validate` function against an explicit null default, even
+// when `required` is false for that document — only `required` itself
+// is skipped).
+const nullableIntegerValidator = {
+  validator: (v) => v === null || Number.isInteger(v),
+  message: "{VALUE} is not a valid integer amount (paise)",
+};
+
+// FA-9 Phase A — true for every entitlementType except the new,
+// non-booking-keyed ACQUISITION_REWARD. Used below to make the
+// booking-shaped fields conditionally required WITHOUT weakening them
+// for the two pre-existing, booking-keyed entitlement types. Safe as a
+// schema-level `this`-based validator here specifically because this
+// collection is only ever written via `.create()` (see file header) —
+// never via `findOneAndUpdate`, which is the unreliable-`this` case the
+// AREA-2.4.1 lesson (CommercialPolicyOverride.js) warns against.
+const isBookingKeyedEntitlement = function () {
+  return this.entitlementType !== EARNING_ENTITLEMENT_TYPE.ACQUISITION_REWARD;
+};
+
 const FieldAgentEarningLedgerSchema = new mongoose.Schema(
   {
-    bookingRef: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", required: true, immutable: true },
+    // Required for ACQUISITION/TERRITORY_PARTNER rows; left null for
+    // ACQUISITION_REWARD (claim-keyed, not booking-keyed — see header).
+    bookingRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Booking",
+      required: isBookingKeyedEntitlement,
+      default: null,
+      immutable: true,
+    },
 
     entitlementType: {
       type: String,
@@ -45,7 +86,10 @@ const FieldAgentEarningLedgerSchema = new mongoose.Schema(
 
     fieldAgentRef: { type: mongoose.Schema.Types.ObjectId, ref: "FieldAgent", required: true, immutable: true },
 
-    // Populated only for entitlementType ACQUISITION.
+    // Populated for entitlementType ACQUISITION (per-booking credit
+    // against the cumulative cap) AND ACQUISITION_REWARD (the one-time
+    // reward row — this is in fact its sole claim linkage, since it has
+    // no bookingRef).
     acquisitionClaimRef: { type: mongoose.Schema.Types.ObjectId, ref: "AcquisitionClaim", default: null, immutable: true },
 
     // Populated only for entitlementType TERRITORY_PARTNER.
@@ -64,21 +108,30 @@ const FieldAgentEarningLedgerSchema = new mongoose.Schema(
     // polymorphic ref (mirrors FraudSignal's own proven idiom).
     policyVersionRef: { type: mongoose.Schema.Types.ObjectId, required: true, immutable: true },
 
-    appliedRatePercent: { type: Number, required: true, min: 0, max: 100, immutable: true },
+    // Required for ACQUISITION/TERRITORY_PARTNER rows (the % actually
+    // applied to a booking); left null for ACQUISITION_REWARD, which is
+    // a fixed amount, not a rate applied to anything.
+    appliedRatePercent: { type: Number, required: isBookingKeyedEntitlement, default: null, min: 0, max: 100, immutable: true },
 
+    // Required for ACQUISITION/TERRITORY_PARTNER rows; left null for
+    // ACQUISITION_REWARD (no booking commission is involved).
     bookingCommissionAmountInPaise: {
       type: Number,
-      required: true,
+      required: isBookingKeyedEntitlement,
+      default: null,
       min: 0,
-      validate: integerValidator,
+      validate: nullableIntegerValidator,
       immutable: true,
     },
 
+    // Required for ACQUISITION/TERRITORY_PARTNER rows; left null for
+    // ACQUISITION_REWARD (no raw booking-derived amount to cap against).
     rawEligibleAmountInPaise: {
       type: Number,
-      required: true,
+      required: isBookingKeyedEntitlement,
+      default: null,
       min: 0,
-      validate: integerValidator,
+      validate: nullableIntegerValidator,
       immutable: true,
     },
 
@@ -97,7 +150,10 @@ const FieldAgentEarningLedgerSchema = new mongoose.Schema(
       immutable: true,
     },
 
-    bookingCompletedAt: { type: Date, required: true, immutable: true },
+    // Required for ACQUISITION/TERRITORY_PARTNER rows; left null for
+    // ACQUISITION_REWARD (no booking is involved — createdAt is this
+    // row's only timestamp).
+    bookingCompletedAt: { type: Date, required: isBookingKeyedEntitlement, default: null, immutable: true },
   },
   { timestamps: true, versionKey: false }
 );

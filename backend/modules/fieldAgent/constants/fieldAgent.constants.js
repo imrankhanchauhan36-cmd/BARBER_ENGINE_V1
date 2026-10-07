@@ -192,6 +192,9 @@ export const AUDIT_ACTION = Object.freeze({
   ACQUISITION_CLAIM_ENDED: "ACQUISITION_CLAIM_ENDED",
   // FA-P3-B Step 1 — Acquisition Approval Lifecycle.
   ACQUISITION_CLAIM_APPROVED: "ACQUISITION_CLAIM_APPROVED",
+  // PHASE C.3-A — the explicit admin "Mark Acquisition Complete" action
+  // (ACTIVE_RECOVERY -> COMPLETED, fixed reward paid once).
+  ACQUISITION_CLAIM_COMPLETED: "ACQUISITION_CLAIM_COMPLETED",
   // FA-11.1 — additive only. Written by
   // modules/fieldAgent/services/performancePolicy.service.js, entityType
   // PERFORMANCE_POLICY_VERSION, actorType ADMIN — mirrors
@@ -224,6 +227,14 @@ export const AUDIT_ACTION = Object.freeze({
   // replace) the existing ACQUISITION_REFERRAL_CONSUMED/
   // ACQUISITION_CLAIM_CREATED events that same call also emits.
   ASSISTED_ONBOARDING_STARTED: "ASSISTED_ONBOARDING_STARTED",
+  // Field Agent Geography Phase B — admin-only administrative
+  // geography assignment (which State/District a Field Agent is
+  // administratively assigned to). Written by
+  // adminFieldAgentGeography.controller.js only; entityType
+  // FIELD_AGENT, actorType ADMIN. Not a Territory Partner/commercial
+  // concept — see FieldAgentGeographyAssignment.js's own header.
+  FIELD_AGENT_GEOGRAPHY_ASSIGNED: "FIELD_AGENT_GEOGRAPHY_ASSIGNED",
+  FIELD_AGENT_GEOGRAPHY_ENDED: "FIELD_AGENT_GEOGRAPHY_ENDED",
 });
 
 // FieldAgentAuditEvent.entityType vocabulary — a free-form string

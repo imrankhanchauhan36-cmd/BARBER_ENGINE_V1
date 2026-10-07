@@ -9,9 +9,7 @@ import PayoutRequest, { PAYOUT_STATUS, OPEN_PAYOUT_STATUSES } from "../models/Pa
 import Salon from "../models/Salon.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import WalletLedger from "../models/WalletLedger.js";
-import KYC from "../modules/kyc/models/KYC.js";
-import NotificationService from "../services/NotificationService.js";
-import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
+import { requestSalonPayout } from "../services/salonPayout.service.js"; // FINANCE-P0-1
 import { Errors, successResponse } from "../utils/response.js";
 
 // ✅ Fix — SalonEarnings import REMOVED (unused)
@@ -19,7 +17,6 @@ import { Errors, successResponse } from "../utils/response.js";
 
 const isValidId     = (id) => mongoose.Types.ObjectId.isValid(id);
 const p2            = (v)  => Math.round(v ?? 0) / 100;
-const MIN_PAISE     = 10000; // ₹100 minimum withdrawal
 
 /**
  * GET /api/payouts/wallet
@@ -76,128 +73,29 @@ export const getWallet = async (req, res, next) => {
 /**
  * POST /api/payouts/withdraw
  *
- * ✅ Fix — PayoutRequest created FIRST, then hold() with real entityId
- *   This ensures WalletLedger always has a valid entity reference.
- *   Flow: create REQUESTED payout → hold(AVAILABLE→LOCKED) with payout._id
- *   If hold fails → transaction aborts → payout creation rolled back
+ * FINANCE-P0-1 — the actual creation logic (KYC gate, amount
+ * validation, open-request check, hold, create, notify) now lives in
+ * services/salonPayout.service.js#requestSalonPayout, shared with
+ * modules/wallet/controllers/wallet.controller.js#requestPayoutHandler
+ * (which must delegate here for a SALON caller instead of creating a
+ * GenericPayoutRequest — ticket §17). This controller's own observable
+ * behavior (checks, order, error types, response shape) is unchanged.
  */
 export const requestWithdrawal = async (req, res, next) => {
-  const session = await mongoose.startSession();
   try {
-    session.startTransaction();
-
-    const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } })
-      .select("_id")
-      .session(session)
-      .lean();
-
-    if (!salon) {
-      await session.abortTransaction(); // ✅ explicit abort
-      return next(Errors.notFound("Salon not found"));
-    }
-
-    // ✅ Wallet Phase 3C — bank verification gate. Reuses the existing
-    // KYC.verification.bank.verified field (set only via the admin
-    // PATCH .../verify-bank action) as the sole source of truth — no
-    // new field, no new status value, no new model. Covers all of:
-    // no KYC record, no bank submitted, bank pending, bank rejected —
-    // every one of those leaves verification.bank.verified !== true.
-    const kyc = await KYC.findOne({ ownerId, isDeleted: { $ne: true } })
-      .select("verification.bank.verified")
-      .session(session)
-      .lean();
-
-    if (kyc?.verification?.bank?.verified !== true) {
-      await session.abortTransaction();
-      return next(Errors.forbidden("Your bank account must be verified before you can request a withdrawal. Please complete KYC bank verification first."));
-    }
-
-    const { amountInPaise } = req.body;
-
-    if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
-      await session.abortTransaction();
-      return next(Errors.badRequest("amountInPaise must be a positive integer"));
-    }
-    if (amountInPaise < MIN_PAISE) {
-      await session.abortTransaction();
-      return next(Errors.badRequest(`Minimum withdrawal is ₹${MIN_PAISE / 100}`));
-    }
-
-    // Check no open payout
-    const existing = await PayoutRequest.findOne({
-      salonId: salon._id,
-      status:  { $in: OPEN_PAYOUT_STATUSES },
-    }).session(session).lean();
-
-    if (existing) {
-      await session.abortTransaction();
-      return next(Errors.conflict("A withdrawal request is already pending. Cancel it first."));
-    }
-
-    // ✅ Fix — Create payout FIRST to get a real _id
-    const [payout] = await PayoutRequest.create([{
-      salonId:       salon._id,
-      amountInPaise,
-      status:        PAYOUT_STATUS.REQUESTED,
-    }], { session });
-
-    // ✅ Fix — hold() now has real entityId (payout._id)
-    // ✅ Fix — idempotency key based on payout._id (not Date.now)
-    //          so retries are safe no-ops
-    await WalletBalanceService.hold({
-      salonId:       salon._id,
-      amountInPaise,
-      refType:       "WITHDRAWAL",
-      refId:         payout._id,           // ← real reference, not null
-      idempotencyKey:`payout:hold:${payout._id}`, // ← stable, retry-safe
-      session,
-      triggeredBy:   "OWNER",
-      triggeredById: ownerId,
-      remarks:       `Withdrawal request — ₹${p2(amountInPaise)}`,
-    });
-
-    await session.commitTransaction();
-
-    //////////////////////////////////////////////////////
-    // 📬 NOTIFICATION (non-blocking, after commit)
-    //////////////////////////////////////////////////////
-
-    await NotificationService.send({
-      recipientId:   salon._id,
-      recipientType: "SALON",
-      templateKey:   NOTIFICATION_EVENTS.WITHDRAW_REQUESTED,
-      variables:     { amount: p2(amountInPaise) },
-      title:         "Withdrawal Requested",
-      message:       `Your withdrawal request for ₹${p2(amountInPaise)} has been submitted.`,
-      type:          "PAYMENT",
-      priority:      "MEDIUM",
-      actionType:    "OPEN_WALLET",
-      actionUrl:     "/wallet",
-      meta:          { payoutId: payout._id, amountInPaise },
-    });
+    const { payout } = await requestSalonPayout({ ownerId: req.user._id, amountInPaise: req.body.amountInPaise });
 
     return successResponse(res, {
       message: "Withdrawal request submitted",
       data: {
         payoutId:       payout._id,
-        amountInPaise,
-        amountInRupees: p2(amountInPaise),
-        status:         PAYOUT_STATUS.REQUESTED,
+        amountInPaise:  payout.amountInPaise,
+        amountInRupees: p2(payout.amountInPaise),
+        status:         payout.status,
       },
     });
   } catch (err) {
-    await session.abortTransaction();
-    // FA-P4-B Step 2 — two concurrent requests can both pass the
-    // pre-check above; the salonId_open_unique partial index is what
-    // actually stops the second. Report that as the same 409 the
-    // pre-check gives, not a 500.
-    if (err?.code === 11000) {
-      return next(Errors.conflict("A withdrawal request is already pending. Cancel it first."));
-    }
     next(err);
-  } finally {
-    session.endSession();
   }
 };
 
@@ -312,7 +210,9 @@ export const getPayoutHistory = async (req, res, next) => {
         status:         p.status,
         utr:            p.utr,
         provider:       p.payoutProvider,
+        providerStatus: p.providerStatus ?? null, // FINANCE-P0-1 — additive
         approvedAt:     p.approvedAt,
+        processingAt:   p.processingAt ?? null,   // FINANCE-P0-1 — additive
         cancelledAt:    p.cancelledAt,
         failureReason:  p.failureReason,
         createdAt:      p.createdAt,

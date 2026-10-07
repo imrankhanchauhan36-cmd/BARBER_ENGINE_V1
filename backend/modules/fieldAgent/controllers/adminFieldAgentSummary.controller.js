@@ -15,7 +15,7 @@ import { getAdminFieldAgentSummary } from "../services/adminFieldAgentSummary.se
 
 export const getAdminFieldAgentSummaryHandler = async (req, res, next) => {
   try {
-    const summary = await getAdminFieldAgentSummary({ fieldAgentId: req.params.id });
+    const summary = await getAdminFieldAgentSummary({ admin: req.user, fieldAgentId: req.params.id });
     return successResponse(res, { message: "Field Agent summary fetched", data: summary });
   } catch (err) {
     return next(err);

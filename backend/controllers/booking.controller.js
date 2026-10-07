@@ -18,8 +18,10 @@ import WalletTransaction, {
 } from "../models/WalletTransaction.js";
 import CancellationPolicyService from "../services/CancellationPolicyService.js";
 import { getPublishedGstPolicy } from "../services/gstPolicy.service.js";
-import { resolvePlatformFeeForArea } from "../services/areaPlatformFee.service.js";
+import { resolveGlobalPlatformFee } from "../services/areaPlatformFee.service.js";
 import { splitRefundComponents } from "../services/refundComponentSplitter.js";
+import { getPublishedRefundPolicy } from "../modules/finance/services/RefundPolicyService.js";
+import { reverseRevenueForCancelledBooking } from "../modules/finance/services/RefundReversalService.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
@@ -754,44 +756,75 @@ export const lockSlot = async (req, res) => {
       // 💰 PLATFORM FEE — the ONE customer-facing fee (product
       // terminology: "Platform Fee"/"Convenience Fee" — never a
       // second, separate charge). Charged ON TOP OF the service
-      // price, not deducted from it. As of the PAN-India Platform
-      // Fee + GST architecture, this is resolved from the salon's
-      // own authoritative area (Salon.location.territory.areaRef),
-      // server-side only — never from CommissionService.js's
-      // percentage-of-service calculation, which is deliberately
-      // left completely unmodified and unused here (frozen; its
-      // per-salon override Salon.business.commissionRate and the
-      // admin endpoint that sets it remain untouched but become
-      // inert for pricing purposes going forward). The result is
-      // still stored in commissionAmountInPaise — no new
-      // customer-facing field — so every existing downstream reader
-      // (Field Agent earning, cancelBooking/ownerCancelBooking,
-      // RefundExecutionService, both frontends) keeps working
-      // unchanged. PAN-India fallback: an area with no PUBLISHED fee
-      // resolves to 0 — the booking is never blocked.
+      // price, not deducted from it. LAUNCH-PHASE (2026-10): a
+      // single GLOBAL/PAN-India platform fee applies to every salon
+      // regardless of area/district/state — no per-salon area lookup
+      // needed any more (see AreaPlatformFeePolicy.js header for the
+      // scope rationale; the area-scoped resolver/UI remain intact,
+      // unused, for a future territory-override phase). Never from
+      // CommissionService.js's percentage-of-service calculation,
+      // which is deliberately left completely unmodified and unused
+      // here (frozen; its per-salon override
+      // Salon.business.commissionRate and the admin endpoint that
+      // sets it remain untouched but become inert for pricing
+      // purposes going forward). The result is still stored in
+      // commissionAmountInPaise — no new customer-facing field — so
+      // every existing downstream reader (Field Agent earning,
+      // cancelBooking/ownerCancelBooking, RefundExecutionService,
+      // both frontends) keeps working unchanged.
+      //
+      // NO SILENT ₹0 FALLBACK: if no Global Platform Fee has ever
+      // been published, the booking is refused with an explicit,
+      // controlled error rather than charging an unconfigured ₹0 —
+      // this is a deliberate admin-configuration gate, not the old
+      // per-area fallback behavior.
+      //
+      // PRICING ENGINE EXPANSION (2026-10): the GLOBAL policy can now
+      // be FIXED/PERCENTAGE/SLAB, not only a flat amount — the base
+      // for PERCENTAGE/SLAB is this booking's own serviceAmountInPaise
+      // (computed just above, BEFORE Platform Fee, BEFORE GST — the
+      // locked calculation order). See
+      // services/areaPlatformFee.service.js#calculatePlatformFeeInPaise.
       //////////////////////////////////////////////////////////
-      const salonForPricing = await Salon.findById(salonId)
-        .select("location.territory.areaRef")
-        .session(lockSession)
-        .lean();
+      const globalPlatformFee = await resolveGlobalPlatformFee(serviceAmountInPaise);
 
-      const { feeInPaise: commissionInPaise, policyId: platformFeePolicyRef } = await resolvePlatformFeeForArea(
-        salonForPricing?.location?.territory?.areaRef
-      );
+      if (!globalPlatformFee) {
+        throw Object.assign(
+          new Error("Platform Fee is not configured yet. Please try again shortly."),
+          { status: 503 }
+        );
+      }
+
+      const { feeInPaise: commissionInPaise, policyId: platformFeePolicyRef } = globalPlatformFee;
 
       //////////////////////////////////////////////////////////
-      // 💰 GST — taxable base is Service + Platform Fee (locked
-      // business rule). Resolved from whichever GstPolicyVersion is
-      // currently PUBLISHED; null (not 0) when none has ever been
-      // published, so a legacy-equivalent "GST doesn't apply" state
-      // is distinguishable from "GST was computed and is genuinely
-      // zero". Snapshotted onto the booking — never re-derived from
-      // live config again.
+      // 💰 SALON GST — LAUNCH PHASE (2026-10). Taxable base is the
+      // SALON SERVICE AMOUNT ONLY — Platform Fee is deliberately
+      // excluded (Platform Fee GST is a separate, later phase, not
+      // implemented here). Rate depends on the salon's own
+      // basicInfo.gstStatus (REGISTERED -> 5%, UNREGISTERED -> 0% at
+      // launch, both from whichever GstPolicyVersion is currently
+      // PUBLISHED). GST NEVER blocks a booking: gstPolicy is null
+      // when nothing has ever been published (or the published
+      // document predates this phase and lacks both rates), and a
+      // null policy produces null snapshot fields — a legacy-
+      // equivalent "GST doesn't apply" state, distinguishable from
+      // "GST was computed and is genuinely zero" (which stores 0, not
+      // null, exactly like an UNREGISTERED salon's booking does).
+      // Snapshotted onto the booking — never re-derived from live
+      // config again, so a later change to this salon's own
+      // gstStatus, or a new policy publish, never touches this
+      // booking's own stored values.
       //////////////////////////////////////////////////////////
+      const salonForGst = await Salon.findById(salonId).select("basicInfo.gstStatus").session(lockSession).lean();
+      const isGstRegistered = salonForGst?.basicInfo?.gstStatus === "REGISTERED";
+
       const gstPolicy = await getPublishedGstPolicy();
-      const gstRatePercent = gstPolicy ? gstPolicy.ratePercent : null;
+      const gstRatePercent = gstPolicy
+        ? (isGstRegistered ? gstPolicy.registeredRatePercent : gstPolicy.unregisteredRatePercent)
+        : null;
       const gstAmountInPaise = gstPolicy
-        ? Math.round((serviceAmountInPaise + commissionInPaise) * gstPolicy.ratePercent / 100)
+        ? Math.round(serviceAmountInPaise * gstRatePercent / 100)
         : null;
       const gstPolicyVersionRef = gstPolicy ? gstPolicy.versionId : null;
 
@@ -2041,11 +2074,21 @@ export const cancelBooking = async (req, res) => {
     // shared splitRefundComponents() helper — the exact same helper
     // ownerCancelBooking and RefundExecutionService use, so all three
     // refund paths can never drift apart.
+    //
+    // Global Refund & Cancellation Policy — the refund PERCENTAGE
+    // itself is now admin-configured (RefundPolicyVersion), fetched
+    // fresh here (one findOne, outside the main session — a policy
+    // read is not part of the booking-cancellation write set) and
+    // passed into CancellationPolicyService.evaluate(), which fails
+    // closed (503) if none is published. Identical call, identical
+    // fail-closed behavior, for ownerCancelBooking below — one global
+    // policy, no fault-based override.
     //////////////////////////////////////////////////////////
 
     const now = new Date();
+    const refundPolicyVersion = await getPublishedRefundPolicy();
 
-    const { refundPolicy, refundFraction } = CancellationPolicyService.evaluate({ booking, now });
+    const { refundPolicy, refundFraction, refundPercent } = CancellationPolicyService.evaluate({ booking, now, refundPolicy: refundPolicyVersion });
 
     const {
       serviceRefundPaise,
@@ -2135,10 +2178,19 @@ export const cancelBooking = async (req, res) => {
       );
     }
 
-    // Store cancellation details on booking
-    booking.cancellationPolicy  = refundPolicy;
-    booking.refundAmountInPaise = refundPaise;
-    booking.cancelledAt         = now;
+    // Store cancellation details on booking. refundPolicyVersionRef is
+    // only ever set when a published RefundPolicyVersion was actually
+    // resolved and used (never for a HOLD booking, which short-circuits
+    // to 0% before any policy lookup is needed) — same null-vs-
+    // "never applied" convention as platformFeePolicyRef/
+    // gstPolicyVersionRef. Both fields are immutable once set — a
+    // later policy publish can never retroactively change this
+    // cancellation's own historical snapshot.
+    booking.cancellationPolicy     = refundPolicy;
+    booking.refundAmountInPaise    = refundPaise;
+    booking.refundPolicyVersionRef = booking.status !== BOOKING_STATUS.HOLD ? (refundPolicyVersion?._id ?? null) : null;
+    booking.refundFractionApplied  = refundFraction;
+    booking.cancelledAt            = now;
 
     await transitionBookingStatus({
       booking,
@@ -2148,6 +2200,26 @@ export const cancelBooking = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    //////////////////////////////////////////////////////////
+    // 💰 REVENUE REVERSAL — GST ledger + Zemish Platform Fee revenue,
+    // proportional to refundFraction. Isolated, post-commit, never
+    // blocks or rolls back the cancellation/refund above (same
+    // discipline as RazorpayRefundService's own reversal calls).
+    // No-ops cleanly for a booking with no RevenueSplit (wallet-paid
+    // at origin) — never invents a reversal for a component that was
+    // never recorded. `cancel:<bookingId>` is this reversal's own
+    // idempotency key — distinct from a real Razorpay refund id, so a
+    // later Support-triggered SOURCE refund (a different key) can
+    // never collide with it.
+    //////////////////////////////////////////////////////////
+    if (refundFraction > 0) {
+      await reverseRevenueForCancelledBooking({
+        bookingId: booking._id,
+        refundFraction,
+        reversalKey: `cancel:${booking._id}`,
+      });
+    }
 
     //////////////////////////////////////////////////////////
     // 🗑️ CACHE INVALIDATION — next-slot label stale after cancellation
@@ -2320,12 +2392,15 @@ export const ownerCancelBooking = async (req, res) => {
     // GST). CancellationPolicyService is the single source of truth
     // for the refund fraction regardless of who initiates the
     // cancellation; this introduces no owner-specific percentage,
-    // fee, or penalty.
+    // fee, or penalty. Global Refund & Cancellation Policy — the SAME
+    // published RefundPolicyVersion as cancelBooking, fetched fresh
+    // here (one global policy, no fault-based override).
     //////////////////////////////////////////////////////////
 
     const now = new Date();
+    const refundPolicyVersion = await getPublishedRefundPolicy();
 
-    const { refundPolicy, refundFraction } = CancellationPolicyService.evaluate({ booking, now });
+    const { refundPolicy, refundFraction, refundPercent } = CancellationPolicyService.evaluate({ booking, now, refundPolicy: refundPolicyVersion });
 
     const {
       serviceRefundPaise,
@@ -2393,10 +2468,14 @@ export const ownerCancelBooking = async (req, res) => {
     // cancelReason already exist on the schema (declared, previously
     // unpopulated by either cancellation path) — populated here for
     // the first time, additive only, no schema change.
-    booking.cancellationPolicy  = refundPolicy;
-    booking.refundAmountInPaise = refundPaise;
-    booking.cancelledAt         = now;
-    booking.cancelledBy         = req.user._id;
+    // refundPolicyVersionRef/refundFractionApplied — same convention
+    // as cancelBooking above.
+    booking.cancellationPolicy     = refundPolicy;
+    booking.refundAmountInPaise    = refundPaise;
+    booking.refundPolicyVersionRef = booking.status !== BOOKING_STATUS.HOLD ? (refundPolicyVersion?._id ?? null) : null;
+    booking.refundFractionApplied  = refundFraction;
+    booking.cancelledAt            = now;
+    booking.cancelledBy            = req.user._id;
     if (reason) booking.cancelReason = reason;
 
     await transitionBookingStatus({
@@ -2424,6 +2503,20 @@ export const ownerCancelBooking = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    //////////////////////////////////////////////////////////
+    // 💰 REVENUE REVERSAL — identical to cancelBooking (same
+    // isolated, post-commit, non-blocking call; same `cancel:<bookingId>`
+    // idempotency key, so a booking can never be double-reversed
+    // regardless of which cancellation path produced it).
+    //////////////////////////////////////////////////////////
+    if (refundFraction > 0) {
+      await reverseRevenueForCancelledBooking({
+        bookingId: booking._id,
+        refundFraction,
+        reversalKey: `cancel:${booking._id}`,
+      });
+    }
 
     //////////////////////////////////////////////////////////
     // 🗑️ CACHE INVALIDATION — identical to cancelBooking.

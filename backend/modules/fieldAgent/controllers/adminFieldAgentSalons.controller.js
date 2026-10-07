@@ -13,7 +13,7 @@ import { getAdminFieldAgentSalons } from "../services/adminFieldAgentSalons.serv
 
 export const getAdminFieldAgentSalonsHandler = async (req, res, next) => {
   try {
-    const salons = await getAdminFieldAgentSalons({ fieldAgentId: req.params.id });
+    const salons = await getAdminFieldAgentSalons({ admin: req.user, fieldAgentId: req.params.id });
     return successResponse(res, { message: "Field Agent acquired salons fetched", data: { salons } });
   } catch (err) {
     return next(err);

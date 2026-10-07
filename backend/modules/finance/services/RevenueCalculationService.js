@@ -2,6 +2,16 @@
  * BARBER ENGINE V1
  * backend/modules/finance/services/RevenueCalculationService.js
  *
+ * ⚠ LEGACY / RETIRED (FINANCE-P0-2 QUARANTINE) — DO NOT USE FOR
+ * PRODUCTION PRICING. CANONICAL PRICING IS IN
+ * booking.controller.js#lockSlot (Global Platform Fee + published
+ * GstPolicyVersion). This file has zero live production importers —
+ * confirmed by repo-wide import-graph audit — and its own
+ * RevenueSettings input source is now quarantined (see
+ * RevenueSettingsService.js). Left in place, unmodified, only because
+ * historical/test-verification scripts may still reference it; this
+ * marker is documentation only — no calculation logic below is changed.
+ *
  * P0 Revenue Calculation Engine — Step 1.
  *
  * LOCKED architecture rule: "Calculation Engine kabhi wallet ko touch

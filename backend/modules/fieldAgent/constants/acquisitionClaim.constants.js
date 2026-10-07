@@ -40,14 +40,19 @@ export const REFERRAL_EXPIRY_DAYS = 30;
 // booking-credit lookup in fieldAgentEarning.service.js) is gated
 // purely by this rename — a PENDING_APPROVAL claim is never matched by
 // any `status: ACTIVE_RECOVERY` query, so no separate approval flag or
-// gating check was introduced anywhere else. COMPLETED is added to the
-// enum now for lifecycle forward-compatibility (per this phase's own
-// instruction); no code in this phase transitions a claim into it —
+// gating check was introduced anywhere else.
+//
+// FA-9 Phase A SUPERSEDES the "COMPLETED is reserved/unreachable" note
+// that previously stood here: adminApproveClaim (acquisitionClaim.
+// service.js) now transitions PENDING_APPROVAL -> ACTIVE_RECOVERY ->
+// COMPLETED atomically, in the SAME transaction, immediately on
+// approval — a claim is never left observably at ACTIVE_RECOVERY
+// outside that transaction once Phase A code is live.
 // AcquisitionEarningProgress reaching TARGET_REACHED still does NOT
-// affect AcquisitionClaim.status, exactly as the frozen FA-9 Business
-// Decision Lock (§F/§9) requires (preserves the agent's recognized
-// salon relationship after financial entitlement ends) — wiring
-// ACTIVE_RECOVERY -> COMPLETED is explicitly a later step, not this one.
+// drive this transition (unchanged) — COMPLETED is reached purely by
+// the fixed one-time acquisitionRewardAmountInPaise reward being
+// credited, not by the OLD cumulative-cap mechanism exhausting its
+// target.
 export const CLAIM_STATUS = Object.freeze({
   PENDING_APPROVAL: "PENDING_APPROVAL",
   ACTIVE_RECOVERY: "ACTIVE_RECOVERY",

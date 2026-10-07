@@ -54,6 +54,7 @@ import { createRazorpayRefund, fetchRazorpayPayment, fetchRazorpayRefunds, isRaz
 import RevenueSplit from "../modules/finance/models/RevenueSplit.js";
 import { createRefundReversalLedger } from "../modules/finance/services/GSTLedgerService.js";
 import { createTerritoryRevenueReversal } from "../modules/finance/services/TerritoryRevenueService.js"; // STEP 5.3 — Territory Revenue Distribution Engine
+import { reverseRevenueForCancelledBooking } from "../modules/finance/services/RefundReversalService.js"; // Global Refund & Cancellation Policy — Zemish Platform Fee revenue reversal (closes the gap this file's existing GST/Territory reversals didn't cover)
 import logger from "../utils/logger.js";
 
 const LOCK_LEASE_MS = 60 * 1000;
@@ -185,6 +186,29 @@ export const completeRefund = async ({ refundDoc, gatewayStatus, gatewayRefundId
       }
     } catch (territoryErr) {
       logger.error("[RazorpayRefundService] Territory revenue reversal creation failed (refund itself succeeded; unaffected)", { refundId: String(current.razorpayRefundId || current._id), bookingId: String(current.bookingId), message: territoryErr?.message });
+    }
+
+    // Global Refund & Cancellation Policy — Zemish Platform Fee revenue
+    // reversal (RefundReversalService.js). Isolated in its own
+    // try/catch, same non-blocking discipline as the two reversal
+    // blocks immediately above. Uses this refund's OWN real fraction
+    // (amountInPaise / paymentAmountInPaise — the same proportionality
+    // basis createRefundReversalLedger above already uses for GST) and
+    // the real razorpayRefundId as the idempotency key, so this can
+    // never collide with — or duplicate — the wallet-path reversal
+    // (cancelBooking/ownerCancelBooking), which uses a structurally
+    // distinct `cancel:<bookingId>` key.
+    try {
+      if (current.paymentAmountInPaise) {
+        const sourceRefundFraction = Math.min(1, current.amountInPaise / current.paymentAmountInPaise);
+        await reverseRevenueForCancelledBooking({
+          bookingId: current.bookingId,
+          refundFraction: sourceRefundFraction,
+          reversalKey: current.razorpayRefundId,
+        });
+      }
+    } catch (zemishErr) {
+      logger.error("[RazorpayRefundService] Zemish revenue reversal creation failed (refund itself succeeded; unaffected)", { refundId: String(current.razorpayRefundId || current._id), bookingId: String(current.bookingId), message: zemishErr?.message });
     }
   }
 
@@ -345,7 +369,15 @@ export const issueSourceRefundForCancelledBooking = async ({ bookingId, triggere
     return { alreadyIssued: true, refundPaise: walletRefund.amountInPaise, walletTransactionId: walletRefund._id, refundId: null, refundStatus: null, refundedTo: "WALLET" };
   }
 
-  const refundFraction = REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
+  // Global Refund & Cancellation Policy — read the EXACT fraction
+  // frozen at cancellation time (refundFractionApplied), never
+  // re-derived from the cancellationPolicy label via
+  // REFUND_FRACTION_BY_POLICY: that static table only covers the four
+  // legacy fixed buckets and can no longer represent an arbitrary
+  // admin-configured percentage (e.g. 37%). A booking cancelled before
+  // this field existed (refundFractionApplied null) falls back to the
+  // legacy label table so historical bookings keep working unchanged.
+  const refundFraction = booking.refundFractionApplied ?? REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
   if (refundFraction === undefined) throw err(`Unrecognized cancellationPolicy: ${booking.cancellationPolicy}`, 500);
   const { serviceRefundPaise, totalRefundPaise: refundPaise } = splitRefundComponents({
     refundFraction,

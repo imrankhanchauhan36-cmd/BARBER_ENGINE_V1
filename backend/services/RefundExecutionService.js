@@ -59,6 +59,7 @@ import WalletTransaction, {
 import WalletBalanceService from "./WalletBalanceService.js";
 import { splitRefundComponents, REFUND_FRACTION_BY_POLICY } from "./refundComponentSplitter.js";
 import { issueSourceRefundForCancelledBooking, findSourceRefundForBooking, withRefundLock } from "./RazorpayRefundService.js";
+import { reverseRevenueForCancelledBooking } from "../modules/finance/services/RefundReversalService.js"; // Global Refund & Cancellation Policy — defensive retry (see call site below)
 
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
@@ -135,7 +136,14 @@ async function issueWalletRefundForCancelledBooking({ bookingId, triggeredBy, tr
       return { alreadyIssued: true, refundPaise: existing.amountInPaise, walletTransactionId: existing._id };
     }
 
-    const refundFraction = REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
+    // Global Refund & Cancellation Policy — read the EXACT fraction
+    // frozen at cancellation time (refundFractionApplied), never
+    // re-derived from the cancellationPolicy label via
+    // REFUND_FRACTION_BY_POLICY (see RazorpayRefundService.js's
+    // identical comment for the full rationale). Falls back to the
+    // legacy label table for a booking cancelled before this field
+    // existed.
+    const refundFraction = booking.refundFractionApplied ?? REFUND_FRACTION_BY_POLICY[booking.cancellationPolicy];
     if (refundFraction === undefined) {
       throw Object.assign(new Error(`Unrecognized cancellationPolicy: ${booking.cancellationPolicy}`), { status: 500 });
     }
@@ -218,6 +226,22 @@ async function issueWalletRefundForCancelledBooking({ bookingId, triggeredBy, tr
 
     await session.commitTransaction();
     session.endSession();
+
+    // Global Refund & Cancellation Policy — defensive retry. The
+    // GST/Zemish reversal for this booking was already attempted once,
+    // at the ORIGINAL cancellation time (cancelBooking/ownerCancelBooking,
+    // same `cancel:<bookingId>` key) — this call is idempotent (a
+    // no-op if that already succeeded) and only actually creates
+    // anything on the rare path where that original attempt failed
+    // and a RevenueSplit now exists to reverse. Isolated, non-blocking,
+    // same discipline as every other reversal call site.
+    if (refundFraction > 0) {
+      await reverseRevenueForCancelledBooking({
+        bookingId: booking._id,
+        refundFraction,
+        reversalKey: `cancel:${booking._id}`,
+      });
+    }
 
     return { alreadyIssued: false, refundPaise, walletTransactionId: walletTxn._id };
   } catch (err) {

@@ -43,6 +43,20 @@ import {
 import KYC from "../models/KYC.js";
 import KYCDocument from "../models/KYCDocument.js";
 import VerificationLog from "../models/VerificationLog.js";
+import { Errors } from "../../../utils/response.js";
+
+// PHASE C.2 — the only statuses an admin Approve/Reject decision may
+// start from. Mirrors fieldAgentApproval.service.js's own
+// isTransientConflict/retry idiom for the identical concurrent-admin-
+// decision problem — not a new pattern invented for KYC.
+const VALID_DECISION_SOURCE_STATUSES = [
+  KYC_STATUS.PENDING,
+  KYC_STATUS.UNDER_REVIEW,
+  KYC_STATUS.PARTIALLY_VERIFIED,
+];
+const MAX_DECISION_ATTEMPTS = 5;
+const isTransientConflict = (err) =>
+  err.hasErrorLabel?.("TransientTransactionError") || err.code === 112 || err.codeName === "WriteConflict";
 
 // ─── Log Helper ───────────────────────────────────────────
 const log = async (session, { kycId, ownerId, action, triggeredBy, triggeredByRole, field, requestId, remarks, metadata }) => {
@@ -97,84 +111,130 @@ export const getOrCreateKYC = async (ownerId, applicantType = APPLICANT_TYPE.OWN
  * ✅ Fix 2 — Approve with transaction
  */
 export const approveKYC = async ({ kyc, adminId, adminLevel, notes, requestId }) => {
-  const session = await mongoose.startSession()
-  try {
-    session.startTransaction()
+  let lastErr = null
+  for (let attempt = 0; attempt < MAX_DECISION_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession()
+    try {
+      session.startTransaction()
 
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + KYC_EXPIRY_DAYS)
+      // PHASE C.2 — never trust the caller's already-loaded `kyc` for
+      // the actual decision: re-read live state inside THIS
+      // transaction's own snapshot, same discipline as
+      // fieldAgentApproval.service.js's approveApplication(). The
+      // status filter below is what makes this atomic — if another
+      // decision already moved the document out of
+      // VALID_DECISION_SOURCE_STATUSES, this matches zero documents.
+      const current = await KYC.findById(kyc._id).session(session)
+      if (!current) throw Errors.notFound("KYC not found")
+      if (!VALID_DECISION_SOURCE_STATUSES.includes(current.status)) {
+        throw Errors.conflict(`KYC status is ${current.status} — no longer eligible for approval`)
+      }
 
-    kyc.status     = KYC_STATUS.VERIFIED
-    kyc.approvedAt = new Date()
-    kyc.expiresAt  = expiresAt
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + KYC_EXPIRY_DAYS)
 
-    kyc.review.reviewedBy   = adminId
-    kyc.review.reviewedAt   = new Date()
-    kyc.review.rejectReason = null
-    if (notes) kyc.review.notes = notes
+      current.status     = KYC_STATUS.VERIFIED
+      current.approvedAt = new Date()
+      current.expiresAt  = expiresAt
 
-    kyc.verification.manualReview.status             = VERIFICATION_STATUS.VERIFIED
-    kyc.verification.manualReview.verified           = true
-    kyc.verification.manualReview.verifiedAt         = new Date()
-    kyc.verification.manualReview.verifiedBy         = adminId
-    // ✅ Fix 3 — use constant not magic string
-    kyc.verification.manualReview.verificationSource = VERIFICATION_SOURCE.MANUAL
+      current.review.reviewedBy   = adminId
+      current.review.reviewedAt   = new Date()
+      current.review.rejectReason = null
+      if (notes) current.review.notes = notes
 
-    await kyc.save({ session })
+      current.verification.manualReview.status             = VERIFICATION_STATUS.VERIFIED
+      current.verification.manualReview.verified           = true
+      current.verification.manualReview.verifiedAt         = new Date()
+      current.verification.manualReview.verifiedBy         = adminId
+      // ✅ Fix 3 — use constant not magic string
+      current.verification.manualReview.verificationSource = VERIFICATION_SOURCE.MANUAL
 
-    await log(session, {
-      kycId: kyc._id, ownerId: kyc.ownerId,
-      action: VERIFICATION_ACTION.ADMIN_APPROVED,
-      triggeredBy: adminId, triggeredByRole: adminLevel,
-      requestId, remarks: notes || null,
-    })
+      await current.save({ session })
 
-    await session.commitTransaction()
-    return kyc
-  } catch (err) {
-    await session.abortTransaction()
-    throw err
-  } finally {
-    session.endSession()
+      await log(session, {
+        kycId: current._id, ownerId: current.ownerId,
+        action: VERIFICATION_ACTION.ADMIN_APPROVED,
+        triggeredBy: adminId, triggeredByRole: adminLevel,
+        requestId, remarks: notes || null,
+      })
+
+      await session.commitTransaction()
+      return current
+    } catch (err) {
+      await session.abortTransaction()
+      lastErr = err
+      if (isTransientConflict(err) && attempt < MAX_DECISION_ATTEMPTS - 1) {
+        continue // retry the WHOLE transaction, re-reading live state
+      }
+      throw err
+    } finally {
+      session.endSession()
+    }
   }
+  throw lastErr
 }
 
 /**
  * ✅ Fix 2 — Reject with transaction
  */
 export const rejectKYC = async ({ kyc, adminId, adminLevel, reason, requestId }) => {
-  const session = await mongoose.startSession()
-  try {
-    session.startTransaction()
+  let lastErr = null
+  for (let attempt = 0; attempt < MAX_DECISION_ATTEMPTS; attempt++) {
+    const session = await mongoose.startSession()
+    try {
+      session.startTransaction()
 
-    kyc.status     = KYC_STATUS.REJECTED
-    kyc.rejectedAt = new Date()
+      // PHASE C.2 — same re-read-inside-transaction discipline as
+      // approveKYC above; see that function's comment for the
+      // rationale.
+      const current = await KYC.findById(kyc._id).session(session)
+      if (!current) throw Errors.notFound("KYC not found")
+      if (!VALID_DECISION_SOURCE_STATUSES.includes(current.status)) {
+        throw Errors.conflict(`KYC status is ${current.status} — no longer eligible for rejection`)
+      }
 
-    kyc.review.reviewedBy   = adminId
-    kyc.review.reviewedAt   = new Date()
-    kyc.review.rejectReason = reason
+      current.status     = KYC_STATUS.REJECTED
+      current.rejectedAt = new Date()
+      // PHASE C.2 — explicitly clear approval-side timeline fields so
+      // a rejected KYC never carries stale "still approved" timestamps
+      // (this transition is now guard-blocked from a VERIFIED source,
+      // but these fields are cleared defensively regardless of source
+      // status, matching the same "null the opposite side" idiom
+      // approveKYC already used for review.rejectReason).
+      current.approvedAt = null
+      current.expiresAt  = null
 
-    kyc.verification.manualReview.status   = VERIFICATION_STATUS.FAILED
-    kyc.verification.manualReview.verified = false
-    kyc.verification.manualReview.remarks  = reason
+      current.review.reviewedBy   = adminId
+      current.review.reviewedAt   = new Date()
+      current.review.rejectReason = reason
 
-    await kyc.save({ session })
+      current.verification.manualReview.status   = VERIFICATION_STATUS.FAILED
+      current.verification.manualReview.verified = false
+      current.verification.manualReview.remarks  = reason
 
-    await log(session, {
-      kycId: kyc._id, ownerId: kyc.ownerId,
-      action: VERIFICATION_ACTION.ADMIN_REJECTED,
-      triggeredBy: adminId, triggeredByRole: adminLevel,
-      requestId, remarks: reason,
-    })
+      await current.save({ session })
 
-    await session.commitTransaction()
-    return kyc
-  } catch (err) {
-    await session.abortTransaction()
-    throw err
-  } finally {
-    session.endSession()
+      await log(session, {
+        kycId: current._id, ownerId: current.ownerId,
+        action: VERIFICATION_ACTION.ADMIN_REJECTED,
+        triggeredBy: adminId, triggeredByRole: adminLevel,
+        requestId, remarks: reason,
+      })
+
+      await session.commitTransaction()
+      return current
+    } catch (err) {
+      await session.abortTransaction()
+      lastErr = err
+      if (isTransientConflict(err) && attempt < MAX_DECISION_ATTEMPTS - 1) {
+        continue // retry the WHOLE transaction, re-reading live state
+      }
+      throw err
+    } finally {
+      session.endSession()
+    }
   }
+  throw lastErr
 }
 
 /**
