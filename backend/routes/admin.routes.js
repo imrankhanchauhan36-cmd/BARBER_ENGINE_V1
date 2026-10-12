@@ -62,6 +62,7 @@ import {
   requestReuploadHandler,
   verifyAadhaarHandler,
   verifyBankHandler,
+  verifyGSTHandler,
   verifyPANHandler,
 } from "../modules/kyc/controllers/adminKyc.controller.js";
 
@@ -130,6 +131,8 @@ import { protect } from "../middlewares/auth.middleware.js";
 import { requireAdminLevel } from "../middlewares/requireAdminLevel.js";
 import { requireRole } from "../middlewares/role.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
+import { adminKycVerifyRateLimiter } from "../middlewares/rateLimit.middleware.js";
+import { scopedIdempotency } from "../middlewares/scopedIdempotency.middleware.js";
 
 const router = express.Router();
 
@@ -329,9 +332,16 @@ router.patch("/kyc/:id/assign",           requireAdminLevel("INDIA","STATE"),   
 router.patch("/kyc/:id/request-reupload", requireAdminLevel("INDIA","STATE"),            asyncHandler(requestReuploadHandler));
 
 // ── KYC — Phase 6B (Verification) ────────────────────────
-router.patch("/kyc/:id/verify-pan",     requireAdminLevel("INDIA","STATE"), asyncHandler(verifyPANHandler));
-router.patch("/kyc/:id/verify-aadhaar", requireAdminLevel("INDIA","STATE"), asyncHandler(verifyAadhaarHandler));
-router.patch("/kyc/:id/verify-bank",    requireAdminLevel("INDIA","STATE"), asyncHandler(verifyBankHandler));
+// Phase 3b (approved 2026-10-10) — adminKycVerifyRateLimiter +
+// scopedIdempotency added after requireAdminLevel, matching the
+// established order (authorization before rate limiting) already
+// used by fieldAgentKyc.routes.js. 30/min — see
+// rateLimit.middleware.js's comment for why this is deliberately
+// higher than Field Agent's self-serve 5/hour ceiling.
+router.patch("/kyc/:id/verify-pan",     requireAdminLevel("INDIA","STATE"), adminKycVerifyRateLimiter, scopedIdempotency("adminKyc.verifyPan"),     asyncHandler(verifyPANHandler));
+router.patch("/kyc/:id/verify-aadhaar", requireAdminLevel("INDIA","STATE"), adminKycVerifyRateLimiter, scopedIdempotency("adminKyc.verifyAadhaar"), asyncHandler(verifyAadhaarHandler));
+router.patch("/kyc/:id/verify-bank",    requireAdminLevel("INDIA","STATE"), adminKycVerifyRateLimiter, scopedIdempotency("adminKyc.verifyBank"),    asyncHandler(verifyBankHandler));
+router.patch("/kyc/:id/verify-gst",     requireAdminLevel("INDIA","STATE"), adminKycVerifyRateLimiter, scopedIdempotency("adminKyc.verifyGst"),     asyncHandler(verifyGSTHandler));
 
 // ── Finance ──────────────────────────────────────────────
 router.get("/finance/summary",          requireAdminLevel("INDIA","STATE","DISTRICT"), asyncHandler(getFinanceSummary));

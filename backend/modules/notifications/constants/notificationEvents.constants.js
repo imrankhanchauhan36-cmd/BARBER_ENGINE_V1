@@ -58,8 +58,14 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   WITHDRAW_CANCELLED:   "WITHDRAW_CANCELLED",
 
   // KYC
-  KYC_APPROVED: "KYC_APPROVED", // reserved — no caller yet
-  KYC_REJECTED: "KYC_REJECTED", // reserved — no caller yet
+  // ZEMISH Phase 3 — stale comment corrected: both ARE wired, from
+  // modules/kyc/controllers/adminKyc.controller.js's
+  // approveKYCHandler/rejectKYCHandler (Owner, via recipientType
+  // "SALON", and Field Agent, via FA-P2-A's separate recipientType
+  // "FIELD_AGENT" branch) — confirmed directly from source, not
+  // reserved/unwired as this comment previously, incorrectly, said.
+  KYC_APPROVED: "KYC_APPROVED",
+  KYC_REJECTED: "KYC_REJECTED",
 
   // Salon
   SALON_APPROVED: "SALON_APPROVED", // reserved — no caller yet

@@ -190,6 +190,24 @@ export const updateSalonStatus = async (req, res, next) => {
       }
     }
 
+    // ZEMISH expected-flow correction — the KYC gate that used to live
+    // here (blocking APPROVED when the owner's PAN+Bank KYC wasn't yet
+    // verified) has been REMOVED, not merely hidden. Admin can now
+    // approve a salon while the owner's KYC is still pending: the
+    // corrected flow is submit -> Admin review/approval -> post-
+    // approval KYC Choice screen, so KYC is no longer a precondition
+    // for approval itself. Mandatory PAN+Bank verification is NOT
+    // removed: discoverability/bookability for a salon approved while
+    // KYC-pending is now independently enforced by
+    // business.isKycVerifiedForDiscovery (see utils/salonReady.guard.js
+    // and services/salonVisibilitySync.service.js) rather than by
+    // blocking the approval decision itself. The Owner's own
+    // submitSalon() (controllers/salon.onboarding.controller.js) is
+    // unaffected by this change — unchanged. The Field-Agent-assisted
+    // submitSalon() port (fieldAgentOnboarding.service.js) still
+    // enforces its own shared gate predicate at submit time, also
+    // unaffected — unchanged.
+
     // MUST-DO-NOW #3 — concurrency fix. The pre-check above (line 180)
     // reads from `salon`, loaded by a separate, earlier findById — two
     // concurrent requests can both read PENDING and both pass it. The

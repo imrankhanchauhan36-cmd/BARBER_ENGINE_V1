@@ -120,3 +120,76 @@ export const fieldAgentKycProviderRateLimiter = rateLimit({
     message: "Too many automatic verification attempts. Please try again later or continue with Manual KYC.",
   },
 });
+
+// ZEMISH onboarding-gate pass — Owner self-serve verification, exact
+// same config as fieldAgentKycProviderRateLimiter above (same product
+// shape: a real, possibly-billed Cashfree/Surepass call per attempt).
+export const ownerKycProviderRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: {
+    success: false,
+    message: "Too many automatic verification attempts. Please try again later or continue with Manual KYC.",
+  },
+});
+
+//////////////////////////////////////////////////////////////
+// 🪪 PHASE 3b — OWNER + ADMIN KYC LIMITS (Global Verification Engine
+// security hardening, approved 2026-10-10)
+//
+// Closes the gap the FA-3.2 comment above explicitly deferred: Owner's
+// self-serve KYC routes (modules/kyc/routes/ownerKyc.routes.js) and the
+// live admin KYC verification routes (routes/admin.routes.js) had no
+// rate limiting at all before this phase. Thresholds mirror the
+// already-proven Field Agent values above — confirmed safe via a
+// read-only check of salon-app's kycApi.js (no client-side retry loop)
+// and KYCScreen.js (buttons already disabled while a request is
+// in-flight; a real session produces ~9 requests total, far under
+// these limits).
+//
+// Uses the exact same baseConfig (and therefore the exact same
+// keyGenerator — req.user._id, falling back to IP only when
+// unauthenticated, which cannot happen on these protect()-gated
+// routes) as every limiter above. No existing limiter, and no
+// Field Agent route, is modified by this section.
+//////////////////////////////////////////////////////////////
+
+export const ownerKycSubmissionRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 1000, // 1 min
+  max: 10,
+  message: {
+    success: false,
+    message: "Too many KYC submission requests. Please wait.",
+  },
+});
+
+export const ownerKycDocumentRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 1000, // 1 min
+  max: 10,
+  message: {
+    success: false,
+    message: "Too many document upload requests. Please wait.",
+  },
+});
+
+// Admin review throughput is deliberately NOT capped at Field Agent's
+// self-serve 5/hour level — an admin legitimately batches through a
+// queue of pending KYC records in one sitting. 30/min is abuse
+// prevention only, far above normal single-admin review pace, and
+// only verify-pan ever has real provider-cost exposure today
+// (Surepass, when configured) — verify-aadhaar/verify-bank are
+// Manual-only in the current admin flow (confirmed in the Phase 1
+// audit), so none of the three can run up an unbounded real bill even
+// at this ceiling.
+export const adminKycVerifyRateLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: 60 * 1000, // 1 min
+  max: 30,
+  message: {
+    success: false,
+    message: "Too many verification attempts. Please wait.",
+  },
+});

@@ -13,6 +13,7 @@ export const SALON_NOT_READY_REASONS = {
   INVALID_ID:       "INVALID_SALON_ID",
   NOT_FOUND:        "SALON_NOT_FOUND",
   NOT_APPROVED:     "SALON_NOT_APPROVED",
+  KYC_NOT_VERIFIED: "SALON_KYC_NOT_VERIFIED",
   DELETED:          "SALON_DELETED",
   NO_SERVICES:      "NO_ACTIVE_SERVICES",
   NO_CHAIRS:        "NO_ACTIVE_CHAIRS",
@@ -86,7 +87,7 @@ export const isSalonReadyForBooking = async (salonId) => {
         _id: salonId,
         isDeleted: { $ne: true },
       })
-        .select("approval business timings")
+        .select("approval business.isForceClosed timings")
         .lean(),
 
       Service.countDocuments({

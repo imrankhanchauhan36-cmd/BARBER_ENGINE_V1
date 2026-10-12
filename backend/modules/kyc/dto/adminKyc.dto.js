@@ -2,7 +2,19 @@
  * BARBER ENGINE V1
  * backend/modules/kyc/dto/adminKyc.dto.js
  * Admin KYC DTOs — Phase 6A
+ *
+ * ZEMISH completion pass — toDetailDTO now also reports whether GST was
+ * verified. No `verification.gst` field exists on KYC.js by design (see
+ * that model's own header: GST never gates anything, so its outcome is
+ * derived on read from the existing VerificationLog trail instead of a
+ * stored boolean) — this mirrors the exact same derivation
+ * fieldAgentKyc.controller.js's own DTO already uses for the identical
+ * field. toDetailDTO is now async (one extra read-only query) — additive
+ * to its return shape only; its one caller (adminKyc.controller.js
+ * ::getKYCDetail) now awaits it.
  */
+
+import VerificationLog from "../models/VerificationLog.js";
 
 // ─── Verification field DTO ───────────────────────────────
 const verificationField = (v = {}) => ({
@@ -93,8 +105,16 @@ export const toListDTO = (kyc) => {
 /**
  * Detail DTO
  */
-export const toDetailDTO = (kyc) => {
+export const toDetailDTO = async (kyc) => {
   const owner = kyc.ownerId || {}
+
+  // GST verified status — derived from the latest {field:"gst"} log row,
+  // only queried when a GST number was actually submitted (mirrors
+  // fieldAgentKyc.controller.js's identical DTO logic exactly).
+  const gstVerified = kyc.identity?.gst?.maskedNumber
+    ? !!(await VerificationLog.findOne({ kycId: kyc._id, field: "gst" }).sort({ createdAt: -1 }).select("success").lean())?.success
+    : false
+
   return {
     id:                kyc._id,
     status:            kyc.status            ?? null,
@@ -123,6 +143,7 @@ export const toDetailDTO = (kyc) => {
       },
       gst: {
         maskedNumber: kyc.identity?.gst?.maskedNumber ?? null,
+        verified:     gstVerified,
       },
     },
 
@@ -153,6 +174,7 @@ export const toDetailDTO = (kyc) => {
       bank:         verificationField(kyc.verification?.bank),
       ocr:          verificationField(kyc.verification?.ocr),
       face:         verificationField(kyc.verification?.face),
+      liveness:     verificationField(kyc.verification?.liveness),
       manualReview: verificationField(kyc.verification?.manualReview),
     },
 

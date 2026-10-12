@@ -15,24 +15,26 @@
  * surepass.provider.js's own header already flags for Surepass —
  * confirm these against the live Cashfree dashboard/docs for the
  * merchant's actual provisioned product set before enabling in
- * production. Until CASHFREE_CLIENT_ID/CASHFREE_CLIENT_SECRET are set,
- * every method below returns success:false so verification.service.js
- * falls through to the next configured provider — same "not configured
- * → fall through" behavior Surepass already has.
+ * production.
+ *
+ * ZEMISH dual-environment pass — credentials and base URL now come
+ * exclusively from resolveCashfreeVerificationConfig()
+ * (cashfreeVerificationConfig.js), which reads CASHFREE_VERIFICATION_
+ * ENV/CLIENT_ID/CLIENT_SECRET — a dedicated set, isolated from the
+ * CASHFREE_CLIENT_ID/CASHFREE_CLIENT_SECRET/CASHFREE_ENV Cashfree
+ * Payouts keeps using (see that file's own header). Resolved fresh on
+ * every call, never cached at module-load. Whenever that resolver
+ * returns configured:false — missing credentials OR an unrecognized
+ * environment value — every method below returns success:false so
+ * verification.service.js falls through to the next configured
+ * provider, same "not configured → fall through" behavior Surepass
+ * already has. This never silently defaults to Sandbox or Production.
  */
 
 import { VERIFICATION_SOURCE, VERIFICATION_STATUS } from "../constants/kyc.constants.js";
-
-const CASHFREE_BASE = process.env.CASHFREE_ENV === "PRODUCTION"
-  ? "https://api.cashfree.com/verification"
-  : "https://sandbox.cashfree.com/verification";
+import { resolveCashfreeVerificationConfig } from "./cashfreeVerificationConfig.js";
 
 const TIMEOUT_MS = 20_000;
-
-const getCredentials = () => ({
-  clientId:     process.env.CASHFREE_CLIENT_ID,
-  clientSecret: process.env.CASHFREE_CLIENT_SECRET,
-});
 
 const notConfigured = (method) => ({
   success:     false,
@@ -80,18 +82,22 @@ const extractProviderRef = (response = {}) =>
 // caller that doesn't pass it is completely unaffected. Added for
 // Phase 2D: Cashfree's /face-liveness endpoint requires an
 // `x-api-version` header no other endpoint used so far has needed.
-const callCashfree = async (path, body, extraHeaders = {}) => {
-  const { clientId, clientSecret } = getCredentials();
+//
+// `config` is the ALREADY-RESOLVED, ALREADY-configured:true result of
+// resolveCashfreeVerificationConfig() — every exported method below
+// resolves and checks it before calling this, so by the time this
+// runs, baseUrl/clientId/clientSecret are always genuinely present.
+const callCashfree = async (config, path, body, extraHeaders = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${CASHFREE_BASE}${path}`, {
+    const res = await fetch(`${config.baseUrl}${path}`, {
       method: "POST",
       headers: {
         "Content-Type":     "application/json",
-        "x-client-id":      clientId,
-        "x-client-secret":  clientSecret,
+        "x-client-id":      config.clientId,
+        "x-client-secret":  config.clientSecret,
         ...extraHeaders,
       },
       body: JSON.stringify(body),
@@ -113,11 +119,11 @@ const callCashfree = async (path, body, extraHeaders = {}) => {
  * ─── PAN ──────────────────────────────────────────────────
  */
 export const verifyPANCashfree = async ({ panNumber, nameOnPAN }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("PAN verification");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("PAN verification");
 
   try {
-    const { ok, json } = await callCashfree("/pan", { pan: panNumber, name: nameOnPAN || undefined });
+    const { ok, json } = await callCashfree(config, "/pan", { pan: panNumber, name: nameOnPAN || undefined });
 
     if (!ok || json.valid !== true) {
       return failed(json.message || "PAN verification failed", extractProviderRef(json));
@@ -132,7 +138,12 @@ export const verifyPANCashfree = async ({ panNumber, nameOnPAN }) => {
       data: {
         panNumber,
         nameOnPAN:  json.registered_name ?? nameOnPAN ?? null,
-        panType:    json.pan_type ?? null,
+        // FIX — Cashfree's real, documented Verify PAN Sync response
+        // field is `type` (e.g. "Individual"/"Business"), not
+        // `pan_type`. Confirmed against a genuine sample response in
+        // Cashfree's own API reference before this call was ever
+        // made; the previous field name meant this was always null.
+        panType:    json.type ?? null,
         verifiedAt: new Date(),
       },
     };
@@ -145,11 +156,11 @@ export const verifyPANCashfree = async ({ panNumber, nameOnPAN }) => {
  * ─── AADHAAR (2-step OTP) ─────────────────────────────────
  */
 export const initiateAadhaarOTPCashfree = async ({ aadhaarNumber }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("Aadhaar OTP initiation");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("Aadhaar OTP initiation");
 
   try {
-    const { ok, json } = await callCashfree("/offline-aadhaar/otp", { aadhaar_number: aadhaarNumber });
+    const { ok, json } = await callCashfree(config, "/offline-aadhaar/otp", { aadhaar_number: aadhaarNumber });
     const providerRef = extractProviderRef(json);
 
     if (!ok || !json.ref_id) {
@@ -181,11 +192,11 @@ export const initiateAadhaarOTPCashfree = async ({ aadhaarNumber }) => {
 };
 
 export const verifyAadhaarOTPCashfree = async ({ refId, otp }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("Aadhaar OTP verification");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("Aadhaar OTP verification");
 
   try {
-    const { ok, json } = await callCashfree("/offline-aadhaar/verify", { ref_id: refId, otp });
+    const { ok, json } = await callCashfree(config, "/offline-aadhaar/verify", { ref_id: refId, otp });
     // Prefer the response's own reference id when Cashfree returns one;
     // fall back to the client-tracked refId (our own pending-session
     // identifier) when it doesn't — preserves prior behavior for this
@@ -218,11 +229,11 @@ export const verifyAadhaarOTPCashfree = async ({ refId, otp }) => {
  * ─── BANK ─────────────────────────────────────────────────
  */
 export const verifyBankCashfree = async ({ accountNumber, ifsc, accountHolder }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("Bank verification");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("Bank verification");
 
   try {
-    const { ok, json } = await callCashfree("/bank-account/sync", {
+    const { ok, json } = await callCashfree(config, "/bank-account/sync", {
       bank_account: accountNumber,
       ifsc,
       name:         accountHolder,
@@ -269,11 +280,11 @@ export const verifyBankCashfree = async ({ accountNumber, ifsc, accountHolder })
  * a real successful response before relying on it.
  */
 export const verifyFaceMatchCashfree = async ({ verificationId, selfieUrl }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("Face match");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("Face match");
 
   try {
-    const { ok, json } = await callCashfree("/face-match", {
+    const { ok, json } = await callCashfree(config, "/face-match", {
       verification_id: verificationId,
       image: selfieUrl,
     });
@@ -317,11 +328,12 @@ export const verifyFaceMatchCashfree = async ({ verificationId, selfieUrl }) => 
 const CASHFREE_API_VERSION = "2024-12-01";
 
 export const verifyLivenessCashfree = async ({ verificationId, selfieUrl }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("Liveness check");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("Liveness check");
 
   try {
     const { ok, json } = await callCashfree(
+      config,
       "/face-liveness",
       { verification_id: verificationId, image: selfieUrl },
       { "x-api-version": CASHFREE_API_VERSION }
@@ -348,11 +360,11 @@ export const verifyLivenessCashfree = async ({ verificationId, selfieUrl }) => {
  * ─── GST (optional) ───────────────────────────────────────
  */
 export const verifyGSTCashfree = async ({ gstNumber }) => {
-  const { clientId, clientSecret } = getCredentials();
-  if (!clientId || !clientSecret) return notConfigured("GST verification");
+  const config = resolveCashfreeVerificationConfig();
+  if (!config.configured) return notConfigured("GST verification");
 
   try {
-    const { ok, json } = await callCashfree("/gstin", { GSTIN: gstNumber });
+    const { ok, json } = await callCashfree(config, "/gstin", { GSTIN: gstNumber });
 
     if (!ok || json.valid !== true) {
       return failed(json.message || "GST verification failed", extractProviderRef(json));
@@ -366,8 +378,15 @@ export const verifyGSTCashfree = async ({ gstNumber }) => {
       providerRef: extractProviderRef(json),
       data: {
         gstNumber,
-        legalName:  json.legal_name ?? null,
-        tradeName:  json.trade_name ?? null,
+        // FIX — Cashfree's real, documented Verify GSTIN response
+        // fields are `legal_name_of_business` and
+        // `trade_name_of_business`, not `legal_name`/`trade_name`.
+        // Confirmed against a genuine sample response in Cashfree's
+        // own API reference, and reproduced live in a real Sandbox
+        // call (both previously resolved to null). `gst_in_status`
+        // was already correct and is unchanged.
+        legalName:  json.legal_name_of_business ?? null,
+        tradeName:  json.trade_name_of_business ?? null,
         gstStatus:  json.gst_in_status ?? null,
         verifiedAt: new Date(),
       },

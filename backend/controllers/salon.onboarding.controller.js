@@ -13,6 +13,11 @@ import { assignAdminByDistrict } from "../services/adminAssign.service.js";
 import geoService from "../services/geo.service.js";
 import { invalidateAllNextSlotCache } from "../services/slotEngine.service.js";
 import logger from "../utils/logger.js";
+// ZEMISH expected-flow correction — the KYC gate that previously used
+// KYC/APPLICANT_TYPE/isMandatoryOwnerKycVerified in this file
+// (saveBasicInfo and submitSalon, both already removed in earlier
+// passes) is gone; neither import is used anywhere in this file
+// anymore.
 
 ///////////////////////////////////////////////////////////
 // STEP 1 — SAVE BASIC INFO (UNCHANGED — PERFECT)
@@ -131,6 +136,23 @@ export const saveBasicInfo = async (req, res) => {
       "location.geo.coordinates": [0, 0],
       "approval.status": "DRAFT",
     };
+
+    // ZEMISH Partner Registration restore pass — the creation-time KYC
+    // gate that used to live here has been REMOVED, not merely hidden:
+    // a brand-new owner can now save basic info and continue onboarding
+    // without PAN+Bank already verified. Mandatory PAN+Bank is still
+    // fully enforced — just at the later, more appropriate transition
+    // points, which were already built as defense-in-depth alongside
+    // this gate and are completely unaffected by its removal:
+    //   - this same function's own submitSalon() (DRAFT→PENDING, below
+    //     in this file) — its own comment already called this gate
+    //     check "normally redundant for the self-serve path" while
+    //     this one existed; it is now the real, primary enforcement.
+    //   - fieldAgentOnboarding.service.js's submitSalon() port, for
+    //     Field-Agent-assisted onboarding.
+    //   - admin.controller.js's updateSalonStatus(), on final APPROVED.
+    // See isMandatoryOwnerKycVerified's own header (utils/
+    // onboardingKycGate.js) for exactly what "mandatory" covers.
 
     // Phase 11L fix: $max MUST be a sibling top-level operator alongside
     // $set/$setOnInsert, not a key nested inside the object passed to
@@ -1643,6 +1665,23 @@ export const submitSalon = async (req, res) => {
     if (salon.onboarding?.step < 7) {
       throw new Error("Complete all steps before submit");
     }
+
+    // ZEMISH expected-flow correction — the KYC gate that used to live
+    // here has been REMOVED, not merely hidden: an owner can now
+    // submit a complete salon application for Admin review without
+    // PAN+Bank already verified. This matches the corrected business
+    // flow (submit → Admin review/approval → post-approval KYC Choice
+    // screen) — KYC is enforced at a later stage, not here. Mandatory
+    // PAN+Bank verification itself is NOT removed or weakened: the
+    // Field-Agent-assisted submitSalon() port (fieldAgentOnboarding.
+    // service.js) and admin.controller.js's updateSalonStatus()
+    // (APPROVED branch) both still enforce the same shared gate
+    // predicate exactly as before — unchanged, unaffected by this
+    // edit. Note:
+    // with this change, Admin's own approval gate is now the first
+    // point in the Owner flow that would still require KYC — closing
+    // that gap (if desired) is a separate, not-yet-authorized change,
+    // not made here.
 
     //////////////////////////////////////////////////////
     // 🔥 DATA COMPLETENESS CHECK (CONSISTENT READ)

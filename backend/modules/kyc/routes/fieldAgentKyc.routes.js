@@ -12,7 +12,7 @@
 import express from "express";
 import multer from "multer";
 import cloudinary from "../../../config/cloudinary.js";
-import { idempotency } from "../../../middlewares/idempotency.middleware.js";
+import { scopedIdempotency } from "../../../middlewares/scopedIdempotency.middleware.js";
 import {
     fieldAgentKycDocumentRateLimiter,
     fieldAgentKycProviderRateLimiter,
@@ -67,7 +67,7 @@ router.get("/", getMyFieldAgentKYC);
 router.post(
   "/identity",
   fieldAgentKycSubmissionRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.identity"),
   validate(fieldAgentKycSchemas.identity),
   submitFieldAgentIdentityHandler
 );
@@ -75,7 +75,7 @@ router.post(
 router.post(
   "/bank",
   fieldAgentKycSubmissionRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.bank"),
   validate(fieldAgentKycSchemas.bank),
   submitFieldAgentBankHandler
 );
@@ -127,19 +127,32 @@ router.post(
 router.post(
   "/verify/pan",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.verifyPan"),
   validate(fieldAgentKycSchemas.verifyPan),
   verifyFieldAgentPANHandler
 );
 
 // ─── Phase 7A — Cashfree Secure ID self-serve routes ────────────────
-// Same protect/requireRole (applied above)/rate-limiter/idempotency
-// pattern as the existing /verify/pan route — each may hit a real,
-// billed Cashfree API call.
+// Same protect/requireRole (applied above)/rate-limiter pattern as the
+// existing /verify/pan route — each may hit a real, billed Cashfree
+// API call.
+//
+// Migrated from the shared, unscoped `idempotency` middleware to
+// `scopedIdempotency` (same pattern already used by ownerKyc.routes.js
+// and routes/admin.routes.js's KYC verify endpoints) — closes a real,
+// previously-disclosed gap: the unscoped middleware's Redis key
+// (`idempotency:<userId>:<key>`) does not incorporate the route, so a
+// client reusing the same literal Idempotency-Key header value across
+// two different provider-calling routes here (e.g. /verify/bank and
+// /verify/face) would have silently received the WRONG route's cached
+// response. Each route below now gets its own key namespace plus
+// payload-mismatch detection — see scopedIdempotency.middleware.js's
+// own header for the full mechanism. Purely additive: response shapes,
+// rate limiters, and validators are all unchanged.
 router.post(
   "/aadhaar/initiate",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.aadhaarInitiate"),
   validate(fieldAgentKycSchemas.aadhaarInitiate),
   verifyFieldAgentAadhaarInitiateHandler
 );
@@ -147,7 +160,7 @@ router.post(
 router.post(
   "/aadhaar/verify",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.aadhaarVerify"),
   validate(fieldAgentKycSchemas.aadhaarVerify),
   verifyFieldAgentAadhaarCompleteHandler
 );
@@ -155,7 +168,7 @@ router.post(
 router.post(
   "/verify/bank",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.verifyBank"),
   validate(fieldAgentKycSchemas.verifyBank),
   verifyFieldAgentBankHandler
 );
@@ -163,25 +176,25 @@ router.post(
 router.post(
   "/verify/face",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.verifyFace"),
   verifyFieldAgentFaceMatchHandler
 );
 
 router.post(
   "/verify/liveness",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.verifyLiveness"),
   verifyFieldAgentLivenessHandler
 );
 
 router.post(
   "/verify/gst",
   fieldAgentKycProviderRateLimiter,
-  idempotency,
+  scopedIdempotency("fieldAgentKyc.verifyGst"),
   validate(fieldAgentKycSchemas.verifyGst),
   verifyFieldAgentGSTHandler
 );
 
-router.post("/submit", fieldAgentKycSubmissionRateLimiter, idempotency, submitFieldAgentKYCHandler);
+router.post("/submit", fieldAgentKycSubmissionRateLimiter, scopedIdempotency("fieldAgentKyc.submit"), submitFieldAgentKYCHandler);
 
 export default router;

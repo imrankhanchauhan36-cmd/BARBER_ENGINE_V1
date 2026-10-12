@@ -51,3 +51,6 @@ postman/
 
 # Admin Panel has its own Git repository
 /admin-panel/
+
+# ZEMISH website has its own Git repository
+/zemish-web/

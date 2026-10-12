@@ -54,4 +54,23 @@ export const AUDIT_ACTIONS = {
   POLICY_OVERRIDE_UPDATED: "POLICY_OVERRIDE_UPDATED",
   POLICY_OVERRIDE_PUBLISHED: "POLICY_OVERRIDE_PUBLISHED",
   POLICY_OVERRIDE_RETIRED: "POLICY_OVERRIDE_RETIRED",
+
+  // KYC admin decisions (ZEMISH Phase 4) — targetType "KYC",
+  // targetId the KYC record's own _id (not the salon/owner), mirroring
+  // the existing per-entity pattern (e.g. DISTRICT_* above, read back
+  // via GET /admin/districts/:id/audit). Written only on a genuinely
+  // persisted decision (adminKyc.controller.js's approveKYCHandler/
+  // rejectKYCHandler, after the KYC write already committed) or a
+  // completed admin-triggered field verification attempt (success or
+  // failure — meta.success records which). Same string values as
+  // notificationEvents.constants.js's KYC_APPROVED/KYC_REJECTED by
+  // deliberate choice (the same real-world decision, logged to two
+  // different systems for two different audiences) — not a collision,
+  // these are separate collections (Notification vs AdminAuditLog).
+  KYC_APPROVED:          "KYC_APPROVED",
+  KYC_REJECTED:          "KYC_REJECTED",
+  KYC_PAN_VERIFIED:      "KYC_PAN_VERIFIED",
+  KYC_AADHAAR_VERIFIED:  "KYC_AADHAAR_VERIFIED",
+  KYC_BANK_VERIFIED:     "KYC_BANK_VERIFIED",
+  KYC_GST_VERIFIED:      "KYC_GST_VERIFIED",
 };

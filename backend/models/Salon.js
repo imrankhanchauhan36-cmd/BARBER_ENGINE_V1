@@ -289,7 +289,26 @@ const SalonSchema = new mongoose.Schema(
         default: false,
         index: true,
       },
-    
+
+      // ZEMISH Option B — additive, independent of approval.status
+      // (which keeps its exact existing meaning: "an admin has
+      // approved this application"). Set only via
+      // syncSalonVisibilityForOwner() (services/salonVisibilitySync.
+      // service.js), which recomputes it from the SAME existing
+      // isMandatoryOwnerKycVerified() predicate already used at
+      // submission/approval — never a separate verification rule.
+      // Default false is correct for brand-new records; existing
+      // APPROVED salons need the one-time backfill script
+      // (scripts/backfillSalonKycVisibility.mjs) to compute their real
+      // value, never assumed true from approval.status alone. Not yet
+      // read by discovery/booking — that integration is a later,
+      // separate phase.
+      isKycVerifiedForDiscovery: {
+        type:    Boolean,
+        default: false,
+        index:   true,
+      },
+
       suspendedReason: {
         type:      String,
         default:   null,

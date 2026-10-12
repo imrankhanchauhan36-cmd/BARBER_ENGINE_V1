@@ -7,12 +7,13 @@
 
 import mongoose from "mongoose";
 import {
+    APPLICANT_TYPE,
     KYC_STATUS,
     VERIFICATION_ACTION
 } from "../constants/kyc.constants.js";
 import VerificationLog from "../models/VerificationLog.js";
-import { verifyAadhaarManual, verifyBankManual, verifyPANManual } from "../providers/manual.provider.js";
-import { verifyPANSurepass } from "../providers/surepass.provider.js";
+import { verifyAadhaarManual } from "../providers/manual.provider.js";
+import { CHECK_TYPE, verifyViaNonCashfreeProvider } from "../engine/verificationOrchestrator.service.js";
 import {
     initiateAadhaarOTPCashfree,
     verifyAadhaarOTPCashfree,
@@ -22,13 +23,22 @@ import {
     verifyLivenessCashfree,
     verifyPANCashfree,
 } from "../providers/cashfree.provider.js";
+import { resolveCashfreeVerificationConfig } from "../providers/cashfreeVerificationConfig.js";
+import { syncSalonVisibilityForOwner } from "../../../services/salonVisibilitySync.service.js";
 import { encrypt } from "./encryption.service.js";
 import { maskAadhaar, maskAccount, maskGST, maskPAN } from "./masking.service.js";
 
-// Cashfree is configured only when both credentials are present — same
-// "presence of env var decides provider" convention already used for
-// Surepass (`!!process.env.SUREPASS_TOKEN`).
-const cashfreeConfigured = () => !!(process.env.CASHFREE_CLIENT_ID && process.env.CASHFREE_CLIENT_SECRET);
+// ZEMISH dual-environment pass — delegates to the same resolver
+// cashfree.provider.js itself uses, so there is exactly one source of
+// truth for "is the Verification Suite configured" (CASHFREE_
+// VERIFICATION_ENV/CLIENT_ID/CLIENT_SECRET — isolated from Cashfree
+// Payouts' own CASHFREE_CLIENT_ID/CASHFREE_CLIENT_SECRET/CASHFREE_ENV).
+// Fails closed: a missing credential OR an unrecognized environment
+// value both return false here, same as Surepass's own
+// `!!process.env.SUREPASS_TOKEN` presence check, so PAN/Bank cleanly
+// fall through to Surepass/Manual rather than attempting a
+// misconfigured Cashfree request.
+const cashfreeConfigured = () => resolveCashfreeVerificationConfig().configured;
 
 // ─── Log Helper ───────────────────────────────────────────
 const log = async (session, payload) => {
@@ -63,6 +73,32 @@ const calcKYCStatus = (level, currentStatus) => {
 /**
  * ─── VERIFY PAN ──────────────────────────────────────────
  * Uses Surepass if token available, else manual
+ *
+ * Phase 5.4.6 — the Surepass/Manual selection below (the `else`
+ * branch, when Cashfree is not configured) now calls through the
+ * already-approved, already-tested verificationOrchestrator.service.js
+ * (verifyViaNonCashfreeProvider) instead of inlining the useAPI check
+ * directly. REPLACES the call site — does not add a parallel call.
+ * The Cashfree-configured branch directly below is deliberately left
+ * completely UNCHANGED (still calls verifyPANCashfree directly): a
+ * genuine Cashfree failure must remain final, and routing it through
+ * the orchestrator's own Cashfree-direct path would require either
+ * enabling CASHFREE_DIRECT_CAPABILITY_FLAGS.PAN (forbidden — must stay
+ * disabled by default) or injecting a local override that mirrors
+ * cashfreeConfigured() (a larger, separately-reviewable change not
+ * made in this minimal phase). No behavior change on that branch.
+ *
+ * RESOLVED Phase 5.4.7 (was flagged as a known nuance in Phase 5.4.6's
+ * version of this comment): verifyViaNonCashfreeProvider's PAN logic
+ * used to call Surepass unconditionally and fall through to Manual on
+ * ANY non-success, which would have silently retried a genuine,
+ * configured Surepass rejection against Manual had SUREPASS_TOKEN ever
+ * been configured. It now selects Surepass OR Manual by configuration
+ * presence ONLY, decided before either is called — byte-identical to
+ * this function's own ORIGINAL inline selection logic (before Phase
+ * 5.4.6 replaced it with the orchestrator call below). See
+ * verificationOrchestrator.service.js's own Phase 5.4.7 hardening note
+ * on verifyViaNonCashfreeProvider for the full before/after rationale.
  *
  * FA-3.2 — added optional actorId/actorRole/actorIsAdmin, all
  * defaulting to the existing adminId/adminLevel/true so every existing
@@ -99,10 +135,16 @@ export const verifyPAN = async ({
     if (cashfreeConfigured()) {
       result = await verifyPANCashfree({ panNumber, nameOnPAN });
     } else {
-      const useAPI = !!process.env.SUREPASS_TOKEN;
-      result = useAPI
-        ? await verifyPANSurepass({ panNumber })
-        : await verifyPANManual({ panNumber, name: nameOnPAN });
+      // Phase 5.4.6 — replaces the inline useAPI?Surepass:Manual branch
+      // with a single call through the orchestrator's existing,
+      // already-tested pass-through. Same two underlying provider
+      // functions, same order; see this function's header note above
+      // for the one documented semantic nuance (currently unobservable).
+      result = await verifyViaNonCashfreeProvider({
+        checkType: CHECK_TYPE.PAN,
+        applicantType: APPLICANT_TYPE.OWNER,
+        payload: { panNumber, nameOnPAN },
+      });
     }
 
     // Encrypt + mask — never store plaintext PAN (identity.pan.number stays null)
@@ -143,6 +185,13 @@ export const verifyPAN = async ({
       remarks:         result.remarks,
       riskScoreAfter:  kyc.risk?.score ?? 0,
     });
+
+    // ZEMISH Option B, Phase 1 — inside this same transaction, before
+    // commit, so visibility and this KYC write are atomic: if this
+    // throws, the catch below aborts the WHOLE transaction, including
+    // the kyc.save() above. See salonVisibilitySync.service.js's own
+    // header for the full rationale.
+    await syncSalonVisibilityForOwner(kyc.ownerId, kyc, { session });
 
     await session.commitTransaction();
     return { success: result.success, result, kyc };
@@ -213,6 +262,16 @@ export const verifyAadhaar = async ({ kyc, last4, adminId, adminLevel, requestId
  * verifyPAN already uses, so a Field Agent self-serve call attributes
  * correctly without touching admin's existing call sites (all of which
  * omit these and get byte-identical adminId/adminLevel-based behavior).
+ *
+ * Phase 5.4.6 — the Manual-only `else` branch now calls through
+ * verifyViaNonCashfreeProvider instead of calling verifyBankManual
+ * inline. No Surepass bank product exists in either the old or new
+ * code, so there is no semantic nuance here (unlike verifyPAN above):
+ * verifyViaNonCashfreeProvider's BANK branch calls verifyBankManual
+ * with the exact same argument names, in the exact same (only)
+ * configuration state. The Cashfree-configured branch directly below
+ * is deliberately left completely UNCHANGED, for the same reason given
+ * in verifyPAN's header note above.
  */
 export const verifyBank = async ({
   kyc, accountNumber, ifsc, bankName, accountHolder, requestId,
@@ -227,7 +286,11 @@ export const verifyBank = async ({
 
     const result = cashfreeConfigured()
       ? await verifyBankCashfree({ accountNumber, ifsc, accountHolder })
-      : await verifyBankManual({ accountNumber, ifsc, bankName, accountHolder });
+      : await verifyViaNonCashfreeProvider({
+          checkType: CHECK_TYPE.BANK,
+          applicantType: APPLICANT_TYPE.OWNER,
+          payload: { accountNumber, ifsc, bankName, accountHolder },
+        });
 
     kyc.bank.accountHolder    = accountHolder;
     kyc.bank.encryptedAccount = encrypt(accountNumber);
@@ -259,6 +322,10 @@ export const verifyBank = async ({
       success: result.success, requestId, remarks: result.remarks,
       providerRef: result.providerRef ?? null,
     });
+
+    // ZEMISH Option B, Phase 1 — see verifyPAN's identical call for
+    // the full rationale (atomic with this transaction, fail-together).
+    await syncSalonVisibilityForOwner(kyc.ownerId, kyc, { session });
 
     await session.commitTransaction();
     return { success: result.success, result, kyc };

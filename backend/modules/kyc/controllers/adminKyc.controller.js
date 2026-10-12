@@ -10,16 +10,25 @@
 
 import Salon from "../../../models/Salon.js";
 import User from "../../../models/User.js";
+import AdminAuditLog from "../../../models/AdminAuditLog.js";
 import NotificationService from "../../../services/NotificationService.js";
 import { NOTIFICATION_CHANNEL } from "../../../constants/notification.constants.js";
 import { NOTIFICATION_EVENTS } from "../../notifications/constants/notificationEvents.constants.js";
 import { Errors, successResponse } from "../../../utils/response.js";
+import { AUDIT_ACTIONS } from "../../../utils/auditActions.js";
+// ZEMISH Phase 4 — utils/auditLog.js, NOT the unrelated, unused
+// utils/logAdminAction.js (confirmed via repo-wide grep: that second
+// file has zero real importers anywhere; every live caller —
+// district.controller.js, the Field Agent/finance services, etc. —
+// uses this one, which also threads req.ip/userAgent/requestId
+// through, unlike the unused file).
+import { logAdminAction } from "../../../utils/auditLog.js";
 import { APPLICANT_TYPE, KYC_STATUS } from "../constants/kyc.constants.js";
 import { toDetailDTO, toListDTO, toSummaryDTO } from "../dto/adminKyc.dto.js";
 import KYC from "../models/KYC.js";
 import { syncFieldAgentApplicationOnApproval, syncFieldAgentApplicationOnRejection } from "../services/fieldAgentKyc.service.js";
 import { approveKYC, assignKYC, getKYCLogs, rejectKYC, requestReupload } from "../services/kyc.service.js";
-import { verifyAadhaar, verifyBank, verifyPAN } from "../services/verification.service.js";
+import { verifyAadhaar, verifyBank, verifyGST, verifyPAN } from "../services/verification.service.js";
 import { validateApprove, validateAssign, validateReject, validateRequestReupload } from "../validators/kyc.validator.js";
 
 const isValidId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
@@ -233,23 +242,65 @@ export const getKYCDetail = async (req, res, next) => {
 
     const logs = await getKYCLogs(kyc._id);
 
+    // ZEMISH Phase 4 — AdminAuditLog is a SEPARATE collection/model
+    // from VerificationLog above (platform-wide admin-action trail vs
+    // KYC-domain field-verification trail — see auditActions.js's own
+    // header on KYC_APPROVED/KYC_REJECTED/KYC_*_VERIFIED for why both
+    // exist). Scoped to targetType:"KYC", targetId: THIS kyc's own
+    // _id — same per-entity pattern already proven by
+    // GET /admin/districts/:id/audit (district.controller.js), not a
+    // new, duplicate audit system. Normalized into the EXACT same
+    // shape the VerificationLog-derived entries already use below, so
+    // the existing admin-panel audit tab (which already renders this
+    // array generically) needed zero changes to show both sources
+    // merged, chronologically, in one table.
+    const adminActions = await AdminAuditLog
+      .find({ targetType: "KYC", targetId: kyc._id })
+      .populate("adminId", "name adminLevel")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const normalizedAdminActions = adminActions.map(a => ({
+      id:          a._id,
+      action:      a.action,
+      // Surfaces the underlying verification provider when this entry
+      // IS a verify-* attempt (meta.source, e.g. CASHFREE/SUREPASS/
+      // MANUAL — same meaning as the column already has for
+      // VerificationLog rows); falls back to "ADMIN" for approve/
+      // reject, which have no provider of their own.
+      source:      a.meta?.source ?? "ADMIN",
+      field:       null,
+      remarks:     a.meta?.reason ?? a.meta?.notes ?? null,
+      success:     a.meta?.success ?? true,
+      requestId:   a.requestId ?? null,
+      triggeredBy: a.adminId
+        ? { id: a.adminId._id, name: a.adminId.name, adminLevel: a.adminId.adminLevel }
+        : null,
+      createdAt: a.createdAt,
+    }));
+
+    const auditLogs = [
+      ...logs.map(l => ({
+        id:          l._id,
+        action:      l.action,
+        source:      l.source,
+        field:       l.field       ?? null,
+        remarks:     l.remarks     ?? null,
+        success:     l.success     ?? true,
+        requestId:   l.requestId   ?? null,
+        triggeredBy: l.triggeredBy
+          ? { id: l.triggeredBy._id, name: l.triggeredBy.name, adminLevel: l.triggeredBy.adminLevel }
+          : null,
+        createdAt: l.createdAt,
+      })),
+      ...normalizedAdminActions,
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     return successResponse(res, {
       message: "KYC detail fetched",
       data: {
-        ...toDetailDTO(kyc),
-        auditLogs: logs.map(l => ({
-          id:          l._id,
-          action:      l.action,
-          source:      l.source,
-          field:       l.field       ?? null,
-          remarks:     l.remarks     ?? null,
-          success:     l.success     ?? true,
-          requestId:   l.requestId   ?? null,
-          triggeredBy: l.triggeredBy
-            ? { id: l.triggeredBy._id, name: l.triggeredBy.name, adminLevel: l.triggeredBy.adminLevel }
-            : null,
-          createdAt: l.createdAt,
-        })),
+        ...(await toDetailDTO(kyc)),
+        auditLogs,
       },
     });
   } catch (err) { next(err) }
@@ -357,6 +408,31 @@ export const approveKYCHandler = async (req, res, next) => {
       await syncFieldAgentApplicationOnApproval(updated);
     }
 
+    //////////////////////////////////////////////////////
+    // 📝 AUDIT LOG (ZEMISH Phase 4, non-blocking, after write) —
+    // same placement principle as the notification block above: only
+    // reached once approveKYC() has already committed, so this can
+    // only ever record a genuinely persisted decision, never a
+    // rejected/conflicting attempt (those throw earlier and never
+    // reach here). Fire-and-forget (not awaited), matching the
+    // existing logAdminAction call-site convention everywhere else in
+    // this codebase (e.g. district.controller.js) — a logging failure
+    // can delay nothing and change nothing about the response already
+    // being prepared below.
+    //////////////////////////////////////////////////////
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_APPROVED,
+      targetType: "KYC",
+      targetId:   updated._id,
+      meta: {
+        applicantType: updated.applicantType,
+        status:        updated.status,
+        notes:         req.body.notes?.trim() || null,
+      },
+      req,
+    });
+
     return successResponse(res, {
       message: "KYC approved successfully",
       data: { id: updated._id, status: updated.status, approvedAt: updated.approvedAt, expiresAt: updated.expiresAt },
@@ -456,6 +532,26 @@ export const rejectKYCHandler = async (req, res, next) => {
     if (updated.applicantType === APPLICANT_TYPE.FIELD_AGENT) {
       await syncFieldAgentApplicationOnRejection(updated);
     }
+
+    //////////////////////////////////////////////////////
+    // 📝 AUDIT LOG (ZEMISH Phase 4, non-blocking, after write) — see
+    // approveKYCHandler's identical block above for the full
+    // rationale. The reject reason is included in `meta` on the same
+    // basis it's already sent verbatim in the notification message
+    // above — not a new exposure this phase introduces.
+    //////////////////////////////////////////////////////
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_REJECTED,
+      targetType: "KYC",
+      targetId:   updated._id,
+      meta: {
+        applicantType: updated.applicantType,
+        status:        updated.status,
+        reason:        req.body.reason.trim(),
+      },
+      req,
+    });
 
     return successResponse(res, {
       message: "KYC rejected",
@@ -565,6 +661,20 @@ export const verifyPANHandler = async (req, res, next) => {
       requestId: req.requestId ?? null,
     });
 
+    // ZEMISH Phase 4 — logged regardless of success/failure (an admin
+    // *attempting* verification is itself the auditable action; the
+    // outcome is recorded in meta.success, never the raw PAN number —
+    // only `source` (CASHFREE/SUREPASS/MANUAL) and the already-masked
+    // value already held on `kyc`).
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_PAN_VERIFIED,
+      targetType: "KYC",
+      targetId:   kyc._id,
+      meta:       { success, source: result.source, maskedPAN: kyc.identity.pan.maskedNumber },
+      req,
+    });
+
     return successResponse(res, {
       message: success ? "PAN verified successfully" : "PAN verification failed",
       data: {
@@ -602,6 +712,19 @@ export const verifyAadhaarHandler = async (req, res, next) => {
       kyc, last4: last4.trim(),
       adminId: admin._id, adminLevel: admin.adminLevel,
       requestId: req.requestId ?? null,
+    });
+
+    // ZEMISH Phase 4 — see verifyPANHandler's identical comment above.
+    // Never the raw Aadhaar (only last4 is ever collected at all per
+    // this handler's own design — see KYC.js's own header) — only the
+    // already-masked value already shown to the admin elsewhere.
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_AADHAAR_VERIFIED,
+      targetType: "KYC",
+      targetId:   kyc._id,
+      meta:       { success, source: result.source, maskedAadhaar: kyc.identity.aadhaar.maskedNumber },
+      req,
     });
 
     return successResponse(res, {
@@ -655,6 +778,18 @@ export const verifyBankHandler = async (req, res, next) => {
       requestId:      req.requestId ?? null,
     });
 
+    // ZEMISH Phase 4 — see verifyPANHandler's identical comment above.
+    // Never the raw account number — only the already-masked value and
+    // the non-sensitive IFSC (a bank branch code, not account PII).
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_BANK_VERIFIED,
+      targetType: "KYC",
+      targetId:   kyc._id,
+      meta:       { success, source: result.source, maskedAccount: kyc.bank.maskedAccount, ifsc: kyc.bank.ifsc },
+      req,
+    });
+
     return successResponse(res, {
       message: success ? "Bank verified successfully" : "Bank verification failed",
       data: {
@@ -666,6 +801,61 @@ export const verifyBankHandler = async (req, res, next) => {
         pennyDrop:     kyc.bank.pennyDropStatus,
         source:        result.source,
         remarks:       result.remarks,
+      },
+    });
+  } catch (err) { next(err) }
+};
+
+/**
+ * PATCH /admin/kyc/:id/verify-gst
+ * ZEMISH completion pass — GST is Cashfree-only (no Surepass/Manual
+ * equivalent, same as the existing verifyGST in verification.service.js,
+ * untouched here) and remains strictly OPTIONAL: it never updates
+ * verificationLevel/status (verifyGST itself never touches those
+ * fields — see that function's own header), so a failed or skipped GST
+ * verification can never block approval or any other check. Mirrors
+ * verifyPANHandler/verifyBankHandler's exact structure.
+ */
+export const verifyGSTHandler = async (req, res, next) => {
+  try {
+    const admin = req.user;
+    assertAdminLevel(admin, ["INDIA", "STATE"]);
+    if (!isValidId(req.params.id)) return next(Errors.badRequest("Invalid KYC ID"));
+
+    const { gstNumber } = req.body;
+    if (!gstNumber?.trim()) return next(Errors.badRequest("gstNumber is required"));
+    if (!/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstNumber.trim().toUpperCase())) {
+      return next(Errors.badRequest("Invalid GSTIN format. Expected: 22ABCDE1234F1Z5"));
+    }
+
+    const kyc = await KYC.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!kyc) return next(Errors.notFound("KYC not found"));
+    await assertKYCInScope(kyc, admin);
+
+    const { success, result } = await verifyGST({
+      kyc, gstNumber: gstNumber.trim().toUpperCase(),
+      actorId: admin._id, actorRole: admin.adminLevel,
+      requestId: req.requestId ?? null,
+    });
+
+    // ZEMISH Phase 4 — see verifyPANHandler's identical comment above.
+    logAdminAction({
+      adminId:    admin.id,
+      action:     AUDIT_ACTIONS.KYC_GST_VERIFIED,
+      targetType: "KYC",
+      targetId:   kyc._id,
+      meta:       { success, source: result.source, maskedGST: kyc.identity.gst.maskedNumber },
+      req,
+    });
+
+    return successResponse(res, {
+      message: success ? "GST verified successfully" : "GST verification did not succeed — this is optional and will not block approval",
+      data: {
+        id:           kyc._id,
+        maskedGST:    kyc.identity.gst.maskedNumber,
+        gstVerified:  success,
+        source:       result.source,
+        remarks:      result.remarks,
       },
     });
   } catch (err) { next(err) }

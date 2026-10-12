@@ -70,11 +70,14 @@ import SalonMedia from "../../../models/SalonMedia.js";
 import Service from "../../../models/Service.js";
 import Staff from "../../../models/Staff.js";
 import User from "../../../models/User.js";
+import KYC from "../../kyc/models/KYC.js";
+import { APPLICANT_TYPE } from "../../kyc/constants/kyc.constants.js";
+import { isMandatoryOwnerKycVerified } from "../../../utils/onboardingKycGate.js";
 import { assignAdminByDistrict } from "../../../services/adminAssign.service.js";
 import geoService from "../../../services/geo.service.js";
 import { invalidateAllNextSlotCache } from "../../../services/slotEngine.service.js";
 import logger from "../../../utils/logger.js";
-import { Errors } from "../../../utils/response.js";
+import { AppError, Errors } from "../../../utils/response.js";
 
 // FIELD-AGENT-SCOPED RULE (differs from the frozen Owner controller's
 // own [DRAFT,APPROVED] allow-list by deliberate product decision,
@@ -737,7 +740,7 @@ export const submitSalon = async ({ salonId }) => {
   try {
     session.startTransaction();
 
-    const salon = await Salon.findById(salonId).select("_id onboarding approval").session(session);
+    const salon = await Salon.findById(salonId).select("_id ownerId onboarding approval").session(session);
     if (!salon) throw Errors.notFound("Salon not found");
 
     // Uses the same EDITABLE_STATUSES allow-list as every other step
@@ -749,6 +752,25 @@ export const submitSalon = async ({ salonId }) => {
     // place APPROVED was still named as if it were editable.
     if (!EDITABLE_STATUSES.includes(salon.approval?.status)) throw Errors.badRequest("Already submitted or not editable");
     if (salon.onboarding?.step < 7) throw Errors.badRequest("Complete all steps before submit");
+
+    // ZEMISH assisted-onboarding gate (Section A) — a Field Agent may
+    // freely CREATE and fill in a draft for a brand-new owner (no gate
+    // anywhere upstream of this point: saveBasicInfo/saveLocation/
+    // saveServices/etc. above are all untouched). The owner's own
+    // mandatory PAN+Bank verification is enforced right here, at the
+    // one TRANSITION that takes the salon out of DRAFT and into admin
+    // review (PENDING) — the same choke point, and the same shared
+    // isMandatoryOwnerKycVerified() helper, used by the owner's own
+    // self-serve submitSalon in salon.onboarding.controller.js. This
+    // keeps both creation paths consistent without blocking assisted
+    // onboarding from starting.
+    const ownerKyc = await KYC.findOne({ ownerId: salon.ownerId, applicantType: APPLICANT_TYPE.OWNER, isDeleted: { $ne: true } })
+      .select("status verification.pan.verified verification.bank.verified")
+      .session(session)
+      .lean();
+    if (!isMandatoryOwnerKycVerified(ownerKyc)) {
+      throw new AppError("Owner must complete PAN and bank verification before this salon can be submitted for approval.", 403, "KYC_REQUIRED");
+    }
 
     const [servicesCount, staffCount, mediaCount, chairsCount] = await Promise.all([
       Service.countDocuments({ salonId: salon._id, isDeleted: false }).session(session),

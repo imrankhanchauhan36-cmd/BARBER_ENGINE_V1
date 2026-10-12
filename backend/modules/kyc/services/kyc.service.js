@@ -44,6 +44,7 @@ import KYC from "../models/KYC.js";
 import KYCDocument from "../models/KYCDocument.js";
 import VerificationLog from "../models/VerificationLog.js";
 import { Errors } from "../../../utils/response.js";
+import { syncSalonVisibilityForOwner } from "../../../services/salonVisibilitySync.service.js";
 
 // PHASE C.2 — the only statuses an admin Approve/Reject decision may
 // start from. Mirrors fieldAgentApproval.service.js's own
@@ -158,6 +159,12 @@ export const approveKYC = async ({ kyc, adminId, adminLevel, notes, requestId })
         requestId, remarks: notes || null,
       })
 
+      // ZEMISH Option B, Phase 1 — same transaction, before commit,
+      // same fail-together rationale as verifyPAN/verifyBank. Uses
+      // `current` (the re-read-inside-transaction document), never the
+      // caller's possibly-stale outer `kyc` argument.
+      await syncSalonVisibilityForOwner(current.ownerId, current, { session })
+
       await session.commitTransaction()
       return current
     } catch (err) {
@@ -220,6 +227,14 @@ export const rejectKYC = async ({ kyc, adminId, adminLevel, reason, requestId })
         triggeredBy: adminId, triggeredByRole: adminLevel,
         requestId, remarks: reason,
       })
+
+      // ZEMISH Option B, Phase 1 — same transaction, before commit.
+      // This is the regression case: isMandatoryOwnerKycVerified()
+      // will now read status REJECTED (a disqualifying status) and
+      // correctly recompute false, revoking visibility for any
+      // already-APPROVED salon this owner has — the predicate itself
+      // is unchanged, this just keeps the Salon field in sync with it.
+      await syncSalonVisibilityForOwner(current.ownerId, current, { session })
 
       await session.commitTransaction()
       return current
@@ -307,6 +322,12 @@ export const requestReupload = async ({ kyc, documentType, reason, adminId, admi
       triggeredBy: adminId, triggeredByRole: adminLevel,
       field: documentType, requestId, remarks: reason,
     })
+
+    // ZEMISH Option B, Phase 1 — same transaction, before commit.
+    // Another regression case: REVERIFY_REQUIRED is a disqualifying
+    // status, so this correctly revokes visibility if it was
+    // previously granted.
+    await syncSalonVisibilityForOwner(kyc.ownerId, kyc, { session })
 
     await session.commitTransaction()
     return kyc
