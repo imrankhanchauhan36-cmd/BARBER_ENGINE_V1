@@ -20,6 +20,8 @@
  *   Booking.commissionAmountInPaise -> RevenueSplit.platformFeeInPaise
  *   Booking.gstRatePercent          -> RevenueSplit.gstRatePercent
  *   Booking.gstAmountInPaise        -> RevenueSplit.gstAmountInPaise
+ *   Booking.platformFeeGstRatePercent   -> RevenueSplit.platformFeeGstRatePercent   (additive, Phase 3)
+ *   Booking.platformFeeGstAmountInPaise -> RevenueSplit.platformFeeGstAmountInPaise (additive, Phase 3)
  *   Booking.totalAmountInPaise      -> RevenueSplit.customerPaidInPaise
  *   Derived (LOCKED split, unchanged): salonCreditInPaise =
  *     Booking.serviceAmountInPaise; zemishRevenueInPaise =
@@ -163,6 +165,11 @@ export const createRevenueSplitForBooking = async ({ booking }) => {
       platformFeeInPaise: booking.commissionAmountInPaise,
       gstRatePercent: booking.gstRatePercent,
       gstAmountInPaise: booking.gstAmountInPaise,
+      // Platform-fee GST (additive, Phase 3) — copied verbatim, same
+      // null-vs-zero discipline as gstRatePercent/gstAmountInPaise
+      // above; never recomputed here.
+      platformFeeGstRatePercent: booking.platformFeeGstRatePercent,
+      platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
       customerPaidInPaise: booking.totalAmountInPaise,
       // Derived — LOCKED split, unchanged: the salon is owed exactly the
       // service amount, Zemish's revenue is exactly the platform fee.

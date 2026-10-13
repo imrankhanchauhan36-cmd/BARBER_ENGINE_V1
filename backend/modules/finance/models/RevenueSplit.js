@@ -64,22 +64,62 @@ const revenueSplitSchema = new mongoose.Schema(
       validate: integerPaiseValidator,
       immutable: true,
     },
+    // FIXED (Phase 3 review, 2026-10-12): was `required: true`, but
+    // Booking.gstRatePercent/gstAmountInPaise CAN legitimately be null
+    // (no GST policy ever published at lockSlot time — Booking's own
+    // null-vs-zero convention). Copying that verbatim null into a
+    // required field made RevenueSplit.create() throw, caught by the
+    // outer try/catch in RevenueSplitIntegrationService.js, silently
+    // returning null — i.e. NO RevenueSplit (and therefore no
+    // GSTLedger row) was ever created for that booking. Confirmed
+    // live against the real dev database: every one of the real
+    // completed bookings that predated a published GST policy has
+    // zero RevenueSplit/GSTLedger trail because of exactly this.
+    // Nullable now, matching Booking's own convention exactly — never
+    // required again.
     gstRatePercent: {
       type: Number,
-      required: true,
+      default: null,
       min: 0,
       max: 100,
       immutable: true,
     },
 
     // ── Calculated outputs ──────────────────────────────────────────
+    // Same fix as gstRatePercent above — nullable, not required.
     gstAmountInPaise: {
       type: Number,
-      required: true,
-      min: 0,
-      validate: integerPaiseValidator,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
       immutable: true,
     },
+
+    // PLATFORM-FEE GST (additive, Phase 3) — mirrors Booking's own
+    // platformFeeGstRatePercent/platformFeeGstAmountInPaise exactly,
+    // copied verbatim by RevenueSplitIntegrationService.js. Nullable
+    // for the same reason as gstRatePercent/gstAmountInPaise above —
+    // a historical booking created before this feature existed has
+    // null here, never a fabricated value.
+    platformFeeGstRatePercent: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 100,
+      immutable: true,
+    },
+    platformFeeGstAmountInPaise: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
+      immutable: true,
+    },
+
     customerPaidInPaise: {
       type: Number,
       required: true,

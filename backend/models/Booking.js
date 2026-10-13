@@ -250,7 +250,8 @@ const BookingSchema = new mongoose.Schema(
     // Breakdown of totalAmountInPaise — needed because the Platform Fee
     // is charged ON TOP of the service price (not deducted from it):
     // totalAmountInPaise = serviceAmountInPaise + commissionAmountInPaise
-    //                      + (gstAmountInPaise || 0).
+    //                      + (gstAmountInPaise || 0)
+    //                      + (platformFeeGstAmountInPaise || 0).
     // The full serviceAmountInPaise goes to the salon on confirm;
     // commissionAmountInPaise and gstAmountInPaise both stay with the
     // platform. Stored per-booking (rather than re-deriving from the
@@ -298,11 +299,16 @@ const BookingSchema = new mongoose.Schema(
     // booking that predates this feature is distinguishable from one
     // where GST was genuinely computed as zero — same null-guarded
     // convention already established by cancellationPolicy/
-    // refundAmountInPaise below. GST base = serviceAmountInPaise +
-    // commissionAmountInPaise (locked business rule), resolved once at
-    // lockSlot from the currently PUBLISHED GstPolicyVersion and never
-    // re-read for an existing booking — a later rate change can never
-    // retroactively alter it.
+    // refundAmountInPaise below. GST base is serviceAmountInPaise
+    // ONLY — Platform Fee is deliberately excluded from this specific
+    // field (corrected 2026-10-12; this comment previously said the
+    // base included commissionAmountInPaise, which never matched the
+    // actual lockSlot/bookingPricing.service.js formula — see
+    // platformFeeGstRatePercent/platformFeeGstAmountInPaise just below
+    // for the separate charge that IS based on the platform fee).
+    // Resolved once at lockSlot from the currently PUBLISHED
+    // GstPolicyVersion and never re-read for an existing booking — a
+    // later rate change can never retroactively alter it.
     gstRatePercent: {
       type:    Number,
       default: null,
@@ -314,6 +320,34 @@ const BookingSchema = new mongoose.Schema(
       validate: {
         validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
         message:   "gstAmountInPaise must be a non-negative whole number (paise) or null",
+      },
+    },
+
+    // PLATFORM-FEE GST (additive, Phase 2, 2026-10-12) — a SEPARATE
+    // GST charge on the Platform Fee itself (commissionAmountInPaise
+    // above), independent of salon GST registration status, using
+    // GstPolicyVersion's own platformFeeGstRatePercent (the same
+    // published document gstRatePercent/gstAmountInPaise above
+    // already read from — no second policy). Same null-vs-zero
+    // convention: null means "not configured when this booking was
+    // priced" (fail-open, never blocks a booking), not "computed as
+    // zero". totalAmountInPaise = serviceAmountInPaise +
+    // commissionAmountInPaise + (gstAmountInPaise || 0) +
+    // (platformFeeGstAmountInPaise || 0). Resolved once at lockSlot
+    // (via services/bookingPricing.service.js, shared with the
+    // read-only GET /v1/bookings/user/quote endpoint) and never
+    // re-read for an existing booking.
+    platformFeeGstRatePercent: {
+      type:    Number,
+      default: null,
+      min:     [0, "platformFeeGstRatePercent cannot be negative"],
+    },
+    platformFeeGstAmountInPaise: {
+      type:    Number,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message:   "platformFeeGstAmountInPaise must be a non-negative whole number (paise) or null",
       },
     },
 

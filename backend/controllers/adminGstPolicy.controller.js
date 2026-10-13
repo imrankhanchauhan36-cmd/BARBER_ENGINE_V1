@@ -23,6 +23,7 @@ export const createDraftGstPolicyHandler = async (req, res, next) => {
       adminId: req.user._id,
       registeredRatePercent: req.body.registeredRatePercent,
       unregisteredRatePercent: req.body.unregisteredRatePercent,
+      platformFeeGstRatePercent: req.body.platformFeeGstRatePercent,
       req,
     });
     return successResponse(res, { statusCode: 201, message: "Draft GST policy created", data: { version } });
@@ -56,6 +57,7 @@ export const updateDraftGstPolicyHandler = async (req, res, next) => {
       adminId: req.user._id,
       registeredRatePercent: req.body.registeredRatePercent,
       unregisteredRatePercent: req.body.unregisteredRatePercent,
+      platformFeeGstRatePercent: req.body.platformFeeGstRatePercent,
       req,
     });
     return successResponse(res, { message: "Draft GST policy updated", data: { version } });

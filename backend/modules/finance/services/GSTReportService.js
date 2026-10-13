@@ -48,6 +48,12 @@ const emptyTotals = () => ({
   gstCollectedInPaise: 0,
   gstReversedInPaise: 0,
   netGSTLiabilityInPaise: 0,
+  // Platform-fee GST (additive, Phase 3) — own, parallel column set,
+  // never mixed into the service-GST totals above.
+  platformFeeGrossTaxableValueInPaise: 0,
+  platformFeeGstCollectedInPaise: 0,
+  platformFeeGstReversedInPaise: 0,
+  netPlatformFeeGstLiabilityInPaise: 0,
   bookingCount: 0,
   refundCount: 0,
 });
@@ -57,6 +63,10 @@ const addTotals = (a, b) => ({
   gstCollectedInPaise: a.gstCollectedInPaise + b.gstCollectedInPaise,
   gstReversedInPaise: a.gstReversedInPaise + b.gstReversedInPaise,
   netGSTLiabilityInPaise: a.netGSTLiabilityInPaise + b.netGSTLiabilityInPaise,
+  platformFeeGrossTaxableValueInPaise: a.platformFeeGrossTaxableValueInPaise + b.platformFeeGrossTaxableValueInPaise,
+  platformFeeGstCollectedInPaise: a.platformFeeGstCollectedInPaise + b.platformFeeGstCollectedInPaise,
+  platformFeeGstReversedInPaise: a.platformFeeGstReversedInPaise + b.platformFeeGstReversedInPaise,
+  netPlatformFeeGstLiabilityInPaise: a.netPlatformFeeGstLiabilityInPaise + b.netPlatformFeeGstLiabilityInPaise,
   bookingCount: a.bookingCount + b.bookingCount,
   refundCount: a.refundCount + b.refundCount,
 });
@@ -81,6 +91,11 @@ export const getMonthlyTotals = async (year) => {
         _id: { month: { $month: "$invoiceDate" }, ledgerType: "$ledgerType" },
         taxableValueInPaise: { $sum: "$taxableValueInPaise" },
         gstAmountInPaise: { $sum: "$gstAmountInPaise" },
+        // Platform-fee GST (additive, Phase 3) — summed independently;
+        // $sum ignores null/missing values, so a row with no
+        // platform-fee GST contributes 0 here without special-casing.
+        platformFeeTaxableValueInPaise: { $sum: "$platformFeeTaxableValueInPaise" },
+        platformFeeGstAmountInPaise: { $sum: "$platformFeeGstAmountInPaise" },
         rowCount: { $sum: 1 },
         bookingIds: { $addToSet: "$bookingId" },
       },
@@ -94,14 +109,18 @@ export const getMonthlyTotals = async (year) => {
     if (row._id.ledgerType === GST_LEDGER_TYPE.SALE) {
       bucket.grossTaxableValueInPaise += row.taxableValueInPaise;
       bucket.gstCollectedInPaise += row.gstAmountInPaise;
+      bucket.platformFeeGrossTaxableValueInPaise += row.platformFeeTaxableValueInPaise;
+      bucket.platformFeeGstCollectedInPaise += row.platformFeeGstAmountInPaise;
       bucket.bookingCount += row.bookingIds.length; // distinct within this one SALE bucket — safe, see file header
     } else if (row._id.ledgerType === GST_LEDGER_TYPE.REFUND_REVERSAL) {
       bucket.gstReversedInPaise += row.gstAmountInPaise;
+      bucket.platformFeeGstReversedInPaise += row.platformFeeGstAmountInPaise;
       bucket.refundCount += row.rowCount;
     }
   }
   for (const bucket of months) {
     bucket.netGSTLiabilityInPaise = bucket.gstCollectedInPaise - bucket.gstReversedInPaise;
+    bucket.netPlatformFeeGstLiabilityInPaise = bucket.platformFeeGstCollectedInPaise - bucket.platformFeeGstReversedInPaise;
   }
   return months;
 };

@@ -286,6 +286,7 @@ export const getBookingDetail = async (req, res, next) => {
           serviceAmountInPaise: booking.serviceAmountInPaise,
           commissionAmountInPaise: booking.commissionAmountInPaise,
           gstAmountInPaise: booking.gstAmountInPaise,
+          platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
         });
         refundBreakdown = {
           refundPolicy: booking.cancellationPolicy,
@@ -462,6 +463,7 @@ async function performAdminCancellation({ booking, now, reason, adminUser, sessi
     serviceAmountInPaise: booking.serviceAmountInPaise,
     commissionAmountInPaise: booking.commissionAmountInPaise,
     gstAmountInPaise: booking.gstAmountInPaise,
+    platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
   });
 
   // Preserves the exact customer-flow condition from cancelBooking() —

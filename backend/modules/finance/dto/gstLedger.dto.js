@@ -22,6 +22,12 @@ export const toGSTLedgerDTO = (ledger) => {
     gstRate: ledger.gstRate,
     gstAmount: paiseToRupees(ledger.gstAmountInPaise),
     platformFee: paiseToRupees(ledger.platformFeeInPaise),
+    // Platform-fee GST (additive, Phase 3) — own, separate component,
+    // null (not 0) on any row that never had it (same convention as
+    // the fields above).
+    platformFeeTaxableValue: paiseToRupees(ledger.platformFeeTaxableValueInPaise),
+    platformFeeGstRate: ledger.platformFeeGstRate ?? null,
+    platformFeeGstAmount: paiseToRupees(ledger.platformFeeGstAmountInPaise),
     invoiceDate: ledger.invoiceDate ?? null,
     policyVersion: ledger.policyVersion,
     createdAt: ledger.createdAt ?? null,

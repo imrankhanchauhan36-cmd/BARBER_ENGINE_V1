@@ -42,16 +42,24 @@ const forbiddenServerControlledFields = {
 // SALON GST LAUNCH PHASE (2026-10): two rates, both required on every
 // write — no default, no single-rate fallback, matching
 // GstPolicyVersion.js's own header rationale.
+//
+// PLATFORM-FEE GST FOUNDATION (additive, 2026-10-12): platformFeeGstRatePercent
+// is `.optional()` — deliberately NOT `.required()` — so every existing
+// create/update request for the two service-GST rates alone continues
+// to validate exactly as before. `.allow(null)` lets an update
+// explicitly clear a previously-set value back to "not configured".
 export const gstPolicySchemas = {
   createDraft: Joi.object({
     registeredRatePercent: Joi.number().min(0).max(100).required(),
     unregisteredRatePercent: Joi.number().min(0).max(100).required(),
+    platformFeeGstRatePercent: Joi.number().min(0).max(100).allow(null).optional(),
     ...forbiddenServerControlledFields,
   }).unknown(false),
 
   updateDraft: Joi.object({
     registeredRatePercent: Joi.number().min(0).max(100).required(),
     unregisteredRatePercent: Joi.number().min(0).max(100).required(),
+    platformFeeGstRatePercent: Joi.number().min(0).max(100).allow(null).optional(),
     ...forbiddenServerControlledFields,
   }).unknown(false),
 

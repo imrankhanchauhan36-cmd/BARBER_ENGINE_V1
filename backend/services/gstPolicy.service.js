@@ -47,14 +47,18 @@ const assertDraft = (version) => {
   }
 };
 
-export const createDraftGstPolicy = async ({ adminId, registeredRatePercent, unregisteredRatePercent, req }) => {
-  const version = await GstPolicyVersion.create({ registeredRatePercent, unregisteredRatePercent, createdBy: adminId });
+// platformFeeGstRatePercent is optional and additive — omitting it
+// (undefined) behaves exactly as before this phase; Mongoose simply
+// does not set the key, so existing callers that never pass it are
+// completely unaffected.
+export const createDraftGstPolicy = async ({ adminId, registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, req }) => {
+  const version = await GstPolicyVersion.create({ registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, createdBy: adminId });
   await logAdminAction({
     adminId,
     action: "GST_POLICY_CREATED",
     targetType: "GST_POLICY_VERSION",
     targetId: version._id,
-    meta: { registeredRatePercent, unregisteredRatePercent },
+    meta: { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent: platformFeeGstRatePercent ?? null },
     req,
   });
   return version;
@@ -83,18 +87,25 @@ export const getGstPolicyDetail = async (versionId) => {
   return version;
 };
 
-export const updateDraftGstPolicy = async ({ versionId, adminId, registeredRatePercent, unregisteredRatePercent, req }) => {
+export const updateDraftGstPolicy = async ({ versionId, adminId, registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, req }) => {
   const version = await getVersionOrThrow(versionId);
   assertDraft(version);
   version.registeredRatePercent = registeredRatePercent;
   version.unregisteredRatePercent = unregisteredRatePercent;
+  // Only touch the optional field when the caller explicitly sent
+  // something (a number to set it, or null to clear it) — undefined
+  // means "not part of this update," matching every existing caller
+  // that never sends platformFeeGstRatePercent at all.
+  if (platformFeeGstRatePercent !== undefined) {
+    version.platformFeeGstRatePercent = platformFeeGstRatePercent;
+  }
   await version.save();
   await logAdminAction({
     adminId,
     action: "GST_POLICY_UPDATED",
     targetType: "GST_POLICY_VERSION",
     targetId: version._id,
-    meta: { registeredRatePercent, unregisteredRatePercent },
+    meta: { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent: version.platformFeeGstRatePercent ?? null },
     req,
   });
   return version;
@@ -188,16 +199,29 @@ export const retireGstPolicy = async ({ versionId, adminId, req }) => {
 
 /**
  * Hot-path resolver — called once per booking at lockSlot. Returns
- * { registeredRatePercent, unregisteredRatePercent, versionId } for
- * the currently PUBLISHED policy, or null when none has ever been
- * published OR the published document predates this phase and lacks
- * both rates (a legacy single-`ratePercent` document) — either way,
- * booking.controller.js treats a null return as "no GST applies"
- * (null snapshot fields), exactly like a legacy pre-feature booking.
- * GST NEVER blocks a booking, so this never throws — it only ever
- * returns the resolved rates or null, same discipline as the old
- * single-rate resolver, just never silently computing with an
- * undefined rate from a pre-migration document.
+ * { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent,
+ * versionId } for the currently PUBLISHED policy, or null when none
+ * has ever been published OR the published document predates this
+ * phase and lacks both service-GST rates (a legacy single-`ratePercent`
+ * document) — either way, booking.controller.js treats a null return
+ * as "no GST applies" (null snapshot fields), exactly like a legacy
+ * pre-feature booking. GST NEVER blocks a booking, so this never
+ * throws — it only ever returns the resolved rates or null, same
+ * discipline as the old single-rate resolver, just never silently
+ * computing with an undefined rate from a pre-migration document.
+ *
+ * platformFeeGstRatePercent is validated SEPARATELY from the two
+ * service-GST rates (hasValidFeeRate vs hasValidTwoRates below) —
+ * additive, 2026-10-12. A currently-PUBLISHED policy that predates
+ * this field (or simply never set it) still resolves valid service
+ * GST; `platformFeeGstRatePercent` on the returned object is simply
+ * `null` in that case, until a policy explicitly containing a valid
+ * rate is published. The inverse also holds by construction: nothing
+ * about the fee-rate check can affect `hasValidTwoRates` above, so a
+ * malformed/missing fee rate can never disable service GST either.
+ * No caller in this phase reads this new field yet (not wired into
+ * booking.controller.js) — it is resolved and returned for the
+ * upcoming booking-engine phase only.
  */
 export const getPublishedGstPolicy = async () => {
   const now = Date.now();
@@ -206,16 +230,24 @@ export const getPublishedGstPolicy = async () => {
   }
 
   const published = await GstPolicyVersion.findOne({ status: GST_POLICY_STATUS.PUBLISHED })
-    .select("registeredRatePercent unregisteredRatePercent")
+    .select("registeredRatePercent unregisteredRatePercent platformFeeGstRatePercent")
     .lean();
 
   const hasValidTwoRates = published
     && Number.isFinite(published.registeredRatePercent)
     && Number.isFinite(published.unregisteredRatePercent);
 
+  const hasValidFeeRate = published
+    && Number.isFinite(published.platformFeeGstRatePercent);
+
   cache.cached = true;
   cache.policy = hasValidTwoRates
-    ? { registeredRatePercent: published.registeredRatePercent, unregisteredRatePercent: published.unregisteredRatePercent, versionId: published._id }
+    ? {
+        registeredRatePercent: published.registeredRatePercent,
+        unregisteredRatePercent: published.unregisteredRatePercent,
+        platformFeeGstRatePercent: hasValidFeeRate ? published.platformFeeGstRatePercent : null,
+        versionId: published._id,
+      }
     : null;
   cache.expiresAt = now + CACHE_TTL_MS;
   return cache.policy;

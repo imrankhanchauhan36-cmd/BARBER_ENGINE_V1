@@ -384,6 +384,7 @@ export const issueSourceRefundForCancelledBooking = async ({ bookingId, triggere
     serviceAmountInPaise: booking.serviceAmountInPaise,
     commissionAmountInPaise: booking.commissionAmountInPaise,
     gstAmountInPaise: booking.gstAmountInPaise,
+    platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
   });
   if (booking.refundAmountInPaise != null && booking.refundAmountInPaise !== refundPaise) {
     throw err(`Computed refund (${refundPaise} paise) does not match the amount recorded at cancellation time (${booking.refundAmountInPaise} paise) — refusing to execute an inconsistent refund`, 409);

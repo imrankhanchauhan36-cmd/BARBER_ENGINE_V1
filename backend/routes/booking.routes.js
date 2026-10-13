@@ -38,6 +38,7 @@ import {
   getEligibleProfessionalsForService,
 } from "../services/professionalAvailability.service.js";
 import { bookingSchemas } from "../validators/booking.validators.js";
+import { calculateBookingPricing } from "../services/bookingPricing.service.js";
 
 const router = express.Router();
 
@@ -189,6 +190,95 @@ userRouter.get("/eligible-professionals", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch eligible professionals",
+    });
+  }
+});
+
+// ── Pricing quote (additive, read-only) ───────────────────────
+// Shares calculateBookingPricing() with lockSlot's own pricing step
+// (services/bookingPricing.service.js) — quote and a real booking can
+// never independently disagree about a price. Read-only: no Booking
+// document is created, no slot is locked, no wallet/payment/ledger
+// side effect of any kind. Same inline-handler / manual-query-
+// validation / no-rate-limiter convention as the two read-only
+// endpoints immediately above (/slots, /eligible-professionals) —
+// deliberately NOT the Joi-validated, rate-limited convention used by
+// the write-side /lock, /confirm, /cancel routes below, since this
+// endpoint has no side effect to throttle and no idempotency key.
+//
+// FAIL-CLOSED on platform-fee GST (hardened, Phase 2 review,
+// 2026-10-12): calculateBookingPricing() now THROWS a {status:503,
+// code:"PLATFORM_FEE_GST_NOT_CONFIGURED"} error (caught below, same
+// shape as the pre-existing PLATFORM_FEE_NOT_CONFIGURED case) when
+// the published GST policy has no valid platformFeeGstRatePercent —
+// this quote never returns a seemingly-complete total that is
+// silently missing a required charge. Service GST remains unchanged
+// (fail-open — `serviceGst.configured:false` + a warning, exactly as
+// before), since an unpublished/legacy GST policy for service GST is
+// a legitimate historical state this codebase has always supported.
+userRouter.get("/quote", async (req, res) => {
+  try {
+    const { salonId, serviceRefs } = req.query;
+
+    if (!salonId || !serviceRefs) {
+      return res.status(400).json({
+        success: false,
+        message: "salonId and serviceRefs are required",
+      });
+    }
+
+    // Same comma-separated-ids convention as /eligible-professionals
+    // and /slots above.
+    const serviceRefList = String(serviceRefs).split(",").map((s) => s.trim()).filter(Boolean);
+    if (serviceRefList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "serviceRefs must contain at least one service id",
+      });
+    }
+
+    const pricing = await calculateBookingPricing({ salonId, serviceRefs: serviceRefList });
+
+    // Only service GST can still be unconfigured on a successful
+    // return — platform-fee GST being unconfigured now throws instead
+    // (caught below), so no warning branch for it exists here anymore.
+    const warnings = [];
+    if (pricing.gstRatePercent === null) {
+      warnings.push("No GST policy is currently published — no service GST has been applied to this quote.");
+    }
+
+    return res.status(200).json({
+      success: true,
+      salonId,
+      serviceRefs: serviceRefList,
+      serviceAmountInPaise: pricing.serviceAmountInPaise,
+      platformFee: {
+        amountInPaise: pricing.commissionAmountInPaise,
+        policyId:      pricing.platformFeePolicyRef,
+      },
+      serviceGst: {
+        configured:      pricing.gstRatePercent !== null,
+        ratePercent:     pricing.gstRatePercent,
+        amountInPaise:   pricing.gstAmountInPaise,
+        policyVersionId: pricing.gstPolicyVersionRef,
+      },
+      platformFeeGst: {
+        configured:      true,
+        ratePercent:     pricing.platformFeeGstRatePercent,
+        amountInPaise:   pricing.platformFeeGstAmountInPaise,
+        policyVersionId: pricing.gstPolicyVersionRef,
+      },
+      totalAmountInPaise:   pricing.totalAmountInPaise,
+      payableAmountInPaise: pricing.totalAmountInPaise,
+      warnings,
+    });
+
+  } catch (err) {
+    console.error("Quote error:", err);
+    return res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Failed to calculate quote",
+      ...(err.code ? { code: err.code } : {}),
     });
   }
 });

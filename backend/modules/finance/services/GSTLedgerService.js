@@ -32,12 +32,18 @@ const DUPLICATE_KEY_ERROR_CODE = 11000;
  * Creates the one SALE GSTLedger row for a RevenueSplit — a pure
  * snapshot, no recalculation.
  *
- * Rules (ticket's own wording):
- *   - GST disabled OR gstAmount == 0 → return null (RevenueCalculationService
- *     already forces gstAmountInPaise to 0 whenever GST was disabled at
- *     calculation time — see RevenueCalculationService.js — so checking
- *     gstAmountInPaise covers both cases without this file needing to
- *     know about a separate "gstEnabled" flag).
+ * Rules (FIXED, Phase 3 review, 2026-10-12 — see GSTLedger.js's own
+ * header for the full taxableValueInPaise correction this accompanies):
+ *   - a row is created whenever EITHER service GST OR platform-fee GST
+ *     was actually collected — not only when the (now-corrected)
+ *     service-GST amount is positive. Previously this function only
+ *     checked revenueSplit.gstAmountInPaise, which would have silently
+ *     DROPPED a real, legitimately-collected platform-fee-GST amount
+ *     for any booking whose service GST happens to be 0 (an
+ *     unregistered salon, for example) — exactly the "fee-GST-only
+ *     case" this phase's own requirements call out.
+ *   - both GST components absent/zero → return null (nothing collected
+ *     at all for this booking — no row).
  *   - idempotent: a second call for the same RevenueSplit returns the
  *     EXISTING row, never a second one.
  *   - never throws on a duplicate-key race — returns the winner's row.
@@ -46,14 +52,19 @@ const DUPLICATE_KEY_ERROR_CODE = 11000;
  *
  * @param {{ revenueSplit: object }} params - a RevenueSplit document
  *   (mongoose doc or plain object) with at least _id, bookingId,
- *   platformFeeInPaise, gstRatePercent, gstAmountInPaise, policyVersion.
+ *   serviceAmountInPaise, platformFeeInPaise, gstRatePercent,
+ *   gstAmountInPaise, platformFeeGstRatePercent,
+ *   platformFeeGstAmountInPaise, policyVersion.
  * @returns {Promise<object|null>}
  */
 export const createSaleLedger = async ({ revenueSplit }) => {
   if (!revenueSplit?._id) return null;
 
   const gstAmountInPaise = revenueSplit.gstAmountInPaise;
-  if (!gstAmountInPaise || gstAmountInPaise <= 0) return null; // GST disabled OR gstAmount == 0
+  const platformFeeGstAmountInPaise = revenueSplit.platformFeeGstAmountInPaise;
+  const hasServiceGst = Number.isInteger(gstAmountInPaise) && gstAmountInPaise > 0;
+  const hasPlatformFeeGst = Number.isInteger(platformFeeGstAmountInPaise) && platformFeeGstAmountInPaise > 0;
+  if (!hasServiceGst && !hasPlatformFeeGst) return null; // nothing collected on either component
 
   const existing = await GSTLedger.findOne({ revenueSplitId: revenueSplit._id, ledgerType: GST_LEDGER_TYPE.SALE }).lean();
   if (existing) return existing;
@@ -64,13 +75,20 @@ export const createSaleLedger = async ({ revenueSplit }) => {
       revenueSplitId: revenueSplit._id,
       ledgerType: GST_LEDGER_TYPE.SALE,
       status: GST_LEDGER_STATUS.COLLECTED,
-      // LOCKED rule: GST applies only to the Platform Fee — the taxable
-      // value is therefore the platform fee itself, read verbatim from
-      // RevenueSplit, never re-derived.
-      taxableValueInPaise: revenueSplit.platformFeeInPaise,
+      // FIXED: taxableValueInPaise is the base THIS row's OWN
+      // gstAmountInPaise was actually computed on — the service
+      // amount, never the platform fee (see GSTLedger.js's header).
+      taxableValueInPaise: revenueSplit.serviceAmountInPaise,
       gstRate: revenueSplit.gstRatePercent,
       gstAmountInPaise: revenueSplit.gstAmountInPaise,
       platformFeeInPaise: revenueSplit.platformFeeInPaise,
+      // Platform-fee GST — its own, separate taxable base (the
+      // platform fee itself), rate, and amount. Only populated when
+      // it was actually computed for this booking (never a fabricated
+      // value for a historical booking that predates this feature).
+      platformFeeTaxableValueInPaise: hasPlatformFeeGst ? revenueSplit.platformFeeInPaise : null,
+      platformFeeGstRate: hasPlatformFeeGst ? revenueSplit.platformFeeGstRatePercent : null,
+      platformFeeGstAmountInPaise: revenueSplit.platformFeeGstAmountInPaise,
       invoiceDate: new Date(),
       policyVersion: revenueSplit.policyVersion,
     });
@@ -154,8 +172,29 @@ export const createRefundReversalLedger = async ({ revenueSplit, refundId }) => 
   if (!refundDoc.paymentAmountInPaise) return null; // defensive — schema requires it, but never divide by 0
 
   const refundFraction = Math.min(1, refundDoc.amountInPaise / refundDoc.paymentAmountInPaise);
-  const reversalGstAmountInPaise = Math.round(saleLedger.gstAmountInPaise * refundFraction);
-  if (reversalGstAmountInPaise <= 0) return null; // rounds to nothing to reverse
+
+  // Apportion EACH GST component independently and null-safely — a
+  // SALE row can now have either component null (never collected for
+  // this booking) per GSTLedger.js's corrected, nullable schema.
+  const reversalGstAmountInPaise = Number.isInteger(saleLedger.gstAmountInPaise)
+    ? Math.round(saleLedger.gstAmountInPaise * refundFraction)
+    : null;
+  const reversalTaxableValueInPaise = Number.isInteger(saleLedger.taxableValueInPaise)
+    ? Math.round(saleLedger.taxableValueInPaise * refundFraction)
+    : null;
+  // Platform-fee GST (additive, Phase 3) — same apportionment pattern,
+  // own component, so a fee-GST-only SALE row (service GST was 0/null)
+  // still reverses correctly rather than being silently dropped.
+  const reversalPlatformFeeGstAmountInPaise = Number.isInteger(saleLedger.platformFeeGstAmountInPaise)
+    ? Math.round(saleLedger.platformFeeGstAmountInPaise * refundFraction)
+    : null;
+  const reversalPlatformFeeTaxableValueInPaise = Number.isInteger(saleLedger.platformFeeTaxableValueInPaise)
+    ? Math.round(saleLedger.platformFeeTaxableValueInPaise * refundFraction)
+    : null;
+
+  const hasServiceReversal = Number.isInteger(reversalGstAmountInPaise) && reversalGstAmountInPaise > 0;
+  const hasPlatformFeeReversal = Number.isInteger(reversalPlatformFeeGstAmountInPaise) && reversalPlatformFeeGstAmountInPaise > 0;
+  if (!hasServiceReversal && !hasPlatformFeeReversal) return null; // rounds to nothing to reverse on EITHER component
 
   try {
     return await GSTLedger.create({
@@ -163,10 +202,13 @@ export const createRefundReversalLedger = async ({ revenueSplit, refundId }) => 
       revenueSplitId: saleLedger.revenueSplitId,
       ledgerType: GST_LEDGER_TYPE.REFUND_REVERSAL,
       status: GST_LEDGER_STATUS.REVERSED,
-      taxableValueInPaise: Math.round(saleLedger.taxableValueInPaise * refundFraction),
+      taxableValueInPaise: reversalTaxableValueInPaise,
       gstRate: saleLedger.gstRate, // verbatim from SALE — never recomputed
       gstAmountInPaise: reversalGstAmountInPaise,
       platformFeeInPaise: Math.round(saleLedger.platformFeeInPaise * refundFraction),
+      platformFeeTaxableValueInPaise: reversalPlatformFeeTaxableValueInPaise,
+      platformFeeGstRate: saleLedger.platformFeeGstRate, // verbatim from SALE — never recomputed
+      platformFeeGstAmountInPaise: reversalPlatformFeeGstAmountInPaise,
       invoiceDate: new Date(),
       policyVersion: saleLedger.policyVersion, // verbatim from SALE
       refundId,

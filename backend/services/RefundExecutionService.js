@@ -157,6 +157,7 @@ async function issueWalletRefundForCancelledBooking({ bookingId, triggeredBy, tr
       serviceAmountInPaise: booking.serviceAmountInPaise,
       commissionAmountInPaise: booking.commissionAmountInPaise,
       gstAmountInPaise: booking.gstAmountInPaise,
+      platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
     });
 
     if (

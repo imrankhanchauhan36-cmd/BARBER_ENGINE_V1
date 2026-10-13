@@ -6,7 +6,7 @@
  * (produced exclusively by CancellationPolicyService.evaluate(), which
  * remains byte-for-byte unchanged) across every refund-eligible booking
  * component: Service, Platform Fee (booking.commissionAmountInPaise),
- * and GST.
+ * service GST, and (additive, Phase 3) Platform-Fee GST.
  *
  * PURE CALCULATION ONLY — no DB access, no session, no policy logic, no
  * awareness of cancellation timing. Takes already-resolved snapshot
@@ -59,19 +59,26 @@ const toPaise = (amountInPaise, refundFraction) =>
  *   Platform Fee amount (field name unchanged, per the locked business rule).
  * @param {number|null} [params.gstAmountInPaise] — null for legacy
  *   bookings created before GST existed.
+ * @param {number|null} [params.platformFeeGstAmountInPaise] — additive,
+ *   Phase 3; null for a booking created before this feature existed
+ *   (null-guarded exactly like gstAmountInPaise — contributes 0, never
+ *   throws).
  * @returns {{ serviceRefundPaise:number, commissionRefundPaise:number,
- *   gstRefundPaise:number, totalRefundPaise:number }}
+ *   gstRefundPaise:number, platformFeeGstRefundPaise:number,
+ *   totalRefundPaise:number }}
  */
 export const splitRefundComponents = ({
   refundFraction,
   serviceAmountInPaise,
   commissionAmountInPaise,
   gstAmountInPaise,
+  platformFeeGstAmountInPaise,
 }) => {
   const serviceRefundPaise = toPaise(serviceAmountInPaise, refundFraction);
   const commissionRefundPaise = toPaise(commissionAmountInPaise, refundFraction);
   const gstRefundPaise = toPaise(gstAmountInPaise, refundFraction);
-  const totalRefundPaise = serviceRefundPaise + commissionRefundPaise + gstRefundPaise;
+  const platformFeeGstRefundPaise = toPaise(platformFeeGstAmountInPaise, refundFraction);
+  const totalRefundPaise = serviceRefundPaise + commissionRefundPaise + gstRefundPaise + platformFeeGstRefundPaise;
 
-  return { serviceRefundPaise, commissionRefundPaise, gstRefundPaise, totalRefundPaise };
+  return { serviceRefundPaise, commissionRefundPaise, gstRefundPaise, platformFeeGstRefundPaise, totalRefundPaise };
 };

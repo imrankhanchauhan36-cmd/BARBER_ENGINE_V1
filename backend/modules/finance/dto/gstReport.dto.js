@@ -21,6 +21,11 @@ export const toSummaryPeriodDTO = (period) => ({
   gstCollected: paiseToRupees(period.gstCollectedInPaise),
   gstReversed: paiseToRupees(period.gstReversedInPaise),
   netGSTLiability: paiseToRupees(period.netGSTLiabilityInPaise),
+  // Platform-fee GST (additive, Phase 3) — own, parallel figures.
+  platformFeeGrossTaxableValue: paiseToRupees(period.platformFeeGrossTaxableValueInPaise),
+  platformFeeGstCollected: paiseToRupees(period.platformFeeGstCollectedInPaise),
+  platformFeeGstReversed: paiseToRupees(period.platformFeeGstReversedInPaise),
+  netPlatformFeeGstLiability: paiseToRupees(period.netPlatformFeeGstLiabilityInPaise),
   bookingCount: period.bookingCount,
   refundCount: period.refundCount,
 });
@@ -39,6 +44,11 @@ export const toMonthlyRowDTO = (m) => ({
   collected: paiseToRupees(m.gstCollectedInPaise),
   reversed: paiseToRupees(m.gstReversedInPaise),
   net: paiseToRupees(m.netGSTLiabilityInPaise),
+  // Platform-fee GST (additive, Phase 3).
+  platformFeeTaxable: paiseToRupees(m.platformFeeGrossTaxableValueInPaise),
+  platformFeeCollected: paiseToRupees(m.platformFeeGstCollectedInPaise),
+  platformFeeReversed: paiseToRupees(m.platformFeeGstReversedInPaise),
+  platformFeeNet: paiseToRupees(m.netPlatformFeeGstLiabilityInPaise),
   bookings: m.bookingCount,
   refunds: m.refundCount,
 });
@@ -61,6 +71,9 @@ const toLineItemDTO = (row) => ({
   gstRate: row.gstRate,
   gstAmount: paiseToRupees(row.gstAmountInPaise),
   platformFee: paiseToRupees(row.platformFeeInPaise),
+  platformFeeTaxableValue: paiseToRupees(row.platformFeeTaxableValueInPaise),
+  platformFeeGstRate: row.platformFeeGstRate ?? null,
+  platformFeeGstAmount: paiseToRupees(row.platformFeeGstAmountInPaise),
   invoiceDate: row.invoiceDate,
   policyVersion: row.policyVersion,
   refundId: row.refundId ?? null,

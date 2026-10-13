@@ -66,31 +66,54 @@ const gstLedgerSchema = new mongoose.Schema(
       immutable: true,
     },
 
-    // The amount GST was actually computed on. LOCKED business rule: GST
-    // applies only to the Platform Fee — so this always equals
-    // platformFeeInPaise below, snapshotted as its own explicit field
-    // (not derived at read time) because this document is the permanent
-    // government-liability record and must remain self-describing even
-    // if a future phase widens what GST is computed on.
+    // The amount SERVICE GST was actually computed on — the SALON
+    // SERVICE AMOUNT, never the Platform Fee (see the separate
+    // platformFeeTaxableValueInPaise/platformFeeGstRate/
+    // platformFeeGstAmountInPaise trio below for the Platform Fee's
+    // OWN, independent GST charge). CORRECTED 2026-10-12: this field
+    // previously carried the comment "GST applies only to the
+    // Platform Fee — so this always equals platformFeeInPaise below"
+    // and GSTLedgerService.js hardcoded it to platformFeeInPaise —
+    // that was a stale assumption inherited from a retired pricing
+    // engine (RevenueCalculationService.js) and never matched what
+    // gstAmountInPaise was actually computed from once the Salon GST
+    // Launch phase moved service GST onto the service amount. Rows
+    // created before this fix keep their original (incorrect) value —
+    // never retroactively corrected, per this collection's own
+    // immutability discipline — only new rows are correct going
+    // forward. Nullable (not required): a historical booking with no
+    // GST policy ever published has null service GST (Booking's own
+    // null-vs-zero convention) — a row can still exist purely because
+    // Platform-Fee GST was collected (see below).
     taxableValueInPaise: {
       type: Number,
-      required: true,
-      min: 0,
-      validate: integerPaiseValidator,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
       immutable: true,
     },
     gstRate: {
       type: Number,
-      required: true,
+      default: null,
       min: 0,
       max: 100,
       immutable: true,
     },
+    // No longer `min: 1` (createSaleLedger() can now create a row with
+    // gstAmountInPaise === 0 when ONLY Platform-Fee GST was collected
+    // — an unregistered salon's booking, for example) — the decision
+    // of whether a row gets created at all now lives entirely in
+    // createSaleLedger()'s own check across BOTH GST components, not
+    // in this field's own minimum.
     gstAmountInPaise: {
       type: Number,
-      required: true,
-      min: 1, // createSaleLedger() never creates a row for a zero/disabled GST split
-      validate: integerPaiseValidator,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
       immutable: true,
     },
     platformFeeInPaise: {
@@ -98,6 +121,38 @@ const gstLedgerSchema = new mongoose.Schema(
       required: true,
       min: 0,
       validate: integerPaiseValidator,
+      immutable: true,
+    },
+
+    // PLATFORM-FEE GST (additive, Phase 3) — a SEPARATE GST charge on
+    // the Platform Fee itself (platformFeeInPaise above), independent
+    // of the service-GST trio above. Nullable: null on any row/booking
+    // that predates this feature (or, in principle, any future state
+    // where platform-fee GST genuinely isn't configured) — never a
+    // fabricated rate/amount.
+    platformFeeTaxableValueInPaise: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
+      immutable: true,
+    },
+    platformFeeGstRate: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 100,
+      immutable: true,
+    },
+    platformFeeGstAmountInPaise: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (v) => v === null || (Number.isInteger(v) && v >= 0),
+        message: "{PATH} must be a non-negative whole number (paise) or null",
+      },
       immutable: true,
     },
 
