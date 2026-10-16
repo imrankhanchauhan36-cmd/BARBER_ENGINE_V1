@@ -47,18 +47,28 @@ const assertDraft = (version) => {
   }
 };
 
-export const createDraftGstPolicy = async ({ adminId, ratePercent, req }) => {
-  const version = await GstPolicyVersion.create({ ratePercent, createdBy: adminId });
+// platformFeeGstRatePercent is optional and additive — omitting it
+// (undefined) behaves exactly as before this phase; Mongoose simply
+// does not set the key, so existing callers that never pass it are
+// completely unaffected.
+export const createDraftGstPolicy = async ({ adminId, registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, req }) => {
+  const version = await GstPolicyVersion.create({ registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, createdBy: adminId });
   await logAdminAction({
     adminId,
     action: "GST_POLICY_CREATED",
     targetType: "GST_POLICY_VERSION",
     targetId: version._id,
-    meta: { ratePercent },
+    meta: { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent: platformFeeGstRatePercent ?? null },
     req,
   });
   return version;
 };
+
+// Populates createdBy/publishedBy/retiredBy with just {_id, name} —
+// additive audit-trail display only, same pattern as
+// areaPlatformFee.service.js's own ACTOR_POPULATE, never read for any
+// dollar/rate calculation or authorization decision.
+const ACTOR_POPULATE = ["createdBy", "publishedBy", "retiredBy"].map((path) => ({ path, select: "name" }));
 
 export const listGstPolicies = ({ page = 1, limit = 20 } = {}) => {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
@@ -67,22 +77,35 @@ export const listGstPolicies = ({ page = 1, limit = 20 } = {}) => {
     .sort({ createdAt: -1 })
     .skip((safePage - 1) * safeLimit)
     .limit(safeLimit)
+    .populate(ACTOR_POPULATE)
     .lean();
 };
 
-export const getGstPolicyDetail = (versionId) => getVersionOrThrow(versionId);
+export const getGstPolicyDetail = async (versionId) => {
+  const version = await GstPolicyVersion.findById(versionId).populate(ACTOR_POPULATE);
+  if (!version) throw Errors.notFound("GST policy version not found");
+  return version;
+};
 
-export const updateDraftGstPolicy = async ({ versionId, adminId, ratePercent, req }) => {
+export const updateDraftGstPolicy = async ({ versionId, adminId, registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent, req }) => {
   const version = await getVersionOrThrow(versionId);
   assertDraft(version);
-  version.ratePercent = ratePercent;
+  version.registeredRatePercent = registeredRatePercent;
+  version.unregisteredRatePercent = unregisteredRatePercent;
+  // Only touch the optional field when the caller explicitly sent
+  // something (a number to set it, or null to clear it) — undefined
+  // means "not part of this update," matching every existing caller
+  // that never sends platformFeeGstRatePercent at all.
+  if (platformFeeGstRatePercent !== undefined) {
+    version.platformFeeGstRatePercent = platformFeeGstRatePercent;
+  }
   await version.save();
   await logAdminAction({
     adminId,
     action: "GST_POLICY_UPDATED",
     targetType: "GST_POLICY_VERSION",
     targetId: version._id,
-    meta: { ratePercent },
+    meta: { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent: version.platformFeeGstRatePercent ?? null },
     req,
   });
   return version;
@@ -128,7 +151,11 @@ export const publishGstPolicy = async ({ versionId, adminId, req }) => {
         action: "GST_POLICY_PUBLISHED",
         targetType: "GST_POLICY_VERSION",
         targetId: version._id,
-        meta: { ratePercent: version.ratePercent, retiredVersionId: currentlyPublished?._id ?? null },
+        meta: {
+          registeredRatePercent: version.registeredRatePercent,
+          unregisteredRatePercent: version.unregisteredRatePercent,
+          retiredVersionId: currentlyPublished?._id ?? null,
+        },
         req,
       });
 
@@ -172,19 +199,29 @@ export const retireGstPolicy = async ({ versionId, adminId, req }) => {
 
 /**
  * Hot-path resolver — called once per booking at lockSlot. Returns
- * { ratePercent, versionId } for the currently PUBLISHED policy, or
- * null if none has ever been published (never invents a rate —
- * booking.controller.js treats a null return as "no GST applies",
- * storing null snapshot fields, exactly like a legacy pre-feature
- * booking).
+ * { registeredRatePercent, unregisteredRatePercent, platformFeeGstRatePercent,
+ * versionId } for the currently PUBLISHED policy, or null when none
+ * has ever been published OR the published document predates this
+ * phase and lacks both service-GST rates (a legacy single-`ratePercent`
+ * document) — either way, booking.controller.js treats a null return
+ * as "no GST applies" (null snapshot fields), exactly like a legacy
+ * pre-feature booking. GST NEVER blocks a booking, so this never
+ * throws — it only ever returns the resolved rates or null, same
+ * discipline as the old single-rate resolver, just never silently
+ * computing with an undefined rate from a pre-migration document.
  *
- * STEP 8.2 (policy version follow-up) — versionId (the resolved
- * GstPolicyVersion document's own _id) is new; ratePercent's own
- * meaning/value is unchanged. `_id` is projected implicitly (Mongoose
- * includes it by default unless explicitly excluded) — no query shape
- * change. Cached alongside ratePercent under the same existing TTL, so
- * a booking created from a cached read still snapshots the correct,
- * consistent versionId for that same cached rate.
+ * platformFeeGstRatePercent is validated SEPARATELY from the two
+ * service-GST rates (hasValidFeeRate vs hasValidTwoRates below) —
+ * additive, 2026-10-12. A currently-PUBLISHED policy that predates
+ * this field (or simply never set it) still resolves valid service
+ * GST; `platformFeeGstRatePercent` on the returned object is simply
+ * `null` in that case, until a policy explicitly containing a valid
+ * rate is published. The inverse also holds by construction: nothing
+ * about the fee-rate check can affect `hasValidTwoRates` above, so a
+ * malformed/missing fee rate can never disable service GST either.
+ * No caller in this phase reads this new field yet (not wired into
+ * booking.controller.js) — it is resolved and returned for the
+ * upcoming booking-engine phase only.
  */
 export const getPublishedGstPolicy = async () => {
   const now = Date.now();
@@ -193,11 +230,25 @@ export const getPublishedGstPolicy = async () => {
   }
 
   const published = await GstPolicyVersion.findOne({ status: GST_POLICY_STATUS.PUBLISHED })
-    .select("ratePercent")
+    .select("registeredRatePercent unregisteredRatePercent platformFeeGstRatePercent")
     .lean();
 
+  const hasValidTwoRates = published
+    && Number.isFinite(published.registeredRatePercent)
+    && Number.isFinite(published.unregisteredRatePercent);
+
+  const hasValidFeeRate = published
+    && Number.isFinite(published.platformFeeGstRatePercent);
+
   cache.cached = true;
-  cache.policy = published ? { ratePercent: published.ratePercent, versionId: published._id } : null;
+  cache.policy = hasValidTwoRates
+    ? {
+        registeredRatePercent: published.registeredRatePercent,
+        unregisteredRatePercent: published.unregisteredRatePercent,
+        platformFeeGstRatePercent: hasValidFeeRate ? published.platformFeeGstRatePercent : null,
+        versionId: published._id,
+      }
+    : null;
   cache.expiresAt = now + CACHE_TTL_MS;
   return cache.policy;
 };

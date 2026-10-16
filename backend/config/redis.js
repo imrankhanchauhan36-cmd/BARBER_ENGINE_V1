@@ -21,10 +21,15 @@ redis.on("ready",       ()    => console.log("⚡ Redis Ready for Operations"));
 redis.on("reconnecting",()    => console.log("🔄 Redis Reconnecting..."));
 redis.on("end",         ()    => console.warn("🔴 Redis Connection Closed"));
 
-try {
-  await redis.connect();
-} catch (err) {
-  console.warn("⚠️ Redis unavailable, continuing without cache");
+// ZEMISH isolated KYC test server — opt-in only (SKIP_REDIS_AUTOCONNECT
+// must be exactly "true"). Absent or any other value preserves the
+// existing eager-connect behavior exactly as before this change.
+if (process.env.SKIP_REDIS_AUTOCONNECT !== "true") {
+  try {
+    await redis.connect();
+  } catch (err) {
+    console.warn("⚠️ Redis unavailable, continuing without cache");
+  }
 }
 
 export const isRedisReady = () => redis.isReady;

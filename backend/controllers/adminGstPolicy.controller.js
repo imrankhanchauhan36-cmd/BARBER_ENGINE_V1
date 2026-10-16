@@ -19,7 +19,13 @@ import {
 
 export const createDraftGstPolicyHandler = async (req, res, next) => {
   try {
-    const version = await createDraftGstPolicy({ adminId: req.user._id, ratePercent: req.body.ratePercent, req });
+    const version = await createDraftGstPolicy({
+      adminId: req.user._id,
+      registeredRatePercent: req.body.registeredRatePercent,
+      unregisteredRatePercent: req.body.unregisteredRatePercent,
+      platformFeeGstRatePercent: req.body.platformFeeGstRatePercent,
+      req,
+    });
     return successResponse(res, { statusCode: 201, message: "Draft GST policy created", data: { version } });
   } catch (err) {
     return next(err);
@@ -49,7 +55,9 @@ export const updateDraftGstPolicyHandler = async (req, res, next) => {
     const version = await updateDraftGstPolicy({
       versionId: req.params.versionId,
       adminId: req.user._id,
-      ratePercent: req.body.ratePercent,
+      registeredRatePercent: req.body.registeredRatePercent,
+      unregisteredRatePercent: req.body.unregisteredRatePercent,
+      platformFeeGstRatePercent: req.body.platformFeeGstRatePercent,
       req,
     });
     return successResponse(res, { message: "Draft GST policy updated", data: { version } });

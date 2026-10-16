@@ -57,6 +57,7 @@ export const fieldAgentOnboardingSchemas = {
     specializations: Joi.array().items(Joi.string()).optional(),
     capabilities: Joi.array().items(Joi.string()).optional(),
     privacySetup: Joi.string().optional(),
+    gstStatus: Joi.string().valid("REGISTERED", "UNREGISTERED").optional(),
     whatsapp: Joi.string().allow(null, "").optional(),
     brandName: Joi.string().allow(null, "").optional(),
     branchCode: Joi.string().allow(null, "").optional(),
