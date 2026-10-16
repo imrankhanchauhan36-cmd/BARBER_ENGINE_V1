@@ -17,8 +17,12 @@ import WalletTransaction, {
   WALLET_TXN_TYPE,
 } from "../models/WalletTransaction.js";
 import CancellationPolicyService from "../services/CancellationPolicyService.js";
-import { getPublishedGstPolicy } from "../services/gstPolicy.service.js";
-import { resolvePlatformFeeForArea } from "../services/areaPlatformFee.service.js";
+// Phase 2 (additive, 2026-10-12) — getPublishedGstPolicy/
+// resolvePlatformFeeForArea are no longer called directly here; both
+// now live inside the shared calculateBookingPricing(), which this
+// file calls instead, so lockSlot and GET /v1/bookings/user/quote
+// use the exact same formula.
+import { calculateBookingPricing } from "../services/bookingPricing.service.js";
 import { splitRefundComponents } from "../services/refundComponentSplitter.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
@@ -725,77 +729,36 @@ export const lockSlot = async (req, res) => {
       // confirmBooking() for finance calculations.
       //////////////////////////////////////////////////////////
 
-      const existingServices = await Service
-        .find({ _id: { $in: serviceRefs } })
-        .select("price")
-        .lean()
-        .session(lockSession);
-
-      // A nonexistent serviceRef matches nothing in $in — no error,
-      // just fewer results than requested. Without this check, the
-      // booking silently priced only the services that were actually
-      // found (as low as ₹0 for an entirely fabricated serviceRefs
-      // list) while still occupying a real chair slot. serviceRefs is
-      // already duplicate-free by this point (validated at the schema
-      // layer), so a plain length comparison is exact here.
-      if (existingServices.length !== serviceRefs.length) {
-        throw Object.assign(
-          new Error("One or more selected services are invalid or unavailable"),
-          { status: 400 }
-        );
-      }
-
-      const serviceAmountInPaise = existingServices.reduce(
-        (sum, s) => sum + Math.round(s.price * 100),
-        0
-      );
-
       //////////////////////////////////////////////////////////
-      // 💰 PLATFORM FEE — the ONE customer-facing fee (product
-      // terminology: "Platform Fee"/"Convenience Fee" — never a
-      // second, separate charge). Charged ON TOP OF the service
-      // price, not deducted from it. As of the PAN-India Platform
-      // Fee + GST architecture, this is resolved from the salon's
-      // own authoritative area (Salon.location.territory.areaRef),
-      // server-side only — never from CommissionService.js's
-      // percentage-of-service calculation, which is deliberately
-      // left completely unmodified and unused here (frozen; its
-      // per-salon override Salon.business.commissionRate and the
-      // admin endpoint that sets it remain untouched but become
-      // inert for pricing purposes going forward). The result is
-      // still stored in commissionAmountInPaise — no new
-      // customer-facing field — so every existing downstream reader
-      // (Field Agent earning, cancelBooking/ownerCancelBooking,
-      // RefundExecutionService, both frontends) keeps working
-      // unchanged. PAN-India fallback: an area with no PUBLISHED fee
-      // resolves to 0 — the booking is never blocked.
+      // 💰 PRICING — extracted into services/bookingPricing.service.js
+      // (Phase 2, additive, 2026-10-12) so this exact formula is
+      // shared, byte-for-byte, with the read-only GET
+      // /v1/bookings/user/quote endpoint — quote and the real booking
+      // can never independently disagree about a price. Behavior for
+      // every existing field (serviceAmountInPaise, commissionInPaise,
+      // gstRatePercent, gstAmountInPaise, platformFeePolicyRef,
+      // gstPolicyVersionRef, totalAmountInPaise) is byte-for-byte
+      // unchanged from the inline block this replaced — the only new
+      // outputs are platformFeeGstConfigured/platformFeeGstRatePercent/
+      // platformFeeGstAmountInPaise, which stay null/false (and
+      // totalAmountInPaise's new 4th term stays a no-op +0) until an
+      // admin publishes a GstPolicyVersion that actually contains a
+      // valid platformFeeGstRatePercent — see that function's own
+      // header for the full reasoning. Still runs inside this same
+      // open transaction (lockSession passed through), reading the
+      // exact same Service/Salon documents the old inline block read.
       //////////////////////////////////////////////////////////
-      const salonForPricing = await Salon.findById(salonId)
-        .select("location.territory.areaRef")
-        .session(lockSession)
-        .lean();
-
-      const { feeInPaise: commissionInPaise, policyId: platformFeePolicyRef } = await resolvePlatformFeeForArea(
-        salonForPricing?.location?.territory?.areaRef
-      );
-
-      //////////////////////////////////////////////////////////
-      // 💰 GST — taxable base is Service + Platform Fee (locked
-      // business rule). Resolved from whichever GstPolicyVersion is
-      // currently PUBLISHED; null (not 0) when none has ever been
-      // published, so a legacy-equivalent "GST doesn't apply" state
-      // is distinguishable from "GST was computed and is genuinely
-      // zero". Snapshotted onto the booking — never re-derived from
-      // live config again.
-      //////////////////////////////////////////////////////////
-      const gstPolicy = await getPublishedGstPolicy();
-      const gstRatePercent = gstPolicy ? gstPolicy.ratePercent : null;
-      const gstAmountInPaise = gstPolicy
-        ? Math.round((serviceAmountInPaise + commissionInPaise) * gstPolicy.ratePercent / 100)
-        : null;
-      const gstPolicyVersionRef = gstPolicy ? gstPolicy.versionId : null;
-
-      const totalAmountInPaise = serviceAmountInPaise + commissionInPaise + (gstAmountInPaise || 0);
+      const {
+        serviceAmountInPaise,
+        commissionAmountInPaise: commissionInPaise,
+        platformFeePolicyRef,
+        gstRatePercent,
+        gstAmountInPaise,
+        gstPolicyVersionRef,
+        platformFeeGstRatePercent,
+        platformFeeGstAmountInPaise,
+        totalAmountInPaise,
+      } = await calculateBookingPricing({ salonId, serviceRefs, session: lockSession });
 
       [booking] = await Booking.create(
         [
@@ -817,6 +780,12 @@ export const lockSlot = async (req, res) => {
             commissionAmountInPaise: commissionInPaise,
             gstRatePercent,
             gstAmountInPaise,
+            // Phase 2 (additive, 2026-10-12) — separate GST charge on
+            // the Platform Fee itself; null/absent on every booking
+            // until an admin publishes a policy with a valid
+            // platformFeeGstRatePercent (see bookingPricing.service.js).
+            platformFeeGstRatePercent,
+            platformFeeGstAmountInPaise,
             // STEP 8.2 (policy version follow-up) — audit-trail only,
             // never read for any dollar calculation (that's still
             // totalAmountInPaise/serviceAmountInPaise/
@@ -898,6 +867,11 @@ export const lockSlot = async (req, res) => {
       commissionAmountInPaise: booking.commissionAmountInPaise,
       gstRatePercent:          booking.gstRatePercent,
       gstAmountInPaise:        booking.gstAmountInPaise,
+      // Phase 2 (additive, 2026-10-12) — null on every booking until
+      // an admin publishes a policy with a valid
+      // platformFeeGstRatePercent; never a fabricated rate.
+      platformFeeGstRatePercent:   booking.platformFeeGstRatePercent,
+      platformFeeGstAmountInPaise: booking.platformFeeGstAmountInPaise,
       totalAmountInPaise:      booking.totalAmountInPaise,
     });
 
@@ -906,6 +880,13 @@ export const lockSlot = async (req, res) => {
     return res.status(error.status || 500).json({
       success: false,
       message: error.message || "Failed to lock slot",
+      // Additive — forwards calculateBookingPricing()'s machine-readable
+      // code (e.g. PLATFORM_FEE_GST_NOT_CONFIGURED) when present, so the
+      // app can show a dedicated "pricing temporarily unavailable, try
+      // again shortly" state instead of a generic error. Absent for
+      // every other error this catch already handled before this field
+      // existed (undefined keys are simply omitted from the JSON).
+      ...(error.code ? { code: error.code } : {}),
     });
   }
 };

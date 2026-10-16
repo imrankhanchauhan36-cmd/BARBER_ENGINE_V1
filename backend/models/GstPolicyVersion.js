@@ -2,20 +2,58 @@
  * BARBER ENGINE V1
  * backend/models/GstPolicyVersion.js
  *
- * PAN-India GST configuration — one global rate, versioned. Exact
- * DRAFT -> PUBLISHED -> RETIRED lifecycle and "at most one PUBLISHED"
- * partial-unique-index idiom as
- * modules/fieldAgent/models/CommercialPolicyVersion.js (same proven
- * pattern, different bounded context — this file has no relationship
- * to the Field Agent commercial domain).
+ * PAN-India GST configuration, versioned. Exact DRAFT -> PUBLISHED ->
+ * RETIRED lifecycle and "at most one PUBLISHED" partial-unique-index
+ * idiom as modules/fieldAgent/models/CommercialPolicyVersion.js (same
+ * proven pattern, different bounded context).
  *
  * A booking snapshots gstRatePercent/gstAmountInPaise onto itself at
  * lockSlot time (booking.controller.js) — this document is never read
  * again for an existing booking, so publishing a new rate here can
  * never retroactively change a past booking's GST.
  *
- * No CGST/SGST/IGST breakup in V1 — a single flat ratePercent, per the
- * locked business rule.
+ * SALON GST LAUNCH PHASE (2026-10): replaced the single flat
+ * `ratePercent` with two rates — `registeredRatePercent` (salons with
+ * GST registration) and `unregisteredRatePercent` (salons without).
+ * Launch values: registered=5, unregistered=0. Both are schema-
+ * required with no default, so every NEW write must state both
+ * explicitly (same "no silent single-rate fallback" discipline as
+ * Platform Fee's `scope`/`calculationType` additions) — this is
+ * deliberate: a document missing either rate must never be mistaken
+ * for a valid 2-rate policy. A pre-existing PUBLISHED document from
+ * before this change (old single-rate shape, `ratePercent` only) is
+ * untouched by this migration — never backfilled, never deleted — but
+ * is also structurally incapable of satisfying the new required
+ * fields, so services/gstPolicy.service.js#getPublishedGstPolicy
+ * treats such a document as "no usable GST policy" (returns null,
+ * same as no policy published at all) rather than computing with an
+ * undefined rate. GST NEVER blocks a booking — see that function's
+ * own header for the full reasoning.
+ *
+ * No CGST/SGST/IGST breakup — two flat rates, per the locked business
+ * rule for this phase. ratePercent itself is intentionally NOT kept
+ * as a legacy field on the schema (nothing should be able to write it
+ * again); any already-stored legacy value on an old document is
+ * simply inert data the schema no longer declares.
+ *
+ * PLATFORM-FEE GST FOUNDATION (additive, 2026-10-12): `platformFeeGstRatePercent`
+ * is a single flat rate for GST on the ZEMISH Platform Fee itself —
+ * independent of salon GST registration status (the fee is ZEMISH's
+ * own charge, not the salon's). Unlike the two service-GST rates
+ * above, this field is intentionally OPTIONAL (no `required`, no
+ * default) so that: (a) every existing create/update/publish call for
+ * the two service-GST rates keeps working completely unchanged, and
+ * (b) a policy already PUBLISHED before this field existed remains a
+ * fully valid service-GST policy forever — it simply has no
+ * platform-fee rate until an admin explicitly republishes one that
+ * includes it. services/gstPolicy.service.js#getPublishedGstPolicy
+ * validates this field with its own, separate "is this usable"
+ * check, decoupled from the two-rate check for service GST — a
+ * missing/invalid platformFeeGstRatePercent never disables service
+ * GST, and a missing/invalid registered/unregisteredRatePercent never
+ * blocks platform-fee GST from being read on a document that does
+ * have it. No booking-engine wiring happens in this phase — this is
+ * the policy-authoring foundation only.
  */
 
 import mongoose from "mongoose";
@@ -28,9 +66,23 @@ export const GST_POLICY_STATUS = Object.freeze({
 
 const gstPolicyVersionSchema = new mongoose.Schema(
   {
-    ratePercent: {
+    registeredRatePercent: {
       type: Number,
       required: true,
+      min: 0,
+      max: 100,
+    },
+
+    unregisteredRatePercent: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+    },
+
+    // Additive, optional — see file header "PLATFORM-FEE GST FOUNDATION".
+    platformFeeGstRatePercent: {
+      type: Number,
       min: 0,
       max: 100,
     },

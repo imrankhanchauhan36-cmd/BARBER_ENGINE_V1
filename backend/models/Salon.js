@@ -122,6 +122,18 @@ const SalonSchema = new mongoose.Schema(
       setupType:    { type: String, enum: ["PROPER_SHOP", "OPEN_SETUP"], default: "PROPER_SHOP" },
       privacySetup: { type: String, enum: ["SEPARATE", "MIXED"],         default: "MIXED" },
 
+      // SALON GST — launch phase. Captured once during onboarding
+      // (owner or field-agent Basic Info step, same bucket as
+      // setupType/privacySetup above), locked after approval — no
+      // post-approval edit path exists yet (see onboarding
+      // controllers). Defaults to UNREGISTERED so every pre-existing
+      // salon (created before this field existed) is read as
+      // UNREGISTERED, never silently treated as REGISTERED. This is
+      // the salon's registration STATUS only — not its GSTIN (that
+      // remains on OwnerKYC, untouched, unlinked, by design for this
+      // phase).
+      gstStatus: { type: String, enum: ["REGISTERED", "UNREGISTERED"], default: "UNREGISTERED" },
+
       amenities: {
         hasAC:       { type: Boolean, default: false },
         hasParking:  { type: Boolean, default: false },

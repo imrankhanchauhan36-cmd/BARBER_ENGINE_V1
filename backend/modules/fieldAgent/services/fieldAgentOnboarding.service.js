@@ -109,7 +109,7 @@ const assertEditable = (salon) => {
 // Port of saveBasicInfo (controller:21-163). No approval-status gate
 // and no step-threshold gate in the original — none added here.
 export const saveBasicInfo = async ({ salonId, body }) => {
-  const { shopName, category, tagline, since, amenities, tier, setupType, specializations, capabilities, privacySetup, whatsapp, brandName, branchCode, experience } = body;
+  const { shopName, category, tagline, since, amenities, tier, setupType, specializations, capabilities, privacySetup, whatsapp, brandName, branchCode, experience, gstStatus } = body;
 
   if (!shopName || !category) throw Errors.badRequest("shopName and category required");
 
@@ -126,6 +126,9 @@ export const saveBasicInfo = async ({ salonId, body }) => {
   const finalSetupType = allowedSetupTypes.includes(setupType) ? setupType : "PROPER_SHOP";
   const allowedPrivacy = ["SEPARATE", "MIXED"];
   const finalPrivacy = allowedPrivacy.includes(privacySetup) ? privacySetup : "MIXED";
+  // SALON GST — same allow-list-with-safe-default pattern as the
+  // owner's own saveBasicInfo (controllers/salon.onboarding.controller.js).
+  const finalGstStatus = gstStatus === "REGISTERED" ? "REGISTERED" : "UNREGISTERED";
 
   const updatePayload = {
     "basicInfo.shopName": cleanName,
@@ -141,6 +144,7 @@ export const saveBasicInfo = async ({ salonId, body }) => {
     capabilities: Array.isArray(capabilities) ? capabilities : [],
     "basicInfo.setupType": finalSetupType,
     "basicInfo.privacySetup": finalPrivacy,
+    "basicInfo.gstStatus": finalGstStatus,
     "basicInfo.amenities.hasAC": amenities?.hasAC ?? false,
     "basicInfo.amenities.hasParking": amenities?.hasParking ?? false,
     "basicInfo.amenities.hasWifi": amenities?.hasWifi ?? false,

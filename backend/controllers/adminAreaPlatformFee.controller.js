@@ -20,8 +20,12 @@ export const createDraftAreaPlatformFeeHandler = async (req, res, next) => {
   try {
     const policy = await createDraftAreaPlatformFee({
       adminId: req.user._id,
+      scope: req.body.scope,
       areaRef: req.body.areaRef,
       feeInPaise: req.body.feeInPaise,
+      calculationType: req.body.calculationType,
+      percentageRate: req.body.percentageRate,
+      slabs: req.body.slabs,
       req,
     });
     return successResponse(res, { statusCode: 201, message: "Draft area platform fee created", data: { policy } });
@@ -34,6 +38,7 @@ export const listAreaPlatformFeesHandler = async (req, res, next) => {
   try {
     const policies = await listAreaPlatformFees({
       areaRef: req.query.areaRef,
+      scope: req.query.scope,
       page: req.query.page,
       limit: req.query.limit,
     });
@@ -58,6 +63,9 @@ export const updateDraftAreaPlatformFeeHandler = async (req, res, next) => {
       policyId: req.params.policyId,
       adminId: req.user._id,
       feeInPaise: req.body.feeInPaise,
+      calculationType: req.body.calculationType,
+      percentageRate: req.body.percentageRate,
+      slabs: req.body.slabs,
       req,
     });
     return successResponse(res, { message: "Draft area platform fee updated", data: { policy } });
