@@ -2,14 +2,27 @@
 
 ## Why this exists
 
-This replaces two retired ad-hoc scripts (`reset_pass.mjs`, `reset_admin.mjs`) that
-previously lived in this directory. They connected directly to whatever
-`MONGODB_URI` happened to be configured and wrote a hardcoded password hash to a
-hardcoded account identifier, with no target verification and no check of the
-actual write result. They have been deleted. There is currently **no automated
-replacement** — account recovery is a deliberate, manual procedure, performed by
-a human, every time. Do not recreate a script that hardcodes an account
-identifier or password material.
+This replaces three retired ad-hoc scripts that previously lived in this
+directory:
+
+- `reset_pass.mjs` and `reset_admin.mjs` connected directly to whatever
+  `MONGODB_URI` happened to be configured and wrote a hardcoded password hash
+  to a hardcoded account identifier, with no target verification and no check
+  of the actual write result.
+- `scripts/resetAllAdminPasswords.js` connected the same way and reset **every**
+  admin account's password in a single bulk `updateMany`, gated only by a
+  `NODE_ENV === "production"` check (which does not detect "pointed at the
+  production database while `NODE_ENV` is unset or non-production") and a
+  hardcoded `CONFIRM_RESET = true` flag that could never actually be set to
+  false without editing the file.
+
+All three have been deleted. There is currently **no automated replacement** —
+account recovery is a deliberate, manual procedure, performed by a human, one
+account at a time, every time. **Do not recreate a script that hardcodes an
+account identifier or password material, and do not build a bulk/automated
+reset tool that can touch more than one account per deliberate, independently
+verified action** — if several accounts genuinely need recovery, repeat the
+full procedure below separately for each one.
 
 This document never names a real database, cluster, hostname, account email, or
 any other identifier — those are looked up fresh, each time, in the systems
