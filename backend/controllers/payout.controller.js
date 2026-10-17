@@ -21,14 +21,61 @@ const isValidId     = (id) => mongoose.Types.ObjectId.isValid(id);
 const p2            = (v)  => Math.round(v ?? 0) / 100;
 const MIN_PAISE     = 10000; // ₹100 minimum withdrawal
 
+// ─── Salon-Ambiguity Guard (getWallet/requestWithdrawal/
+//      getPayoutHistory/getLedger) ───────────────────────
+// Same fail-closed shape already used in deviceToken.controller.js /
+// notification.controller.js / booking.controller.js /
+// salon.me.controller.js — duplicated locally per this codebase's own
+// established per-file convention, not imported.
+//
+// No route in this file accepts a client-supplied salonId today (by
+// design — out of scope to add one in this phase), so this resolves
+// from ownerId ALONE, exactly like the unscoped query it replaces —
+// deliberately NOT filtered on approval.status, unlike the booking/
+// notification siblings: a DRAFT/PENDING salon's wallet is legitimately
+// readable today (an all-zero balance, not an error), so narrowing to
+// APPROVED-only would silently 404 a single-salon owner whose salon
+// isn't approved yet — a real regression this fix must not introduce.
+// "Eligible" here means exactly what the old query already matched
+// (ownerId, not soft-deleted) — only now counted instead of blindly
+// taking the first result:
+//   0 matches  -> SALON_NOT_FOUND (byte-identical to today's 404)
+//   1 match    -> that salon (byte-identical to today's behavior)
+//   2+ matches -> SALON_AMBIGUOUS, fails closed with 409 instead of
+//                 the old non-deterministic silent pick (the bug this
+//                 fix closes — see the diagnosis report).
+const resolveOwnerSalonOrThrow = async (ownerId, session = null) => {
+  let query = Salon.find({ ownerId, isDeleted: { $ne: true } }).select("_id").limit(2).lean();
+  if (session) query = query.session(session);
+  const candidates = await query;
+  if (candidates.length === 0) throw new Error("SALON_NOT_FOUND");
+  if (candidates.length > 1) throw new Error("SALON_AMBIGUOUS");
+  return candidates[0];
+};
+
+const payoutSalonErrorResponse = (res, err) => {
+  if (err.message === "SALON_AMBIGUOUS") {
+    return res.status(409).json({
+      success: false,
+      code: "AMBIGUOUS_SALON",
+      message: "You own more than one salon. This operation does not yet support selecting a specific salon.",
+    });
+  }
+  return res.status(404).json({ success: false, message: "Salon not found" });
+};
+
 /**
  * GET /api/payouts/wallet
  */
 export const getWallet = async (req, res, next) => {
   try {
     const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").lean();
-    if (!salon) return next(Errors.notFound("Salon not found"));
+    let salon;
+    try {
+      salon = await resolveOwnerSalonOrThrow(ownerId);
+    } catch (err) {
+      return payoutSalonErrorResponse(res, err);
+    }
 
     const wallet = await WalletBalanceService.getWallet(salon._id);
     const openPayout = await PayoutRequest.findOne({
@@ -87,14 +134,15 @@ export const requestWithdrawal = async (req, res, next) => {
     session.startTransaction();
 
     const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } })
-      .select("_id")
-      .session(session)
-      .lean();
-
-    if (!salon) {
-      await session.abortTransaction(); // ✅ explicit abort
-      return next(Errors.notFound("Salon not found"));
+    let salon;
+    try {
+      salon = await resolveOwnerSalonOrThrow(ownerId, session);
+    } catch (err) {
+      // ✅ explicit abort — ambiguous or missing salon must never reach
+      // the hold()/PayoutRequest.create() below; no funds are ever
+      // held and no payout row is ever created for this attempt.
+      await session.abortTransaction();
+      return payoutSalonErrorResponse(res, err);
     }
 
     // ✅ Wallet Phase 3C — bank verification gate. Reuses the existing
@@ -215,22 +263,36 @@ export const cancelWithdrawal = async (req, res, next) => {
     session.startTransaction();
 
     const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } })
+
+    // ✅ Fix — authoritative-record scoping (same shape as the
+    // already-fixed ownerCancelBooking in booking.controller.js). The
+    // payout's own salonId is the authoritative reference, so it is
+    // fetched by _id FIRST; ownership is then verified against THAT
+    // salon, rather than resolving "the" salon from ownerId alone
+    // first (unscoped Salon.findOne({ownerId}) — ambiguous for an
+    // owner with 2+ real salons) and filtering the payout lookup by
+    // whichever salon that unscoped query happened to return. The old
+    // order could false-negative (404) an owner cancelling their own
+    // real withdrawal if the unscoped lookup picked their OTHER
+    // salon; it could never leak or mutate a different owner's
+    // payout, since the salon-ownership check below still requires
+    // ownerId to match the real caller.
+    const payout = await PayoutRequest.findOne({ _id: req.params.id }).session(session);
+
+    if (!payout) {
+      await session.abortTransaction();
+      return next(Errors.notFound("Payout request not found"));
+    }
+
+    const salon = await Salon.findOne({ _id: payout.salonId, ownerId, isDeleted: { $ne: true } })
       .select("_id")
       .session(session)
       .lean();
 
+    // Same 404 for "doesn't exist" and "belongs to a different owner"
+    // — matches this payout's prior non-disclosure behavior, and
+    // never discloses whether the id belongs to someone else.
     if (!salon) {
-      await session.abortTransaction(); // ✅ explicit abort
-      return next(Errors.notFound("Salon not found"));
-    }
-
-    const payout = await PayoutRequest.findOne({
-      _id:     req.params.id,
-      salonId: salon._id,
-    }).session(session);
-
-    if (!payout) {
       await session.abortTransaction();
       return next(Errors.notFound("Payout request not found"));
     }
@@ -286,8 +348,12 @@ export const cancelWithdrawal = async (req, res, next) => {
 export const getPayoutHistory = async (req, res, next) => {
   try {
     const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").lean();
-    if (!salon) return next(Errors.notFound("Salon not found"));
+    let salon;
+    try {
+      salon = await resolveOwnerSalonOrThrow(ownerId);
+    } catch (err) {
+      return payoutSalonErrorResponse(res, err);
+    }
 
     // ✅ Fix — parseInt radix 10
     const pageNum  = Math.max(parseInt(req.query.page  ?? 1, 10), 1);
@@ -348,8 +414,12 @@ export const getPayoutHistory = async (req, res, next) => {
 export const getLedger = async (req, res, next) => {
   try {
     const ownerId = req.user._id;
-    const salon   = await Salon.findOne({ ownerId, isDeleted: { $ne: true } }).select("_id").lean();
-    if (!salon) return next(Errors.notFound("Salon not found"));
+    let salon;
+    try {
+      salon = await resolveOwnerSalonOrThrow(ownerId);
+    } catch (err) {
+      return payoutSalonErrorResponse(res, err);
+    }
 
     const pageNum  = Math.max(parseInt(req.query.page  ?? 1,  10), 1);
     const limitNum = Math.min(Math.max(parseInt(req.query.limit ?? 20, 10), 1), 100);

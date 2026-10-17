@@ -30,6 +30,17 @@ export const onboardSalon = async (req, res) => {
     // OWNER
     payload.ownerId = req.user.isTemp ? null : req.user._id;
 
+    // NOTE — Phase 0 (multi-salon support): an earlier revision of this
+    // endpoint blocked a second Salon.create() while the owner already
+    // had one PENDING/APPROVED. That guard has been REMOVED — ZEMISH's
+    // confirmed business rule is that one owner may legitimately own
+    // multiple independent salons (e.g. Salon Agra + Salon Delhi), each
+    // with its own salonId, bookings, schedule, staff, and wallet. The
+    // only remaining duplicate-submission signal on this route is the
+    // manager.phone check immediately below, which is independent of
+    // how many salons the owner has — it was never part of the removed
+    // guard and is unchanged.
+
     // FIX 1: managerPhone → manager.phone
     const rawPhone = String(payload.managerPhone || payload.manager?.phone || "")
       .replace(/\D/g, "")
@@ -144,6 +155,27 @@ export const onboardSalon = async (req, res) => {
       isFeatured: false,
 
       staff: payload.staff || {},
+
+      // TIMINGS FIX — this payload never collects working hours (unlike
+      // the actively-used onboarding wizard's dedicated saveTimings step,
+      // controllers/salon.onboarding.controller.js), and Salon.js's
+      // DayScheduleSchema requires open/close on every day unless
+      // isClosed is set, so Salon.create() below always threw without
+      // this. isClosed:true for every day is the only default that does
+      // not invent a working-hours value — it honestly represents
+      // "not yet configured," not a guessed business hour. The wizard's
+      // saveTimings step resolves the salon by ownerId, not by which
+      // endpoint created it, so real hours can still be set afterward
+      // through the normal onboarding flow.
+      timings: {
+        monday:    { isClosed: true },
+        tuesday:   { isClosed: true },
+        wednesday: { isClosed: true },
+        thursday:  { isClosed: true },
+        friday:    { isClosed: true },
+        saturday:  { isClosed: true },
+        sunday:    { isClosed: true },
+      },
 
       assignedAdmin: adminRef,
 

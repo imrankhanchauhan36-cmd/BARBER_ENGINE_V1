@@ -6,10 +6,30 @@ import Salon from "../models/Salon.js";
 // HELPER — GET SALON BY OWNER (reusable)
 //////////////////////////////////////////////////////
 
-const getSalonByOwner = async (ownerId) => {
-  const salon = await Salon.findOne({ ownerId }).select("_id").lean();
-  if (!salon) throw new Error("SALON_NOT_FOUND");
-  return salon;
+// MULTI-SALON NOTIFICATION VISIBILITY — explicit salonId. Same
+// resolver and rationale as controllers/deviceToken.controller.js's
+// own getSalonByOwner (that file's header has the full explanation):
+// an unscoped Salon.findOne({ownerId}) could resolve to the wrong one
+// of an owner's salons, making "My Notifications" (and mark-read/
+// clear-all, which share this same helper) silently show or mutate
+// the wrong salon's notifications. salonId absent is safe only when
+// the owner has exactly one real, APPROVED salon; two or more fails
+// closed with SALON_AMBIGUOUS instead of guessing.
+const getSalonByOwner = async (ownerId, salonId) => {
+  if (salonId) {
+    if (!mongoose.Types.ObjectId.isValid(salonId)) throw new Error("SALON_NOT_FOUND");
+    const salon = await Salon.findOne({ _id: salonId, ownerId, isDeleted: false }).select("_id").lean();
+    if (!salon) throw new Error("SALON_NOT_FOUND");
+    return salon;
+  }
+  const candidates = await Salon.find({
+    ownerId,
+    isDeleted: false,
+    "approval.status": "APPROVED",
+  }).select("_id").limit(2).lean();
+  if (candidates.length === 0) throw new Error("SALON_NOT_FOUND");
+  if (candidates.length > 1) throw new Error("SALON_AMBIGUOUS");
+  return candidates[0];
 };
 
 //////////////////////////////////////////////////////
@@ -18,20 +38,32 @@ const getSalonByOwner = async (ownerId) => {
 // Every handler below used to be OWNER-only (always calling
 // getSalonByOwner). This is now the single place that branches by
 // req.user.role — the OWNER branch is byte-for-byte the original
-// behavior (same query, same "SALON_NOT_FOUND" error), so an OWNER
-// request is completely unaffected. FIELD_AGENT is a new, additive
-// branch: recipientId is the Field Agent's own User._id (not a
-// FieldAgent document — see models/Notification.js's own comment for
-// why), which exists from first OTP verification onward, so this
-// works identically at every stage (applicant or operational).
+// behavior aside from the salonId disambiguation above, so an OWNER
+// request that already has exactly one salon is completely
+// unaffected. FIELD_AGENT is a new, additive branch: recipientId is
+// the Field Agent's own User._id (not a FieldAgent document — see
+// models/Notification.js's own comment for why), which exists from
+// first OTP verification onward, so this works identically at every
+// stage (applicant or operational).
 //////////////////////////////////////////////////////
 
-const resolveRecipient = async (user) => {
+const resolveRecipient = async (user, salonId) => {
   if (user?.role === "FIELD_AGENT") {
     return { recipientType: "FIELD_AGENT", recipientId: user._id };
   }
-  const salon = await getSalonByOwner(user?._id);
+  const salon = await getSalonByOwner(user?._id, salonId);
   return { recipientType: "SALON", recipientId: salon._id };
+};
+
+const salonErrorResponse = (res, err) => {
+  if (err.message === "SALON_AMBIGUOUS") {
+    return res.status(409).json({
+      success: false,
+      code: "AMBIGUOUS_SALON",
+      message: "You own more than one salon. Specify salonId to select which one.",
+    });
+  }
+  return res.status(404).json({ success: false, message: "Salon not found" });
 };
 
 //////////////////////////////////////////////////////
@@ -46,7 +78,7 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getNotifications = async (req, res) => {
   try {
-    const { recipientType, recipientId } = await resolveRecipient(req.user);
+    const { recipientType, recipientId } = await resolveRecipient(req.user, req.query.salonId);
 
     const page  = parseInt(req.query.page)  || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -90,8 +122,8 @@ export const getNotifications = async (req, res) => {
       },
     });
   } catch (err) {
-    if (err.message === "SALON_NOT_FOUND") {
-      return res.status(404).json({ success: false, message: "Salon not found" });
+    if (err.message === "SALON_NOT_FOUND" || err.message === "SALON_AMBIGUOUS") {
+      return salonErrorResponse(res, err);
     }
     return res.status(500).json({ success: false, message: "Failed to fetch notifications" });
   }
@@ -103,7 +135,7 @@ export const getNotifications = async (req, res) => {
 
 export const markAllRead = async (req, res) => {
   try {
-    const { recipientType, recipientId } = await resolveRecipient(req.user);
+    const { recipientType, recipientId } = await resolveRecipient(req.user, req.body?.salonId);
 
     await Notification.updateMany(
       {
@@ -117,8 +149,8 @@ export const markAllRead = async (req, res) => {
 
     return res.status(200).json({ success: true, message: "All marked as read" });
   } catch (err) {
-    if (err.message === "SALON_NOT_FOUND") {
-      return res.status(404).json({ success: false, message: "Salon not found" });
+    if (err.message === "SALON_NOT_FOUND" || err.message === "SALON_AMBIGUOUS") {
+      return salonErrorResponse(res, err);
     }
     return res.status(500).json({ success: false, message: "Failed" });
   }
@@ -136,7 +168,7 @@ export const markOneRead = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid notification ID" });
     }
 
-    const { recipientType, recipientId } = await resolveRecipient(req.user);
+    const { recipientType, recipientId } = await resolveRecipient(req.user, req.body?.salonId);
 
     const updated = await Notification.findOneAndUpdate(
       {
@@ -154,8 +186,8 @@ export const markOneRead = async (req, res) => {
 
     return res.status(200).json({ success: true, data: updated });
   } catch (err) {
-    if (err.message === "SALON_NOT_FOUND") {
-      return res.status(404).json({ success: false, message: "Salon not found" });
+    if (err.message === "SALON_NOT_FOUND" || err.message === "SALON_AMBIGUOUS") {
+      return salonErrorResponse(res, err);
     }
     return res.status(500).json({ success: false, message: "Failed" });
   }
@@ -167,7 +199,7 @@ export const markOneRead = async (req, res) => {
 
 export const clearAllNotifications = async (req, res) => {
   try {
-    const { recipientType, recipientId } = await resolveRecipient(req.user);
+    const { recipientType, recipientId } = await resolveRecipient(req.user, req.body?.salonId);
 
     await Notification.updateMany(
       {
@@ -180,8 +212,8 @@ export const clearAllNotifications = async (req, res) => {
 
     return res.status(200).json({ success: true, message: "All notifications cleared" });
   } catch (err) {
-    if (err.message === "SALON_NOT_FOUND") {
-      return res.status(404).json({ success: false, message: "Salon not found" });
+    if (err.message === "SALON_NOT_FOUND" || err.message === "SALON_AMBIGUOUS") {
+      return salonErrorResponse(res, err);
     }
     return res.status(500).json({ success: false, message: "Failed to clear" });
   }

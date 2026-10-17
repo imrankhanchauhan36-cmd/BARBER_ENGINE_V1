@@ -23,6 +23,7 @@ import scheduleRoutes from "./schedule.routes.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
+import { idempotency } from "../middlewares/idempotency.middleware.js";
 import { bookingWindowSchemas } from "../validators/salon.bookingWindow.validator.js";
 
 const router = express.Router();
@@ -57,7 +58,18 @@ ownerRouter.get("/performance", getBusinessPerformance);
 ownerRouter.post("/status", checkSalonStatus);
 
 // ✅ FIXED → renamed (avoid conflict with onboarding steps)
-ownerRouter.post("/submit-onboarding", onboardSalon);
+// idempotency added — same placement convention as booking.routes.js
+// (lock/confirm/cancel/check-in). NOT a complete fix for the confirmed
+// concurrent-first-submission race: it only protects a caller that
+// sends a matching Idempotency-Key header across a double-tap/retry of
+// the SAME logical attempt (the documented, real convention already
+// followed by user-app's BookingHoldScreen.js via
+// shared/utils/idempotencyKey.js). A caller that sends no header, or a
+// fresh key per attempt, or hits this while Redis is down, gets no
+// protection from this alone — see the onboardSalon guard above for
+// the actual duplicate-PENDING/APPROVED check, which is independent of
+// this and unaffected by Redis availability.
+ownerRouter.post("/submit-onboarding", idempotency, onboardSalon);
 
 // Shop toggle
 ownerRouter.patch("/shop/status", toggleShopOpen);

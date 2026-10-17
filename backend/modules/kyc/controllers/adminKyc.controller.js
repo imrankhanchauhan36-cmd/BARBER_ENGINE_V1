@@ -24,6 +24,30 @@ import { validateApprove, validateAssign, validateReject, validateRequestReuploa
 
 const isValidId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
 
+// ─── KYC Salon-Notification Ambiguity Guard ───────────────
+// KYC has no salon reference of its own (ownerId is the only link,
+// unique per owner — see models/KYC.js) and models/Salon.js's own
+// comment confirms this is intentional/unlinked by design. The old
+// `Salon.findOne({ ownerId: kyc.ownerId })` below picked an arbitrary
+// one of an owner's salons to notify when the owner has 2+ real
+// ones — never a cross-owner leak (ownerId was always the KYC
+// subject's own), but a wrong-salon-notified risk for that owner.
+// Fails closed instead of guessing, same convention already used for
+// resolveSensitiveOwnerSalon/getSalonByOwner elsewhere this session —
+// but unlike those, this is a non-blocking, best-effort notification
+// path (the surrounding `if (kycSalon) {...}` block already silently
+// skips when no salon is found), so "ambiguous" is folded into that
+// same existing skip rather than a new 409/error response: the KYC
+// decision itself is never affected, only whether a SALON
+// notification row gets created for this event. Deliberately NOT
+// filtered on approval.status — KYC approval routinely happens while
+// a salon is still DRAFT/PENDING, and filtering on APPROVED would
+// silently stop notifying the common single-salon case too.
+const resolveKycNotificationSalon = async (ownerId) => {
+  const candidates = await Salon.find({ ownerId, isDeleted: false }).select("_id").limit(2).lean();
+  return candidates.length === 1 ? candidates[0] : null;
+};
+
 // ─── Admin Level Guard ─────────────────────────────────────
 // ✅ Maintainability fix — was previously repeated inline as
 //   if (!["INDIA", "STATE"].includes(admin.adminLevel)) return next(Errors.forbidden("Insufficient privileges"));
@@ -292,8 +316,11 @@ export const approveKYCHandler = async (req, res, next) => {
     // one, but gating on applicantType makes that intentional rather
     // than incidental. Field Agent's own notification path is a
     // future phase (FA-3.2+), not implemented here.
+    // ✅ Fix — resolveKycNotificationSalon() fails closed (null) when
+    // the owner has 0 or 2+ real salons, instead of the old unscoped
+    // Salon.findOne({ownerId}) guessing one. See its own comment above.
     const kycSalon = kyc.applicantType === APPLICANT_TYPE.OWNER
-      ? await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean()
+      ? await resolveKycNotificationSalon(kyc.ownerId)
       : null;
     if (kycSalon) {
       await NotificationService.send({
@@ -397,8 +424,11 @@ export const rejectKYCHandler = async (req, res, next) => {
     // one, but gating on applicantType makes that intentional rather
     // than incidental. Field Agent's own notification path is a
     // future phase (FA-3.2+), not implemented here.
+    // ✅ Fix — resolveKycNotificationSalon() fails closed (null) when
+    // the owner has 0 or 2+ real salons, instead of the old unscoped
+    // Salon.findOne({ownerId}) guessing one. See its own comment above.
     const kycSalon = kyc.applicantType === APPLICANT_TYPE.OWNER
-      ? await Salon.findOne({ ownerId: kyc.ownerId }).select("_id").lean()
+      ? await resolveKycNotificationSalon(kyc.ownerId)
       : null;
     if (kycSalon) {
       await NotificationService.send({
