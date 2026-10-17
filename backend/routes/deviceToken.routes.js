@@ -26,13 +26,18 @@ const router = express.Router();
 router.use(protect);
 
 //////////////////////////////////////////////////////
-// OWNER + FIELD AGENT ACCESS
+// OWNER + FIELD AGENT + USER ACCESS
 // FA-P2-A — widened from OWNER-only (see
 // controllers/deviceToken.controller.js's role branch).
+// USER (customer) widened here as part of the centralized push
+// architecture work — DeviceToken.recipientType and Notification
+// .recipientType both already supported "USER" (pre-existing enum
+// value, never wired to this registration endpoint until now); the
+// matching branch is in deviceToken.controller.js#resolveRecipient.
 //////////////////////////////////////////////////////
 
 router.use(
-  requireRole("OWNER", "FIELD_AGENT")
+  requireRole("OWNER", "FIELD_AGENT", "USER")
 );
 
 //////////////////////////////////////////////////////

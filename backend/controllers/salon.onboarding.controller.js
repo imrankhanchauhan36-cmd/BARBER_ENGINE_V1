@@ -15,6 +15,113 @@ import { invalidateAllNextSlotCache } from "../services/slotEngine.service.js";
 import logger from "../utils/logger.js";
 
 ///////////////////////////////////////////////////////////
+// MULTI-SALON ONBOARDING IDENTITY — Phase 1 (additive)
+//
+// ZEMISH's confirmed business rule: one owner may legitimately own
+// multiple independent salons. Every wizard step below used to
+// resolve "the" salon purely via Salon.findOne({ownerId}) — correct
+// only while an owner has exactly one. buildOnboardingSalonFilter()
+// is the single shared resolution rule every step now uses:
+//
+//   - salonId provided (new clients, via POST startOnboarding below)
+//     → {_id: salonId, ownerId, isDeleted:false}. A foreign or
+//     invalid salonId matches nothing — every call site's EXISTING
+//     "Salon not found" handling covers this unchanged, so an invalid
+//     ID and someone else's real ID are indistinguishable in the
+//     response. This is the authorization check — not a separate
+//     step, but a property of the query itself.
+//
+//   - salonId absent (every current real caller — this field does
+//     not exist in any shipped client yet) → {ownerId}, BYTE-
+//     IDENTICAL to this file's behavior before this change. Nothing
+//     changes for an unmigrated client or an owner with one salon.
+///////////////////////////////////////////////////////////
+
+const buildOnboardingSalonFilter = ({ ownerId, salonId }) => {
+  if (salonId === undefined || salonId === null || salonId === "") {
+    return { ownerId }; // unchanged legacy fallback
+  }
+  if (!mongoose.Types.ObjectId.isValid(salonId)) {
+    return { _id: null }; // deliberately matches nothing
+  }
+  return { _id: salonId, ownerId, isDeleted: false };
+};
+
+// Same {isClosed:true}-for-every-day default already proven and
+// shipped in controllers/salon.controller.js#onboardSalon (Phase 0)
+// — Salon.js's DayScheduleSchema requires open/close on every day
+// unless isClosed, so a genuinely new Salon.create() call needs this
+// to pass validation. Not an invented working-hours value — saveTimings
+// below overwrites it with the owner's real hours in the normal flow.
+const DRAFT_TIMINGS = {
+  monday: { isClosed: true }, tuesday: { isClosed: true }, wednesday: { isClosed: true },
+  thursday: { isClosed: true }, friday: { isClosed: true }, saturday: { isClosed: true }, sunday: { isClosed: true },
+};
+
+///////////////////////////////////////////////////////////
+// STEP 0 — START A NEW SALON ONBOARDING (explicit identity)
+// Endpoint: POST /api/salon/onboarding/start
+//
+// Creates ONE new, independent DRAFT Salon and returns its salonId —
+// the client then carries that id through every subsequent step
+// (basic-info, location, ..., submit). This is a DELIBERATE action:
+// the client must only call this when the owner explicitly chooses
+// "Add a new salon" — never automatically on login/app-resume (an
+// owner resuming an unfinished draft already has its salonId in
+// local storage from when it was created, and should reuse that,
+// not call this again). Idempotency-Key (existing middleware, see
+// routes/salon.onboarding.routes.js) protects a double-tap/retry of
+// the SAME "start" action from creating two drafts; omitting the
+// header means every call is treated as a genuinely new, deliberate
+// start — consistent with how onboardSalon's own Idempotency-Key
+// usage already works (Phase 0).
+///////////////////////////////////////////////////////////
+
+export const startOnboarding = async (req, res) => {
+  try {
+    const ownerId = req.user?._id;
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    // onboarding.step has a schema floor of min:1 (models/Salon.js) —
+    // there is no "step 0" state in this schema's design, so this
+    // omits the field entirely and lets the schema default (1) apply,
+    // same floor saveBasicInfo's own $max:{"onboarding.step":1} already
+    // assumes.
+    const salon = await Salon.create({
+      ownerId,
+      basicInfo: { shopName: "Untitled Salon Draft", category: "UNISEX" },
+      timings: DRAFT_TIMINGS,
+      approval: { status: "DRAFT" },
+      isDeleted: false,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "New salon draft created",
+      data: {
+        salonId: salon._id,
+        onboardingStep: salon.onboarding.step,
+        status: salon.approval.status,
+      },
+    });
+
+  } catch (error) {
+    console.error("START_ONBOARDING_ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Internal server error",
+    });
+  }
+};
+
+///////////////////////////////////////////////////////////
 // STEP 1 — SAVE BASIC INFO (UNCHANGED — PERFECT)
 ///////////////////////////////////////////////////////////
 
@@ -30,6 +137,7 @@ export const saveBasicInfo = async (req, res) => {
     }
 
     const {
+      salonId,
       shopName,
       category,
       tagline,
@@ -136,18 +244,30 @@ export const saveBasicInfo = async (req, res) => {
       },
     };
 
-    const salon = await Salon.findOneAndUpdate(
-      { ownerId },
-      {
-        $set: updatePayload,
-        $setOnInsert: { ownerId },
-      },
-      {
-        new: true,
-        upsert: true,
-        runValidators: false,  // ← step-wise validation, poora schema nahi
-      }
-    );
+    // salonId provided → this owner must already own that exact,
+    // non-deleted salon (created via startOnboarding). NEVER upsert
+    // here — upsert:true would recreate the exact silent-overwrite /
+    // wrong-document risk this phase exists to close. salonId absent
+    // → unchanged legacy path (upsert on {ownerId} alone), for any
+    // client not yet updated to send one.
+    const salon = salonId
+      ? await Salon.findOneAndUpdate(
+          buildOnboardingSalonFilter({ ownerId, salonId }),
+          { $set: updatePayload },
+          { new: true, runValidators: false }
+        )
+      : await Salon.findOneAndUpdate(
+          { ownerId },
+          { $set: updatePayload, $setOnInsert: { ownerId } },
+          { new: true, upsert: true, runValidators: false }
+        );
+
+    if (!salon) {
+      return res.status(404).json({
+        success: false,
+        message: "Salon not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -185,7 +305,7 @@ export const saveLocation = async (req, res) => {
       });
     }
 
-    const { address, lat, lng } = req.body;
+    const { salonId, address, lat, lng } = req.body;
 
     //////////////////////////////////////////////////////
     // VALIDATION
@@ -224,7 +344,10 @@ export const saveLocation = async (req, res) => {
     // 🔥 ADMIN ASSIGN (FIXED)
     //////////////////////////////////////////////////////
 
-    const existingSalon = await Salon.findOne({ ownerId }).select('assignedAdmin').lean();
+    const existingSalon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId })).select('assignedAdmin').lean();
+    if (salonId && !existingSalon) {
+      return res.status(404).json({ success: false, message: "Salon not found" });
+    }
     if (existingSalon?.assignedAdmin) {
       await User.findByIdAndUpdate(
         existingSalon.assignedAdmin,
@@ -248,38 +371,43 @@ export const saveLocation = async (req, res) => {
         ? admin
         : null;
 
-    // 💾 THEN SAVE
-    const salon = await Salon.findOneAndUpdate(
-      { ownerId },
-      {
-        $set: {
-          "location.address": address?.trim() || null,
+    // 💾 THEN SAVE — same upsert-only-when-salonId-absent rule as
+    // saveBasicInfo above; never upsert once a salonId is supplied.
+    const locationSet = {
+      "location.address": address?.trim() || null,
 
-          "location.geo": {
-            type: "Point",
-            coordinates: [lngNum, latNum],
-          },
-
-          "location.territory.countryRef": location.countryRef,
-          "location.territory.stateRef": location.stateRef,
-          "location.territory.districtRef": location.districtRef,
-          "location.territory.cityRef": location.cityRef,
-          "location.territory.pincodeRef": location.pincodeRef,
-
-          assignedAdmin: validAdmin,
-        },
-
-        $setOnInsert: { ownerId }, // 🔥 ADD THIS
-        $max: {
-          "onboarding.step": 2,
-        },
+      "location.geo": {
+        type: "Point",
+        coordinates: [lngNum, latNum],
       },
-      {
-        new: true,
-        upsert: true,       // 🔥 ADD THIS
-        runValidators: false,  // ← FIXED
-      }
-    );
+
+      "location.territory.countryRef": location.countryRef,
+      "location.territory.stateRef": location.stateRef,
+      "location.territory.districtRef": location.districtRef,
+      "location.territory.cityRef": location.cityRef,
+      "location.territory.pincodeRef": location.pincodeRef,
+
+      assignedAdmin: validAdmin,
+    };
+
+    const salon = salonId
+      ? await Salon.findOneAndUpdate(
+          buildOnboardingSalonFilter({ ownerId, salonId }),
+          { $set: locationSet, $max: { "onboarding.step": 2 } },
+          { new: true, runValidators: false }
+        )
+      : await Salon.findOneAndUpdate(
+          { ownerId },
+          { $set: locationSet, $setOnInsert: { ownerId }, $max: { "onboarding.step": 2 } },
+          { new: true, upsert: true, runValidators: false }
+        );
+
+    if (!salon) {
+      return res.status(404).json({
+        success: false,
+        message: "Salon not found",
+      });
+    }
 
     //////////////////////////////////////////////////////
     // RESPONSE
@@ -360,7 +488,7 @@ export const saveServices = async (req, res) => {
       });
     }
 
-    const { services } = req.body;
+    const { salonId, services } = req.body;
 
     //////////////////////////////////////////////////////
     // 📦 VALIDATION
@@ -395,7 +523,7 @@ export const saveServices = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId }).session(session);
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId })).session(session);
 
     if (!salon) {
       await session.abortTransaction();
@@ -723,7 +851,7 @@ export const saveChairs = async (req, res) => {
       throw new Error("Authentication required");
     }
 
-    const { chairCount } = req.body;
+    const { salonId, chairCount } = req.body;
 
     //////////////////////////////////////////////////////
     // 📦 VALIDATION
@@ -756,7 +884,7 @@ export const saveChairs = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId }).session(session);
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId })).session(session);
 
     if (!salon) throw new Error("Salon not found");
 
@@ -803,9 +931,11 @@ export const saveChairs = async (req, res) => {
       salonId: salon._id
     });
 
-    // Step update karo
+    // Step update karo — targets the exact salon doc already resolved
+    // above (salon._id), not a fresh {ownerId} lookup, so this stays
+    // correct even once the owner has more than one salon.
     await Salon.findOneAndUpdate(
-      { ownerId },
+      { _id: salon._id },
       {
         $max: { "onboarding.step": 4 },
         $set: { chairCount: Number(chairCount) },
@@ -892,7 +1022,7 @@ export const saveTimings = async (req, res) => {
       });
     }
 
-    let { timings } = req.body;
+    let { salonId, timings } = req.body;
 
     // Time comparison helper — prevents string comparison bugs
     const toMinutes = (time) => {
@@ -910,7 +1040,7 @@ export const saveTimings = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId });
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId }));
 
     if (!salon) {
       return res.status(404).json({
@@ -1104,7 +1234,7 @@ export const saveStaff = async (req, res) => {
     session.startTransaction();
 
     const ownerId = req.user?._id;
-    const { staff = [], isOwnerOnly } = req.body;
+    const { salonId, staff = [], isOwnerOnly } = req.body;
 
     //////////////////////////////////////////////////////
     // 🔒 AUTH
@@ -1116,7 +1246,7 @@ export const saveStaff = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId }).session(session);
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId })).session(session);
 
     if (!salon) throw new Error("Salon not found");
 
@@ -1384,7 +1514,7 @@ export const savePhotos = async (req, res) => {
     session.startTransaction();
 
     const ownerId = req.user?._id;
-    const { photos } = req.body;
+    const { salonId, photos } = req.body;
 
     //////////////////////////////////////////////////////
     // 🔒 AUTH
@@ -1401,7 +1531,7 @@ export const savePhotos = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId }).session(session);
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId })).session(session);
 
     if (!salon) throw new Error("Salon not found");
 
@@ -1520,6 +1650,7 @@ export const savePhotos = async (req, res) => {
 export const getReview = async (req, res) => {
   try {
     const ownerId = req.user?._id;
+    const { salonId } = req.query;
 
     //////////////////////////////////////////////////////
     // 🔒 AUTH CHECK
@@ -1534,7 +1665,7 @@ export const getReview = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON (SAFE + LEAN)
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId })
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId }))
       .lean();
 
     if (!salon || !salon._id) {
@@ -1607,6 +1738,7 @@ export const submitSalon = async (req, res) => {
     session.startTransaction();
 
     const ownerId = req.user?._id;
+    const { salonId } = req.body;
 
     //////////////////////////////////////////////////////
     // 🔒 AUTH
@@ -1618,7 +1750,7 @@ export const submitSalon = async (req, res) => {
     //////////////////////////////////////////////////////
     // 🔍 GET SALON (LIGHTWEIGHT)
     //////////////////////////////////////////////////////
-    const salon = await Salon.findOne({ ownerId })
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId }))
       .select("_id onboarding approval")
       .session(session);
 
@@ -1655,11 +1787,13 @@ export const submitSalon = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////
-    // 🔥 ATOMIC UPDATE (NO DOUBLE SUBMIT)
+    // 🔥 ATOMIC UPDATE (NO DOUBLE SUBMIT) — targets the exact
+    // salon doc already resolved above (salon._id), not a fresh
+    // {ownerId} lookup, so this stays correct with multiple salons.
     //////////////////////////////////////////////////////
     const updatedSalon = await Salon.findOneAndUpdate(
       {
-        ownerId,
+        _id: salon._id,
         "approval.status": "DRAFT",
       },
       {
@@ -1723,6 +1857,7 @@ export const submitSalon = async (req, res) => {
 export const resubmitOnboarding = async (req, res) => {
   try {
     const ownerId = req.user?._id;
+    const { salonId } = req.body;
 
     if (!ownerId) {
       return res.status(401).json({
@@ -1731,7 +1866,7 @@ export const resubmitOnboarding = async (req, res) => {
       });
     }
 
-    const salon = await Salon.findOne({ ownerId });
+    const salon = await Salon.findOne(buildOnboardingSalonFilter({ ownerId, salonId }));
 
     if (!salon) {
       return res.status(404).json({

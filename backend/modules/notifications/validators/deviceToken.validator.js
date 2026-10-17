@@ -8,6 +8,14 @@
  * controller always derives them server-side from the authenticated
  * owner's own salon, so a client can never register a token under a
  * different recipient. Only device/token fields are validated here.
+ *
+ * MULTI-SALON FIX — optional salonId, ownership-verified server-side
+ * (controllers/deviceToken.controller.js#getSalonByOwner): this is NOT
+ * the same as accepting a bare recipientId — the controller still
+ * never trusts this value directly, it only uses it to pick WHICH of
+ * the owner's own salons to resolve. Required to add explicitly here:
+ * without it, .unknown(false) below rejects the field outright with
+ * a 400 before the controller ever sees it.
  */
 
 import Joi from "joi";
@@ -16,6 +24,11 @@ import {
   DEVICE_PLATFORM_VALUES,
   PUSH_PROVIDER_VALUES,
 } from "../../../constants/notification.constants.js";
+
+// Same convention already used elsewhere in this codebase (e.g.
+// validators/adminCustomerBookings.validator.js) for a plain Mongo
+// ObjectId string.
+const objectId = Joi.string().hex().length(24);
 
 export const deviceTokenSchemas = {
 
@@ -36,6 +49,8 @@ export const deviceTokenSchemas = {
     appVersion: Joi.string().trim().max(50).allow("", null),
 
     deviceId: Joi.string().trim().max(200).allow("", null),
+
+    salonId: objectId.optional(),
   }).unknown(false),
 
   //////////////////////////////////////////////////////////
@@ -45,6 +60,8 @@ export const deviceTokenSchemas = {
   deactivate: Joi.object({
     token: Joi.string().trim().min(10).max(4096).required()
       .messages({ "any.required": "token is required" }),
+
+    salonId: objectId.optional(),
   }).unknown(false),
 
 };

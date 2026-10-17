@@ -518,6 +518,33 @@ export const transferStaff = async (req, res, next) => {
       return next(Errors.badRequest("Staff is already assigned to this salon"));
     }
 
+    // ✅ Fix #11 — Destination-salon duplicate active-phone pre-check.
+    // Mirrors services/professional.service.js's own handling of the
+    // same {salonId,phone} unique partial index — scoped to the
+    // DESTINATION salon, and only when this staff member actually has
+    // a phone (null is excluded by the index's own
+    // partialFilterExpression, so there is nothing to conflict there).
+    // Runs before any mutation below, so a conflict never partially
+    // applies. The underlying unique index (and the generic 409
+    // handler in middlewares/errorHandler.js) remain the real
+    // backstop for the narrow race window between this check and
+    // staff.save() — this pre-check only improves the error message
+    // for the common case, it does not replace that backstop.
+    if (typeof staff.phone === "string" && staff.phone) {
+      const phoneConflict = await Staff.findOne({
+        _id:       { $ne: staff._id },
+        salonId:   salonId,
+        phone:     staff.phone,
+        isDeleted: { $ne: true },
+      }).select("_id name").lean();
+
+      if (phoneConflict) {
+        return next(Errors.conflict(
+          `An active staff member with this phone number already exists in the destination salon (${phoneConflict.name}).`
+        ));
+      }
+    }
+
     const prevSalonId = staff.salonId;
 
     // ✅ Fix #4 — Save transfer history in DB

@@ -9,7 +9,7 @@ import Service from "../models/Service.js"; // ✅ NEW
 import Staff from "../models/Staff.js";
 import State from "../models/State.js";
 import Transaction from "../models/Transaction.js";
-import { resolveScheduleDate } from "../utils/dateRange.helpers.js";
+import { resolveScheduleDate, resolveScheduleWindow, formatISTDateFromUtc } from "../utils/dateRange.helpers.js";
 import { getSalonSummary } from "../services/ratingAggregate.service.js";
 
 
@@ -345,31 +345,80 @@ export const getDashboardStats = async (req, res) => {
   }
 };
 
+// MULTI-SALON BOOKING/SCHEDULE VISIBILITY — explicit salonId. Same
+// resolver and rationale as controllers/booking.controller.js's own
+// resolveSensitiveOwnerSalon (duplicated locally rather than shared
+// across files, matching this codebase's existing convention for
+// these small per-file resolver helpers — see deviceToken.controller.js's
+// own header comment on that same convention). salonId absent is safe
+// only when the owner has exactly one real, APPROVED salon; two or
+// more fails closed with AMBIGUOUS_SALON instead of guessing.
+const resolveSensitiveOwnerSalon = async ({ ownerId, salonId }) => {
+  if (salonId) {
+    if (!mongoose.Types.ObjectId.isValid(salonId)) return { error: "NOT_FOUND" };
+    const salon = await Salon.findOne({ _id: salonId, ownerId, isDeleted: false }).select("_id business.bookingWindowDays").lean();
+    return salon ? { salon } : { error: "NOT_FOUND" };
+  }
+  const candidates = await Salon.find({
+    ownerId,
+    isDeleted: false,
+    "approval.status": "APPROVED",
+  }).select("_id business.bookingWindowDays").limit(2).lean();
+  if (candidates.length === 0) return { error: "NOT_FOUND" };
+  if (candidates.length > 1) return { error: "AMBIGUOUS" };
+  return { salon: candidates[0] };
+};
+
+const salonResolutionErrorResponse = (res, error) => {
+  if (error === "AMBIGUOUS") {
+    return res.status(409).json({
+      success: false,
+      code: "AMBIGUOUS_SALON",
+      message: "You own more than one salon. Specify salonId to select which one.",
+    });
+  }
+  return res.status(404).json({ success: false, message: "Salon not found" });
+};
+
 export const getLiveSchedule = async (req, res) => {
   try {
     const ownerId = req.user?._id;
-    const salon = await Salon.findOne({ ownerId }).select("_id").lean();
-    if (!salon) return res.status(404).json({ success: false, message: "Salon not found" });
+    const { salonId: requestedSalonId } = req.query;
+    const { salon, error } = await resolveSensitiveOwnerSalon({ ownerId, salonId: requestedSalonId });
+    if (error) return salonResolutionErrorResponse(res, error);
 
     const salonId = salon._id;
 
-    // Single selected IST calendar day — defaults to today when
-    // ?date= is absent (byte-identical to the previous behavior for
-    // every existing caller). Never a multi-day/range concept — see
-    // resolveScheduleDate()'s own header for why this is deliberately
-    // NOT built on Business Performance's range resolver.
-    const resolved = resolveScheduleDate(req.query.date);
+    // ?date= present: unchanged, byte-identical single-IST-day behavior
+    // for any existing caller that already relies on it. ?date= absent:
+    // the full advance-booking window the salon is actually configured
+    // to accept (Salon.business.bookingWindowDays, default 7, 1..30),
+    // via resolveScheduleWindow() — the same display-side read of this
+    // setting services/weeklyScheduleMaterializer.service.js's own
+    // computeWindowDates() already uses, not a second, hardcoded
+    // range invented here.
+    const resolved = req.query.date
+      ? resolveScheduleDate(req.query.date)
+      : resolveScheduleWindow(salon.business?.bookingWindowDays ?? 7);
     if (resolved.error) {
       return res.status(400).json({ success: false, message: resolved.error });
     }
-    const { startUtc, endUtc, resolvedDate } = resolved;
+    const { startUtc, endUtc, resolvedDate, resolvedEndDate } = resolved;
 
     const [chairs, bookings, cancelledCount] = await Promise.all([
       Chair.find({ salonId, isDeleted: false, isActive: true })
         .select("name position").sort({ position: 1 }).lean(),
       Booking.find({
         salonRef: salonId,
-        status: { $in: ["CONFIRMED", "ONGOING", "COMPLETED"] },
+        // HOLD included — a booking the customer has locked but not
+        // yet paid/confirmed is still a real, eligible future
+        // appointment the owner needs visibility into (per the
+        // approved requirement, not omitted merely for being
+        // unfinalized). EXPIRED (a HOLD that timed out without
+        // payment — never a real appointment), CANCELLED, and
+        // NO_SHOW remain excluded, unchanged from the existing
+        // operational-view behavior.
+        status: { $in: ["HOLD", "CONFIRMED", "ONGOING", "COMPLETED"] },
         startTime: { $gte: startUtc, $lte: endUtc }
       })
         .populate("userRef", "name phone profilePhoto")
@@ -397,6 +446,11 @@ export const getLiveSchedule = async (req, res) => {
         .filter(b => String(b.chairRef?._id) === String(chair._id))
         .map(b => ({
           bookingId: b._id,
+          // Additive — the IST calendar date this specific slot falls
+          // on, so a multi-day window response can be grouped/labeled
+          // per day on the frontend; every existing consumer reading
+          // only time/endTime/customer/etc. is unaffected.
+          date:      formatISTDateFromUtc(b.startTime),
           time:      b.startTime,
           endTime:   b.endTime,
           customer:  b.userRef?.name || "Customer",
@@ -435,9 +489,19 @@ export const getLiveSchedule = async (req, res) => {
     // separately recomputing "today" client-side. Every existing
     // consumer that only reads `success`/`data` is unaffected.
     // cancelledCount is additive, same as `date` above — a real count
-    // for the selected day, never the cancelled bookings themselves
-    // (those still never appear in `data`, unchanged operational view).
-    return res.status(200).json({ success: true, data: schedule, date: resolvedDate, cancelledCount });
+    // for the selected day/window, never the cancelled bookings
+    // themselves (those still never appear in `data`, unchanged
+    // operational view). `endDate` is additive-only: equals `date`
+    // itself for the existing single-day (?date=) call shape, so an
+    // existing consumer that only reads `date` sees no change; a
+    // multi-day window caller gets the real window boundary too.
+    return res.status(200).json({
+      success: true,
+      data: schedule,
+      date: resolvedDate,
+      endDate: resolvedEndDate ?? resolvedDate,
+      cancelledCount,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to fetch live schedule" });
   }

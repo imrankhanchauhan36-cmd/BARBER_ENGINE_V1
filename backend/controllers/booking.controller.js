@@ -26,6 +26,7 @@ import { calculateBookingPricing } from "../services/bookingPricing.service.js";
 import { splitRefundComponents } from "../services/refundComponentSplitter.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
+import { NOTIFICATION_CHANNEL } from "../constants/notification.constants.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import {
   getEligibleSlotsForProfessional,
@@ -855,6 +856,68 @@ export const lockSlot = async (req, res) => {
         status:    BOOKING_STATUS.HOLD,
       },
     });
+
+    //////////////////////////////////////////////////////////
+    // 🔔 OWNER PUSH — new booking alert (additive). Best-effort only:
+    // any failure here (lookup or send) must never roll back,
+    // invalidate, or alter the booking response below —
+    // NotificationService.send() already has its own outer try/catch
+    // that never throws (see that file's own header: "never throws —
+    // always returns a string"/null), and the two lookups here are
+    // wrapped in the identical try/catch for the same reason.
+    //
+    // Duplicate-send protection on a client RETRY comes from the
+    // EXISTING idempotency middleware this exact route already runs
+    // behind (routes/booking.routes.js — POST /lock -> idempotency,
+    // middlewares/idempotency.middleware.js): a retried request
+    // carrying the same Idempotency-Key header never re-executes this
+    // handler body at all — it is served the already-cached response
+    // instead — so this call can never fire twice for one real lock
+    // attempt. A second, genuinely separate lock attempt by the same
+    // user is independently prevented further up in this same
+    // function (the "already have an active hold" guard above).
+    // Duplicate owner notifications are therefore already structurally
+    // excluded by mechanisms that predate this change, not a new
+    // dedup scheme invented here — see this phase's own report for
+    // why no additional flag/field was added.
+    //////////////////////////////////////////////////////////
+    try {
+      const [customerForPush, servicesForPush] = await Promise.all([
+        User.findById(userId).select("name").lean(),
+        Service.find({ _id: { $in: serviceRefs } }).select("name").lean(),
+      ]);
+
+      const bookingDateTimeStr = booking.startTime.toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Kolkata",
+      });
+      const customerName = customerForPush?.name || "A customer";
+      const serviceName  = servicesForPush?.length
+        ? servicesForPush.map((s) => s.name).join(", ")
+        : null;
+
+      await NotificationService.send(
+        {
+          recipientId:   booking.salonRef,
+          recipientType: "SALON",
+          templateKey:   NOTIFICATION_EVENTS.BOOKING_CREATED,
+          variables:     { time: bookingDateTimeStr, customer: customerName, service: serviceName || "" },
+          title:         "New Booking",
+          message: serviceName
+            ? `${customerName} booked ${serviceName} for ${bookingDateTimeStr}.`
+            : `${customerName} booked an appointment for ${bookingDateTimeStr}.`,
+          type:          "BOOKING",
+          priority:      "HIGH",
+          actionType:    "OPEN_BOOKING",
+          actionUrl:     `/bookings/${booking._id}`,
+          meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+        },
+        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
+      );
+    } catch (notifyErr) {
+      console.warn("lockSlot: owner new-booking notification failed (non-critical):", notifyErr.message);
+    }
 
     return res.status(200).json({
       success:   true,
@@ -2278,17 +2341,37 @@ export const ownerCancelBooking = async (req, res) => {
     const booking = await Booking.findById(bookingId).session(session);
     if (!booking) throw Object.assign(new Error("Booking not found"), { status: 404 });
 
-    // OWNER OWNERSHIP CHECK — resolve the caller's own salon server-side
-    // (same Salon.findOne({ ownerId }) pattern used throughout this
-    // codebase, e.g. getSalonBookings above) and verify the booking
-    // belongs to THAT salon. salonId/ownerId are never read from the
-    // request body.
-    const salon = await Salon.findOne({ ownerId: req.user._id }).session(session).select("_id");
-    if (!salon) throw Object.assign(new Error("Salon not found"), { status: 404 });
-
-    if (booking.salonRef.toString() !== salon._id.toString()) {
-      throw Object.assign(new Error("Unauthorized"), { status: 403 });
-    }
+    // OWNER OWNERSHIP CHECK — scoped directly to the booking's own
+    // authoritative salonRef, not resolved separately via an unscoped
+    // Salon.findOne({ ownerId }). The previous two-step version
+    // (findOne({ownerId}) then compare booking.salonRef against
+    // whichever salon that returned) broke for an owner with 2+
+    // approved salons: Mongoose has no implicit sort, so findOne could
+    // return the owner's OTHER salon, wrongly failing the comparison
+    // and 403'ing an owner trying to cancel their own booking — a
+    // false-negative, not a cross-owner leak, since ownerId was always
+    // scoped to the real caller. Confirmed by a reproducing regression
+    // test (scripts/e2e/verifyMultiSalonBookingNotificationIsolation.mjs)
+    // before this fix, and by the same test asserting success after it.
+    //
+    // No AMBIGUOUS_SALON/resolveSensitiveOwnerSalon needed here (unlike
+    // getSalonBookings/getLiveSchedule/device-token/notification): those
+    // endpoints must guess a salon from ownerId alone with no other
+    // signal. Here booking.salonRef already names the exact salon, so
+    // baking both _id and ownerId into one query removes the ambiguity
+    // outright — smaller and more precise than the ambiguity-resolution
+    // pattern, not a reuse of it. isDeleted: false matches this
+    // codebase's existing soft-delete convention for salon-ownership
+    // checks (Salon.isDeleted, used identically in
+    // resolveSensitiveOwnerSalon above and in deviceToken/notification
+    // controllers) — a salon soft-deleted out from under an owner is no
+    // more actionable here than it is for those endpoints.
+    const salon = await Salon.findOne({
+      _id:       booking.salonRef,
+      ownerId:   req.user._id,
+      isDeleted: false,
+    }).session(session).select("_id");
+    if (!salon) throw Object.assign(new Error("Unauthorized"), { status: 403 });
 
     // STATE MACHINE VALIDATION — identical call, same central rules.
     if (!validateBookingTransition(booking.status, BOOKING_STATUS.CANCELLED)) {
@@ -2778,22 +2861,68 @@ export const getCompletedBookings = async (req, res) => {
 };
 
 //////////////////////////////////////////////////////////////
+// MULTI-SALON BOOKING/SCHEDULE VISIBILITY — explicit salonId
+//
+// Resolves which salon a SENSITIVE, booking-scoped read targets.
+// Unlike the onboarding wizard's resolver (safe to fall back to
+// {ownerId} unconditionally — onboarding only ever touches a DRAFT),
+// this must never silently guess among multiple real salons:
+//   - salonId supplied: must belong to this owner and not be deleted
+//     (ownership baked into the query itself). Invalid/foreign id ->
+//     null, surfaced by every call site as the same generic 404 —
+//     never discloses whose salon it actually is.
+//   - salonId absent: safe ONLY when the owner has exactly one real,
+//     bookable (APPROVED — utils/salonReady.guard.js confirms only
+//     APPROVED salons can ever have a real booking, so DRAFT/PENDING/
+//     REJECTED salons are correctly excluded from this count, not
+//     just "non-deleted") salon. Two or more real salons -> AMBIGUOUS,
+//     fails closed with a distinct error instead of guessing — this
+//     is the exact fix for the confirmed booking-visibility bug
+//     (Salon.findOne({ownerId}) could silently resolve to the wrong
+//     one of the owner's salons).
+//////////////////////////////////////////////////////////////
+
+const resolveSensitiveOwnerSalon = async ({ ownerId, salonId }) => {
+  if (salonId) {
+    if (!mongoose.Types.ObjectId.isValid(salonId)) return { error: "NOT_FOUND" };
+    const salon = await Salon.findOne({ _id: salonId, ownerId, isDeleted: false }).select("_id").lean();
+    return salon ? { salon } : { error: "NOT_FOUND" };
+  }
+  const candidates = await Salon.find({
+    ownerId,
+    isDeleted: false,
+    "approval.status": "APPROVED",
+  }).select("_id").limit(2).lean();
+  if (candidates.length === 0) return { error: "NOT_FOUND" };
+  if (candidates.length > 1) return { error: "AMBIGUOUS" };
+  return { salon: candidates[0] };
+};
+
+const salonResolutionErrorResponse = (res, error) => {
+  if (error === "AMBIGUOUS") {
+    return res.status(409).json({
+      success: false,
+      code: "AMBIGUOUS_SALON",
+      message: "You own more than one salon. Specify salonId to select which one.",
+    });
+  }
+  return res.status(404).json({ success: false, message: "Salon not found" });
+};
+
+//////////////////////////////////////////////////////////////
 // 🚀 11. GET SALON BOOKINGS (OWNER VIEW — paginated)
 //////////////////////////////////////////////////////////////
 
 export const getSalonBookings = async (req, res) => {
   try {
     const ownerId            = req.user._id;
-    const { status }         = req.query;
+    const { status, salonId } = req.query;
     const { page, limit, skip } = getPagination(req.query);
 
-    const salon = await Salon.findOne({ ownerId }).select("_id").lean();
+    const { salon, error } = await resolveSensitiveOwnerSalon({ ownerId, salonId });
 
-    if (!salon) {
-      return res.status(404).json({
-        success: false,
-        message: "Salon not found",
-      });
+    if (error) {
+      return salonResolutionErrorResponse(res, error);
     }
 
     const filter = { salonRef: salon._id };

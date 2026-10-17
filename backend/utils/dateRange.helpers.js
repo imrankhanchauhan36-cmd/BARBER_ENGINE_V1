@@ -225,3 +225,64 @@ export function resolveScheduleDate(dateStr) {
     resolvedDate: formatISTDateOnly(parsed.year, parsed.month, parsed.day),
   };
 }
+
+/**
+ * Multi-day sibling of resolveScheduleDate — today (IST) through
+ * today + (windowDays - 1), inclusive, mirroring the exact "today +
+ * (N-1) future calendar days" rule services/weeklyScheduleMaterializer
+ * .service.js#computeWindowDates already uses for the SAME
+ * Salon.business.bookingWindowDays setting (that file's own locked
+ * decision #1) — this is the display-side read of the same window,
+ * not a second, independently-invented one.
+ *
+ * Deliberately reuses istStartOfDayUtc/istEndOfDayUtc's own
+ * Date.UTC()-based month/day rollover (passing day + (windowDays-1)
+ * directly) instead of a separate "add days" helper — Date.UTC
+ * already normalizes an out-of-range day into the correct next
+ * month/year, which is exactly the behavior a multi-day end boundary
+ * needs.
+ *
+ * windowDays is clamped to Salon.business.bookingWindowDays's own
+ * schema bounds (1..30) by the caller passing a value already read
+ * from that field — this function does not re-invent or widen that
+ * cap itself; an out-of-range input here would be a caller bug, not
+ * a condition this helper is responsible for normalizing.
+ *
+ * @returns {{startUtc:Date,endUtc:Date,resolvedDate:string,resolvedEndDate:string}}
+ */
+export function resolveScheduleWindow(windowDays) {
+  const today = toISTCalendarFields();
+  const safeWindowDays = Number.isInteger(windowDays) && windowDays > 0 ? windowDays : 1;
+
+  const endUtc = istEndOfDayUtc(today.year, today.month, today.day + (safeWindowDays - 1));
+  // formatISTDateOnly() does plain string interpolation with no
+  // month/day rollover of its own (unlike istStartOfDayUtc/
+  // istEndOfDayUtc, which delegate to Date.UTC() for that) — so the
+  // end date must be read back from the already-correctly-rolled-over
+  // endUtc instant via toISTCalendarFields(), never formatted from
+  // the raw `today.day + (safeWindowDays - 1)` arithmetic directly,
+  // or a window crossing a month boundary would print an impossible
+  // calendar date (e.g. "2026-10-35" instead of "2026-11-04").
+  const endFields = toISTCalendarFields(endUtc);
+
+  return {
+    startUtc: istStartOfDayUtc(today.year, today.month, today.day),
+    endUtc,
+    resolvedDate: formatISTDateOnly(today.year, today.month, today.day),
+    resolvedEndDate: formatISTDateOnly(endFields.year, endFields.month, endFields.day),
+  };
+}
+
+/**
+ * The IST calendar-date string (YYYY-MM-DD) a given UTC instant falls
+ * on — the per-booking counterpart to resolveScheduleWindow's own
+ * start/end dates, so a multi-day schedule response can tag each
+ * individual booking with which day of the window it belongs to.
+ * Same toISTCalendarFields()/formatISTDateOnly() primitives this file
+ * already uses everywhere else — not a second date-math
+ * implementation.
+ */
+export function formatISTDateFromUtc(instantUtc) {
+  const fields = toISTCalendarFields(instantUtc);
+  return formatISTDateOnly(fields.year, fields.month, fields.day);
+}

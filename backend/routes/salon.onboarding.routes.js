@@ -5,6 +5,7 @@
 import express from "express";
 
 import {
+  startOnboarding,
   saveBasicInfo,
   saveLocation,
   saveServices, // ✅ ADD THIS
@@ -19,6 +20,7 @@ import {
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
+import { idempotency } from "../middlewares/idempotency.middleware.js";
 
 ///////////////////////////////////////////////////////////
 
@@ -33,6 +35,22 @@ const salonOnboardingRouter = express.Router();
 
 salonOnboardingRouter.use(protect);
 salonOnboardingRouter.use(requireRole("OWNER"));
+
+///////////////////////////////////////////////////////////
+// STEP 0 — START A NEW SALON ONBOARDING (multi-salon, Phase 1)
+// Endpoint: POST /api/salon/onboarding/start
+// idempotency (existing middleware, same convention already used on
+// booking.routes.js and salon.routes.js#submit-onboarding) — a
+// retry/double-tap with the same Idempotency-Key header returns the
+// SAME salonId instead of creating a second draft. Omitting the
+// header means every call is a genuinely new "start" action.
+///////////////////////////////////////////////////////////
+
+salonOnboardingRouter.post(
+  "/start",
+  idempotency,
+  startOnboarding
+);
 
 ///////////////////////////////////////////////////////////
 // STEP 1 — BASIC INFO
