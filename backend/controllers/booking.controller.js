@@ -28,6 +28,7 @@ import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
 import { NOTIFICATION_CHANNEL } from "../constants/notification.constants.js";
 import { getSmartSlots, invalidateNextSlotCache } from "../services/slotEngine.service.js";
+import { formatISTDateFromUtc } from "../utils/dateRange.helpers.js";
 import {
   getEligibleSlotsForProfessional,
   selectAnyProfessional,
@@ -857,67 +858,12 @@ export const lockSlot = async (req, res) => {
       },
     });
 
-    //////////////////////////////////////////////////////////
-    // 🔔 OWNER PUSH — new booking alert (additive). Best-effort only:
-    // any failure here (lookup or send) must never roll back,
-    // invalidate, or alter the booking response below —
-    // NotificationService.send() already has its own outer try/catch
-    // that never throws (see that file's own header: "never throws —
-    // always returns a string"/null), and the two lookups here are
-    // wrapped in the identical try/catch for the same reason.
-    //
-    // Duplicate-send protection on a client RETRY comes from the
-    // EXISTING idempotency middleware this exact route already runs
-    // behind (routes/booking.routes.js — POST /lock -> idempotency,
-    // middlewares/idempotency.middleware.js): a retried request
-    // carrying the same Idempotency-Key header never re-executes this
-    // handler body at all — it is served the already-cached response
-    // instead — so this call can never fire twice for one real lock
-    // attempt. A second, genuinely separate lock attempt by the same
-    // user is independently prevented further up in this same
-    // function (the "already have an active hold" guard above).
-    // Duplicate owner notifications are therefore already structurally
-    // excluded by mechanisms that predate this change, not a new
-    // dedup scheme invented here — see this phase's own report for
-    // why no additional flag/field was added.
-    //////////////////////////////////////////////////////////
-    try {
-      const [customerForPush, servicesForPush] = await Promise.all([
-        User.findById(userId).select("name").lean(),
-        Service.find({ _id: { $in: serviceRefs } }).select("name").lean(),
-      ]);
-
-      const bookingDateTimeStr = booking.startTime.toLocaleString("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-        timeZone: "Asia/Kolkata",
-      });
-      const customerName = customerForPush?.name || "A customer";
-      const serviceName  = servicesForPush?.length
-        ? servicesForPush.map((s) => s.name).join(", ")
-        : null;
-
-      await NotificationService.send(
-        {
-          recipientId:   booking.salonRef,
-          recipientType: "SALON",
-          templateKey:   NOTIFICATION_EVENTS.BOOKING_CREATED,
-          variables:     { time: bookingDateTimeStr, customer: customerName, service: serviceName || "" },
-          title:         "New Booking",
-          message: serviceName
-            ? `${customerName} booked ${serviceName} for ${bookingDateTimeStr}.`
-            : `${customerName} booked an appointment for ${bookingDateTimeStr}.`,
-          type:          "BOOKING",
-          priority:      "HIGH",
-          actionType:    "OPEN_BOOKING",
-          actionUrl:     `/bookings/${booking._id}`,
-          meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-        },
-        [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]
-      );
-    } catch (notifyErr) {
-      console.warn("lockSlot: owner new-booking notification failed (non-critical):", notifyErr.message);
-    }
+    // PHASE B (approved) — the Salon Owner must receive NO notification
+    // (neither PUSH nor IN_APP) at hold time. The owner-facing
+    // BOOKING_CREATED send that used to live here has moved to
+    // runBookingConfirmedEffects(), firing only after payment is
+    // verified and the booking is actually CONFIRMED. See that
+    // function's own comment for the moved block.
 
     return res.status(200).json({
       success:   true,
@@ -1269,22 +1215,34 @@ export const runBookingConfirmedEffects = async ({ req, booking, amount }) => {
     // 📬 NOTIFICATION (non-blocking, after commit)
     //////////////////////////////////////////////////////////
 
-    const bookingTimeStr = booking.startTime.toLocaleTimeString("en-IN", {
-      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
+    // COPY FIX (approved) — this previously read `bookingTimeStr`
+    // (time-only, via toLocaleTimeString) and hardcoded the word
+    // "today" in the message below, regardless of the booking's
+    // actual date. Since a slot can be booked for today OR the next
+    // day (same-day/next-day booking is an existing, supported
+    // flow), that could tell a customer their appointment is "today"
+    // when it is actually tomorrow — a real correctness defect, not
+    // a style choice. Fixed by including the full date in the string
+    // (same toLocaleString dateStyle/timeStyle pattern already used
+    // elsewhere in this file for an identical purpose) and removing
+    // the hardcoded "today" from the message entirely, so the text
+    // is correct for both cases without a same-day/next-day branch.
+    const bookingDateTimeStr = booking.startTime.toLocaleString("en-IN", {
+      dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata",
     });
     await NotificationService.send({
       recipientId:   booking.userRef,
       recipientType: "USER",
       templateKey:   NOTIFICATION_EVENTS.BOOKING_CONFIRMED,
-      variables:     { time: bookingTimeStr },
+      variables:     { date: bookingDateTimeStr },
       title:         "Booking Confirmed",
-      message:       `Your appointment is confirmed for today at ${bookingTimeStr}.`,
+      message:       `Your appointment is confirmed for ${bookingDateTimeStr}.`,
       type:          "BOOKING",
       priority:      "HIGH",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     // Distinct from BOOKING_CONFIRMED above — a separate, finance-focused
     // notification for the payment itself, matching the reserved
@@ -1295,13 +1253,49 @@ export const runBookingConfirmedEffects = async ({ req, booking, amount }) => {
       templateKey:   NOTIFICATION_EVENTS.PAYMENT_SUCCESS,
       variables:     { amount: Math.round(amount / 100) },
       title:         "Payment Successful",
-      message:       `Your payment of ₹${Math.round(amount / 100)} was successful.`,
+      message:       `Your payment was successful. Tap to view details.`,
       type:          "PAYMENT",
       priority:      "MEDIUM",
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, amountInPaise: amount },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
+
+    // PHASE B (approved) — Salon Owner "new booking" push, moved here
+    // from lockSlot(): the owner must see this only once the booking
+    // is actually CONFIRMED (payment verified), never at HOLD time.
+    // Reuses the existing BOOKING_CREATED event key per the founder's
+    // decision — this is the only call site for it now. Runs through
+    // the exact same post-commit, non-blocking path, and the exact
+    // same duplicate-confirmation guard, as BOOKING_CONFIRMED/
+    // PAYMENT_SUCCESS above and the webhook path that also calls this
+    // function (services/razorpayWebhook.service.js) — no second
+    // confirmation/retry mechanism introduced.
+    //
+    // Deep-link payload contract note: PushProvider.js's
+    // buildDeepLinkData() only forwards actionType/actionUrl(->deepLink)
+    // /entityType/entityId into the actual push `data` a device
+    // receives — `meta` below is for the IN_APP Notification document
+    // only and never reaches the push payload. The booking id AND its
+    // IST calendar date (needed by the Salon App to pick the right
+    // Live Schedule day) are therefore both encoded into actionUrl's
+    // query string, with entityId carrying the plain id as well.
+    const bookingDateIST = formatISTDateFromUtc(booking.startTime);
+    await NotificationService.send({
+      recipientId:   booking.salonRef,
+      recipientType: "SALON",
+      templateKey:   NOTIFICATION_EVENTS.BOOKING_CREATED,
+      variables:     { date: bookingDateIST },
+      title:         "New Booking Confirmed",
+      message:       "You have received a new booking. Tap to view customer, service and booking details.",
+      type:          "BOOKING",
+      priority:      "HIGH",
+      actionType:    "OPEN_BOOKING",
+      actionUrl:     `/bookings/${booking._id}?date=${bookingDateIST}`,
+      entityType:    "BOOKING",
+      entityId:      booking._id,
+      meta:          { bookingId: booking._id, bookingDate: bookingDateIST, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     //////////////////////////////////////////////////////////
     // 💰 P0 REVENUE CALCULATION ENGINE — STEP 3 (non-blocking, after
@@ -1695,7 +1689,7 @@ export const checkInBooking = async (req, res) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     return res.status(200).json({
       success:   true,
@@ -1787,7 +1781,7 @@ export const startService = async (req, res) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     return res.status(200).json({
       success:          true,
@@ -1992,7 +1986,28 @@ export const completeService = async (req, res) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
+
+    // Review-request — separate from SERVICE_COMPLETED_USER above (own
+    // templateKey/title/message/actionType), sent at the same already-
+    // guarded post-commit point. Eligibility for this exact booking is
+    // guaranteed open right now (ratingEligibility.service.js requires
+    // status===COMPLETED, which was only just reached), so no extra
+    // eligibility call is needed here.
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.RATING_REQUEST_USER,
+      title:         "How was your ZEMISH experience?",
+      message:       "Your service is complete. Share your rating and review.",
+      type:          "REVIEW",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_REVIEW",
+      actionUrl:     `/ratings/${booking._id}`,
+      entityType:    "BOOKING",
+      entityId:      booking._id,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     //////////////////////////////////////////////////////////
     // 📡 REALTIME — chair freed (after commit)
@@ -3037,7 +3052,24 @@ export const forceComplete = async (req, res) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
+    // Review-request — same rationale as completeService()'s identical
+    // addition: separate event, same already-guarded post-commit point,
+    // eligibility guaranteed open (booking just reached COMPLETED).
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.RATING_REQUEST_USER,
+      title:         "How was your ZEMISH experience?",
+      message:       "Your service is complete. Share your rating and review.",
+      type:          "REVIEW",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_REVIEW",
+      actionUrl:     `/ratings/${booking._id}`,
+      entityType:    "BOOKING",
+      entityId:      booking._id,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
     return res.status(200).json({ success: true, bookingId: booking._id, transactionId: paymentTxn._id, walletBalance: currentWallet?.availableBalanceInPaise ?? 0, message: "Booking marked as completed" });
   } catch (error) {
     // Guarded: post-commit code (cache/socket/notification) runs

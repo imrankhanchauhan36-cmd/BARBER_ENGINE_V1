@@ -63,6 +63,7 @@ import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
+import { NOTIFICATION_CHANNEL } from "../constants/notification.constants.js";
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
 import { toFriendlyId } from "../utils/friendlyId.js";
 import { emitToRoom } from "../socket/index.js";
@@ -135,7 +136,7 @@ const autoStartOneBooking = async (candidateId) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     if (io) {
       const payload = {
