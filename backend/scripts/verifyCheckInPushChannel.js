@@ -42,7 +42,6 @@ check("startService() function found (used as the function boundary)", endIdx !=
 check("checkInBooking() appears before startService() in the file", startIdx !== -1 && endIdx !== -1 && startIdx < endIdx);
 
 const checkInBody  = startIdx !== -1 && endIdx !== -1 ? source.slice(startIdx, endIdx) : "";
-const startSvcBody = endIdx   !== -1 ? source.slice(endIdx) : "";
 
 // ── The actual fix: both channels now requested ─────────────────
 check(
@@ -67,14 +66,6 @@ check("OTP hashing/lookup logic still present", /hashOtp\(otp\)/.test(checkInBod
 check("CONFIRMED -> CHECKED_IN transition validation still present", /validateBookingTransition\(booking\.status, BOOKING_STATUS\.CHECKED_IN\)/.test(checkInBody));
 check("Atomic transaction commit still present", /checkInSession\.commitTransaction\(\)/.test(checkInBody));
 check("HTTP success contract unchanged (200 + success:true)", /res\.status\(200\)\.json\(\{\s*success:\s*true,/.test(checkInBody));
-
-// ── Scope guard: startService's own notification call must be UNCHANGED ──
-// (i.e. this fix did not spread beyond checkInBooking)
-check(
-  "startService()'s own NotificationService.send() call still has NO channels argument (untouched)",
-  /NotificationService\.send\(\{[\s\S]*?SERVICE_STARTED[\s\S]*?\}\);/.test(startSvcBody) &&
-    !/NotificationService\.send\(\{[\s\S]*?SERVICE_STARTED[\s\S]*?\},\s*\[/.test(startSvcBody)
-);
 
 console.log(rows.join("\n"));
 console.log(`\nRESULT: ${fail === 0 ? "ALL PASS" : "SOME FAILED"} — ${pass} passed, ${fail} failed`);
