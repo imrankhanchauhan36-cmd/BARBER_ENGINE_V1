@@ -13,6 +13,7 @@ import { startServiceOverdueJob } from "./jobs/serviceOverdue.job.js";
 import { startSlaScannerJob } from "./jobs/slaScanner.job.js"; // ← Phase G Step 10 — wires up the Step 6-8 SLA scanner/escalation/notification chain, previously file-only
 import { startRatingOutboxJob } from "./jobs/ratingOutbox.job.js"; // ← Rating & Review Engine Phase 2 — distributed-safe RatingEvent outbox consumer
 import { startWeeklyScheduleMaterializerJob } from "./jobs/weeklyScheduleMaterializer.job.js"; // ← C4 Phase 2 — converts WeeklyScheduleTemplate into concrete ProfessionalChairAssignment rows for each salon's rolling booking window
+import { startBookingReadinessChangeJob } from "./jobs/bookingReadinessChange.job.js"; // ← R4 approved pilot — notifies the Salon Owner on a real READY/NEEDS_ATTENTION/NOT_READY transition, reusing getBookingReadiness() unmodified
 import { startFieldAgentKycSyncJob } from "./modules/kyc/jobs/fieldAgentKycSync.job.js"; // ← FA-3.2 consistency layer — durable FieldAgentKycSyncEvent outbox consumer + reconciliation
 import { startFraudDetectionJob } from "./modules/fieldAgent/jobs/fraudDetection.job.js"; // ← FA-7.2 — stateless, read-only REFERRAL_VELOCITY/WITHDRAW_RECLAIM_CYCLE detection over one closed hour, writing only advisory FraudSignal evidence
 import { startCrossAgentOverlapJob } from "./modules/fieldAgent/jobs/crossAgentOverlap.job.js"; // ← FA-7.3 — stateless, read-only CROSS_AGENT_SALON_CYCLING detection over full AcquisitionClaim history, writing only advisory FraudSignal evidence
@@ -214,6 +215,21 @@ const ratingOutboxJob = startRatingOutboxJob();
 const weeklyScheduleMaterializerJob = startWeeklyScheduleMaterializerJob();
 
 //////////////////////////////////////////////////////////////
+// 🚀 STEP 7j2: START BOOKING READINESS CHANGE JOB (R4 — approved pilot)
+//
+// Every 60s, re-runs the existing, unmodified
+// bookingReadiness.service.js::getBookingReadiness() for every
+// approved salon and notifies the owner (IN_APP + PUSH) only on a
+// genuine READY/NEEDS_ATTENTION/NOT_READY transition or a changed
+// first blocking reason code. In-memory dedup cache only — see
+// jobs/bookingReadinessChange.job.js's own header for the documented
+// restart/multi-instance limitations this pilot accepts. No io
+// needed — no realtime emit.
+//////////////////////////////////////////////////////////////
+
+const bookingReadinessChangeJob = startBookingReadinessChangeJob();
+
+//////////////////////////////////////////////////////////////
 // 🚀 STEP 7k: START FIELD AGENT KYC SYNC (FA-3.2 Consistency Layer)
 //
 // Consumer (every 15s) applies FieldAgentKycSyncEvent rows onto the
@@ -381,6 +397,9 @@ const shutdown = async (signal) => {
 
       weeklyScheduleMaterializerJob.stop();
       console.log("✅ Weekly schedule materializer job stopped");
+
+      bookingReadinessChangeJob.stop();
+      console.log("✅ Booking readiness change job stopped");
 
       fieldAgentKycSyncJob.stop();
       console.log("✅ Field Agent KYC sync job stopped");

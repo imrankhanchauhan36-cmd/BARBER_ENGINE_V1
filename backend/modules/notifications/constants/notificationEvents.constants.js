@@ -38,6 +38,7 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   SERVICE_EXTENDED_SALON:       "SERVICE_EXTENDED_SALON",
   SERVICE_AUTO_COMPLETED_SALON: "SERVICE_AUTO_COMPLETED_SALON",
   SERVICE_AUTO_COMPLETED_USER:  "SERVICE_AUTO_COMPLETED_USER",
+  RATING_REQUEST_USER:          "RATING_REQUEST_USER",
 
   // Payment / Wallet
   PAYMENT_SUCCESS: "PAYMENT_SUCCESS", // reserved — no caller yet
@@ -56,6 +57,13 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   // Salon
   SALON_APPROVED: "SALON_APPROVED", // reserved — no caller yet
   SALON_REJECTED: "SALON_REJECTED", // reserved — no caller yet
+
+  // Booking Readiness Engine (R4, approved pilot) — one event for all
+  // three READY/NEEDS_ATTENTION/NOT_READY transitions; the specific
+  // status/reason distinguishes the message, same one-key-plus-
+  // payload-detail convention SUPPORT_TICKET_STATUS_CHANGED/SLA_*
+  // already use above.
+  BOOKING_READINESS_CHANGED: "BOOKING_READINESS_CHANGED",
 
   // Field Agent (FA-P2-A) — KYC_APPROVED/KYC_REJECTED above are reused
   // as-is for the Field Agent applicant path too (same template key,

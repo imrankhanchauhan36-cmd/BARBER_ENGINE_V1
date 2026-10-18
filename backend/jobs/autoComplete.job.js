@@ -81,8 +81,7 @@
  *     retry either); a failed attempt simply remains a candidate
  *     on the next 60s tick, since nothing was persisted.
  *
- * INTEGRATION (NOT wired up in this phase — file only, matching
- * how serviceOverdue.job.js was left in Phase 2 until reviewed)
+ * INTEGRATION (wired up — server.js actually calls this)
  * ───────────
  *   In server.js, alongside the existing jobs:
  *
@@ -102,6 +101,7 @@ import Transaction, { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../models/Tra
 import SalonEarnings from "../models/SalonEarnings.js";
 import NotificationService from "../services/NotificationService.js";
 import { NOTIFICATION_EVENTS } from "../modules/notifications/constants/notificationEvents.constants.js";
+import { NOTIFICATION_CHANNEL } from "../constants/notification.constants.js";
 import WalletBalanceService from "../services/WalletBalanceService.js";
 import { invalidateNextSlotCache } from "../services/slotEngine.service.js";
 import { BOOKING_STATUS, transitionBookingStatus } from "../utils/bookingState.machine.js";
@@ -405,7 +405,28 @@ const autoCompleteOneBooking = async (candidateId, now) => {
       actionType:    "OPEN_BOOKING",
       actionUrl:     `/bookings/${booking._id}`,
       meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
-    });
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
+
+    // Review-request — separate from SERVICE_AUTO_COMPLETED_USER above
+    // (own templateKey/title/message/actionType), same already-guarded
+    // post-commit point. Eligibility for this exact booking is
+    // guaranteed open right now (ratingEligibility.service.js requires
+    // status===COMPLETED, which was only just reached), so no extra
+    // eligibility call is needed here.
+    await NotificationService.send({
+      recipientId:   booking.userRef,
+      recipientType: "USER",
+      templateKey:   NOTIFICATION_EVENTS.RATING_REQUEST_USER,
+      title:         "How was your ZEMISH experience?",
+      message:       "Your service is complete. Share your rating and review.",
+      type:          "REVIEW",
+      priority:      "MEDIUM",
+      actionType:    "OPEN_REVIEW",
+      actionUrl:     `/ratings/${booking._id}`,
+      entityType:    "BOOKING",
+      entityId:      booking._id,
+      meta:          { bookingId: booking._id, friendlyBookingId: toFriendlyId(booking._id, "BK") },
+    }, [NOTIFICATION_CHANNEL.IN_APP, NOTIFICATION_CHANNEL.PUSH]);
 
     //////////////////////////////////////////////////////////
     // 📡 REALTIME — reuses the EXISTING "booking:completed" event
